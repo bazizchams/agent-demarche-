@@ -1,0 +1,101 @@
+code_demarche: ircc_permis_etudes
+nom_portail: "Portail IRCC Permis d'études — Page de démonstration locale"
+chemin_url: "/demo/ircc"
+
+# Règle 3 : vérification de la session IRCC ouverte par l'opérateur (aucun stockage de CléGC / mot de passe)
+temoin_session_ouverte: "#bandeau-session-ircc-connectee"
+detecteur_session_fermee: "#alerte-session-ircc-fermee"
+
+# Règle 2 : détecteurs de CAPTCHA ou de vérification à deux facteurs (2FA)
+detecteurs_blocage_securite:
+  - "#bloc-captcha-ircc"
+  - "#bloc-2fa-ircc"
+
+# Règle 1 (Option A) : boutons de soumission et signature électronique finale strictement interdits à l'agent
+selecteurs_soumission_interdits:
+  - "#btn-soumission-finale-ircc"
+  - "button[data-action-officielle='transmettre-demande-ircc']"
+
+selecteur_enregistrer_brouillon: "#btn-enregistrer-brouillon-ircc"
+
+etapes_automatisation:
+  - code_etape: ouverture_session_portail_ircc
+    type_action: verifier_session_et_securite
+
+  - code_etape: saisie_identite_et_passeport
+    type_action: remplir_champs
+    champs:
+      - champ_candidat: nom
+        selecteur: "#ircc-nom-famille"
+        type_champ: texte
+      - champ_candidat: prenom
+        selecteur: "#ircc-prenom"
+        type_champ: texte
+      - champ_candidat: sexe
+        selecteur: "#ircc-sexe"
+        type_champ: liste
+      - champ_candidat: date_naissance
+        selecteur: "#ircc-date-naissance"
+        type_champ: date_iso
+      - champ_candidat: lieu_naissance
+        selecteur: "#ircc-lieu-naissance"
+        type_champ: texte
+      - champ_candidat: nationalite
+        selecteur: "#ircc-nationalite"
+        type_champ: texte
+      - champ_candidat: pays_residence
+        selecteur: "#ircc-pays-residence"
+        type_champ: texte
+      - champ_candidat: email
+        selecteur: "#ircc-email"
+        type_champ: texte
+      - champ_candidat: telephone
+        selecteur: "#ircc-telephone"
+        type_champ: texte
+      - champ_candidat: numero_passeport
+        selecteur: "#ircc-numero-passeport"
+        type_champ: texte
+      - champ_candidat: date_expiration_passeport
+        selecteur: "#ircc-date-expiration-passeport"
+        type_champ: date_iso
+
+  - code_etape: saisie_projet_etudes_dli
+    type_action: remplir_champs
+    champs:
+      - champ_candidat: etablissement_vise
+        selecteur: "#ircc-etablissement-dli"
+        type_champ: texte
+      - champ_candidat: programme_vise
+        selecteur: "#ircc-programme-etudes"
+        type_champ: texte
+      - champ_candidat: fonds_disponibles_eur
+        selecteur: "#ircc-fonds-disponibles-eur"
+        type_champ: entier
+
+  - code_etape: televersement_justificatifs_ircc
+    type_action: remplir_et_televerser
+    champs: []
+    fichiers:
+      - type_piece: passeport
+        selecteur: "#ircc-upload-passeport"
+        obligatoire: true
+      - type_piece: lettre_admission_dli
+        selecteur: "#ircc-upload-lettre-admission-dli"
+        obligatoire: true
+      - type_piece: attestation_provinciale_pal_caq
+        selecteur: "#ircc-upload-pal-caq"
+        obligatoire: true
+      - type_piece: preuve_financiere
+        selecteur: "#ircc-upload-preuve-financiere"
+        obligatoire: true
+      - type_piece: photo_identite
+        selecteur: "#ircc-upload-photo-identite"
+        obligatoire: true
+      - type_piece: formulaire_imm5645
+        selecteur: "#ircc-upload-imm5645"
+        obligatoire: true
+    cliquer_brouillon_apres: true
+
+  - code_etape: controle_avant_validation_humaine
+    type_action: capture_et_arret_avant_envoi
+    selecteur_temoin_pret: "#banniere-brouillon-ircc-enregistre"

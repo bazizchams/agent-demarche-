@@ -1,0 +1,113 @@
+code: campus_france
+libelle: "Campus France — Études en France (Création et dossier)"
+description: "Constitution du dossier Études en France (Algérie) : identité, parcours et justificatifs."
+
+# Seuil financier mensuel de référence (615 EUR x 12 mois = 7380 EUR)
+seuil_fonds_recommande_eur: 7380
+
+# Veille réglementaire et prérequis officiels (Guide Études en France — Septembre 2026, Campus France Algérie — Règle 7)
+veille_reglementaire:
+  - titre: "Justificatif de ressources minimales (France)"
+    resume: "Minimum réglementaire de 615 EUR par mois d'études (soit 7 380 EUR sur 12 mois) pour la demande de visa long séjour étudiant (VLS-TS)."
+    reference: "CESEDA / France-Visas"
+  - titre: "Certification linguistique et baccalauréat non européen en français"
+    resume: "Test TCF, DELF ou DALF selon la formation (validité TCF : 2 ans). Pour un baccalauréat algérien/non européen étudié en français : déclarer 'Oui', volume 'Plus de 1000 heures', durée '4 ans et plus', niveau atteint 'Avancé'."
+    reference: "Guide Études en France — Septembre 2026 (Onglet Mes compétences linguistiques)"
+  - titre: "Validité du passeport biométrique et format des justificatifs"
+    resume: "Le passeport doit couvrir au moins 3 mois après la sortie prévue de l'espace Schengen (6 mois minimum recommandés). Pièces téléversées aux formats JPG, PNG ou PDF (taille maximale : 10 Mo par fichier)."
+    reference: "Guide Études en France — Septembre 2026 & Code communautaire des visas"
+  - titre: "Règles du panier de formations (max 7 vœux : DAP Blanche, DAP Jaune, Hors DAP)"
+    resume: "Maximum 7 formations au total : DAP Blanche (L1 Université, jusqu'à 3 choix), DAP Jaune (Écoles nationales supérieures d'architecture ENSA, 2 choix obligatoires + Portfolio), Hors DAP (L2, L3, Master 1, Master 2, Ingénieur, Commerce, jusqu'à 7 choix). Texte de motivation obligatoire par formation (jusqu'à 4 000 caractères)."
+    reference: "Guide Études en France — Septembre 2026 (Section 5 : Mon dossier de candidature)"
+  - titre: "Parcours scolaire et professionnel (minimum 2 activités obligatoires)"
+    resume: "La rubrique 'Mon dossier de scolarité' doit comporter le CV et au moins 2 activités : années de lycée jusqu'au bac pour une entrée en Bac+1, ou du baccalauréat jusqu'à la dernière année d'études supérieures pour Bac+2 et plus (commentaire limité à 1 000 caractères)."
+    reference: "Guide Études en France — Septembre 2026 (Section 4 : Mon espace étudiant)"
+  - titre: "Calendrier officiel Campus France Algérie (Session 2026–2027)"
+    resume: "Ouverture le 1er octobre 2026. Hors DAP (L2, L3, Master, Ingénieur, Commerce) : soumission et paiement jusqu'au 30 novembre 2026. DAP (L1, Architecture, BUT, Licence pro) : soumission et paiement jusqu'au 15 décembre 2026. Entretiens jusqu'au 15 mars 2027 ; choix définitif avant le 31 mai 2027. CPGE/BTS/DCG sur Parcoursup dès janvier 2027. Dossier pré-consulaire : au moins 45 jours avant la rentrée."
+    reference: "Guide Études en France — Septembre 2026 (Section 7 : Campus France Algérie)"
+  - titre: "Frais de dossier Campus France Algérie et modalités de paiement"
+    resume: "Plein tarif : 20 000 DZD (candidature, pré-consulaire ou concours). Demi-tarif : 10 000 DZD (Bac français < 4 ans et candidat < 22 ans, ou acceptation Campus Art). Gratuité : boursier du gouvernement français, bachelier LIAD de l'année, agent IFA. Paiement sur paiement.if-algerie.com ou déclaration de virement dans l'onglet 'Mes paiements'."
+    reference: "Institut français d'Algérie — paiement.if-algerie.com"
+  - titre: "Dossier pré-consulaire ('Je suis accepté') et visa CAPAGO (-50 %)"
+    resume: "Après admission (via Études en France ou acceptation papier hors plateforme saisie en 4 étapes), validation du dossier pré-consulaire pour obtenir l'Attestation d'acceptation (identifiant DZXX-XXXXX), ouvrant droit à 50 % de réduction sur les frais de visa long séjour via France-Visas et CAPAGO."
+    reference: "Guide Études en France — Septembre 2026 (Section 6 : Mon dossier pré-consulaire)"
+  - titre: "Antennes Espace Campus France en Algérie"
+    resume: "5 antennes de rattachement selon l'adresse et le téléphone : Alger (ecf.alger@if-algerie.com), Annaba (ecf.annaba@if-algerie.com), Constantine (ecf.constantine@if-algerie.com), Oran (ecf.oran@if-algerie.com), Tlemcen (ecf.tlemcen@if-algerie.com)."
+    reference: "algerie.campusfrance.org"
+
+
+# Champs du candidat obligatoires avant tout pré-remplissage (Règle 4 : zéro valeur par défaut)
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - niveau_actuel
+  - programme_vise
+  - etablissement_vise
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport biométrique en cours de validité"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: photo_identite
+    libelle: "Photo d'identité aux normes"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: releve_notes_bac
+    libelle: "Relevé de notes du Baccalauréat"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: diplome_bac
+    libelle: "Diplôme ou attestation provisoire du Baccalauréat"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: releves_notes_superieur
+    libelle: "Relevés de notes des années d'études supérieures"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: cv
+    libelle: "Curriculum Vitae (CV)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: attestation_langue_francaise
+    libelle: "Attestation de test de français (TCF / DELF / DALF) si requise"
+    obligatoire: false
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+# Étapes ordonnées de la machine à états (reprise idempotente — Phase 3 & Règle 7)
+etapes_tache:
+  - code: verification_prerequis_dossier
+    libelle: "Vérification des prérequis et de la validité des pièces"
+  - code: ouverture_session_etudes_en_france
+    libelle: "Vérification de la session Études en France ouverte par l'opérateur"
+  - code: saisie_informations_personnelles
+    libelle: "Pré-remplissage de l'état civil et des coordonnées"
+  - code: saisie_cursus_et_diplomes
+    libelle: "Pré-remplissage du parcours académique et téléversement des justificatifs"
+  - code: selection_formations_et_motivations
+    libelle: "Pré-remplissage du panier de formations et motivations"
+  - code: controle_avant_validation_humaine
+    libelle: "Capture de contrôle et arrêt de sécurité avant soumission finale"
+

@@ -1,0 +1,107 @@
+code_demarche: campus_france
+nom_portail: "Études en France — Page de démonstration locale"
+# En Phase 4, l'URL relative est résolue par rapport au serveur local de démonstration.
+chemin_url: "/demo/campus-france"
+
+# Règle 3 : l'agent ne stocke aucun mot de passe portail et vérifie que la session est ouverte par l'humain.
+temoin_session_ouverte: "#bandeau-session-connectee"
+detecteur_session_fermee: "#alerte-session-non-connectee"
+
+# Règle 2 : si l'un de ces sélecteurs est visible, l'agent suspend immédiatement la tâche
+# pour laisser l'opérateur humain résoudre le CAPTCHA ou la double authentification (2FA).
+detecteurs_blocage_securite:
+  - "#bloc-captcha-securite"
+  - "#bloc-double-authentification-2fa"
+
+# Règle 1 (Option A) : sélecteurs de soumission finale sur lesquels l'agent a l'INTERDICTION
+# absolue de cliquer. Toute tentative déclenche `ErreurSoumissionFinaleInterdite`.
+selecteurs_soumission_interdits:
+  - "#btn-soumission-finale-officielle"
+  - "button[data-action-officielle='soumettre-definitivement']"
+
+# Bouton d'enregistrement de brouillon (autorisé, ne soumet pas le dossier officiel)
+selecteur_enregistrer_brouillon: "#btn-enregistrer-brouillon"
+
+# Étapes d'automatisation Playwright mappées sur les codes d'étapes de `config/demarches/campus_france.yaml`
+etapes_automatisation:
+  - code_etape: ouverture_session_etudes_en_france
+    type_action: verifier_session_et_securite
+
+  - code_etape: saisie_informations_personnelles
+    type_action: remplir_champs
+    champs:
+      # Sélecteurs d'identifiant exacts (corrige le défaut D2 où input[id*='nom'] écrasait prenom)
+      - champ_candidat: nom
+        selecteur: "#champ-nom-famille"
+        type_champ: texte
+      - champ_candidat: prenom
+        selecteur: "#champ-prenom"
+        type_champ: texte
+      - champ_candidat: sexe
+        selecteur: "#champ-sexe"
+        type_champ: liste
+      - champ_candidat: date_naissance
+        selecteur: "#champ-date-naissance"
+        type_champ: date_iso
+      - champ_candidat: lieu_naissance
+        selecteur: "#champ-lieu-naissance"
+        type_champ: texte
+      - champ_candidat: nationalite
+        selecteur: "#champ-nationalite"
+        type_champ: texte
+      - champ_candidat: pays_residence
+        selecteur: "#champ-pays-residence"
+        type_champ: texte
+      - champ_candidat: email
+        selecteur: "#champ-email"
+        type_champ: texte
+      - champ_candidat: telephone
+        selecteur: "#champ-telephone"
+        type_champ: texte
+      - champ_candidat: numero_passeport
+        selecteur: "#champ-numero-passeport"
+        type_champ: texte
+      - champ_candidat: date_expiration_passeport
+        selecteur: "#champ-date-expiration-passeport"
+        type_champ: date_iso
+
+  - code_etape: saisie_cursus_et_diplomes
+    type_action: remplir_et_televerser
+    champs:
+      - champ_candidat: niveau_actuel
+        selecteur: "#champ-niveau-actuel"
+        type_champ: texte
+    fichiers:
+      - type_piece: passeport
+        selecteur: "#upload-passeport"
+        obligatoire: true
+      - type_piece: photo_identite
+        selecteur: "#upload-photo-identite"
+        obligatoire: true
+      - type_piece: releve_notes_bac
+        selecteur: "#upload-releve-notes-bac"
+        obligatoire: true
+      - type_piece: diplome_bac
+        selecteur: "#upload-diplome-bac"
+        obligatoire: true
+      - type_piece: releves_notes_superieur
+        selecteur: "#upload-releves-notes-superieur"
+        obligatoire: true
+      - type_piece: cv
+        selecteur: "#upload-cv"
+        obligatoire: true
+
+  - code_etape: selection_formations_et_motivations
+    type_action: remplir_champs
+    champs:
+      - champ_candidat: programme_vise
+        selecteur: "#champ-programme-vise"
+        type_champ: texte
+      - champ_candidat: etablissement_vise
+        selecteur: "#champ-etablissement-vise"
+        type_champ: texte
+    cliquer_brouillon_apres: true
+
+  - code_etape: controle_avant_validation_humaine
+    type_action: capture_et_arret_avant_envoi
+    selecteur_temoin_pret: "#banniere-brouillon-enregistre"

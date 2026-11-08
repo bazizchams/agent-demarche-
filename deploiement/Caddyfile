@@ -1,0 +1,23 @@
+# Configuration Caddy 2 — Terminaison TLS 1.3 automatique (Let's Encrypt) + Durcissement HTTP (Phase 6)
+{
+    email {$EMAIL_CERTIFICAT_TLS}
+}
+
+{$DOMAINE_PLATEFORME} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        -Server
+    }
+
+    request_body {
+        max_size 15MB
+    }
+
+    reverse_proxy serveur:8000
+}

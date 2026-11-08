@@ -1,0 +1,74 @@
+# Orchestration de production SaaS multi-bureaux — HTTPS automatique (Caddy 2) + PostgreSQL 16 + FastAPI
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_bureau}
+      POSTGRES_USER: ${POSTGRES_USER:-agent_bureau}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir POSTGRES_PASSWORD dans .env.production}
+    volumes:
+      - volume_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agent_bureau} -d ${POSTGRES_DB:-agent_bureau}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - reseau_interne
+
+  serveur:
+    build:
+      context: ..
+      dockerfile: deploiement/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BE_ENVIRONNEMENT: production
+      BE_URL_BASE_DONNEES: postgresql+psycopg://${POSTGRES_USER:-agent_bureau}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agent_bureau}
+      BE_COOKIE_SECURISE: "true"
+      BE_CLE_MAITRESSE_BASE64: ${BE_CLE_MAITRESSE_BASE64:?Definir BE_CLE_MAITRESSE_BASE64 (32 octets en Base64)}
+      BE_STRIPE_CLE_SECRETE: ${BE_STRIPE_CLE_SECRETE:?Definir BE_STRIPE_CLE_SECRETE}
+      BE_STRIPE_SECRET_WEBHOOK: ${BE_STRIPE_SECRET_WEBHOOK:?Definir BE_STRIPE_SECRET_WEBHOOK}
+      BE_DOSSIER_STOCKAGE: /srv/plateforme/donnees/documents_chiffres
+      BE_DOSSIER_SAUVEGARDES: /srv/plateforme/donnees/sauvegardes_chiffrees
+      BE_DOSSIER_CONFIGURATION: /srv/plateforme/configuration
+    volumes:
+      - volume_documents_chiffres:/srv/plateforme/donnees/documents_chiffres
+      - volume_sauvegardes_chiffrees:/srv/plateforme/donnees/sauvegardes_chiffrees
+    networks:
+      - reseau_interne
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - serveur
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAINE_PLATEFORME: ${DOMAINE_PLATEFORME:-app.votrebureau.dz}
+      EMAIL_CERTIFICAT_TLS: ${EMAIL_CERTIFICAT_TLS:-securite@votrebureau.dz}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - volume_caddy_data:/data
+      - volume_caddy_config:/config
+    networks:
+      - reseau_interne
+
+networks:
+  reseau_interne:
+    driver: bridge
+
+volumes:
+  volume_postgres:
+  volume_documents_chiffres:
+  volume_sauvegardes_chiffrees:
+  volume_caddy_data:
+  volume_caddy_config:

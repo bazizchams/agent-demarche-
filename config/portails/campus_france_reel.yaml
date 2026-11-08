@@ -1,0 +1,128 @@
+code_portail: campus_france_reel
+code_demarche: campus_france
+nom_portail: "Études en France (Campus France Algérie) — Portail officiel"
+mode_portail: reel
+# Règle 6 : statut initial 'non testé' tant que l'opérateur humain n'a pas validé sur le portail réel
+statut_test_initial: "non testé"
+
+# Règle 7 : URL officielle et domaines autorisés en configuration YAML (jamais en dur dans le code)
+url_officielle: "https://pastel.diplomatie.gouv.fr/etudesenfrance"
+domaines_autorises:
+  - "etudesenfrance.diplomatie.gouv.fr"
+  - "pastel.diplomatie.gouv.fr"
+  - "www.algerie.campusfrance.org"
+  - "paiement.if-algerie.com"
+chemin_url: "/etudesenfrance"
+
+# Règle 3 : l'agent vérifie que la session a été ouverte par l'humain dans le navigateur (zéro mot de passe stocké)
+temoin_session_ouverte: "#bandeau-identite-candidat"
+detecteur_session_fermee: "#formulaire-connexion-eef"
+
+# Règle 2 : pause immédiate si un CAPTCHA ou un contrôle 2FA apparaît
+detecteurs_blocage_securite:
+  - "#bloc-captcha-eef"
+  - "#bloc-2fa-eef"
+  - ".g-recaptcha"
+  - "iframe[src*='recaptcha']"
+
+# Règle 1 (Option A) : sélecteurs de soumission finale sur lesquels tout clic automatique est formellement interdit
+selecteurs_soumission_interdits:
+  - "#btn-soumettre-dossier-eef"
+  - "button[data-action-officielle='soumettre-dossier-eef']"
+  - "input[type='submit'][value*='Soumettre le dossier']"
+  - "button.eef-submit-final"
+
+# Bouton d'enregistrement de rubrique / brouillon (autorisé : ne soumet pas le dossier)
+selecteur_enregistrer_brouillon: "#btn-enregistrer-rubrique-eef"
+
+# Étapes séquentielles idempotentes en mode « pré-remplissage + capture de contrôle + arrêt avant envoi »
+etapes_automatisation:
+  - code_etape: ouverture_session_etudes_en_france
+    type_action: verifier_session_et_securite
+
+  - code_etape: saisie_informations_personnelles
+    type_action: remplir_champs
+    selecteur_navigation_onglet: "#onglet-informations-personnelles-eef"
+    cliquer_brouillon_apres: true
+    prendre_capture_etape: true
+    champs:
+      # Sélecteurs distincts pour le nom et le prénom (correction du défaut D2)
+      - champ_candidat: nom
+        selecteur: "#eef-nom-famille"
+        type_champ: texte
+      - champ_candidat: prenom
+        selecteur: "#eef-prenom-candidat"
+        type_champ: texte
+      - champ_candidat: sexe
+        selecteur: "#eef-civilite-sexe"
+        type_champ: liste
+      - champ_candidat: date_naissance
+        selecteur: "#eef-date-naissance"
+        type_champ: date_iso
+      - champ_candidat: lieu_naissance
+        selecteur: "#eef-ville-naissance"
+        type_champ: texte
+      - champ_candidat: nationalite
+        selecteur: "#eef-nationalite"
+        type_champ: texte
+      - champ_candidat: pays_residence
+        selecteur: "#eef-pays-residence"
+        type_champ: texte
+      - champ_candidat: email
+        selecteur: "#eef-email-contact"
+        type_champ: texte
+      - champ_candidat: telephone
+        selecteur: "#eef-telephone-mobile"
+        type_champ: texte
+      - champ_candidat: numero_passeport
+        selecteur: "#eef-numero-piece-identite"
+        type_champ: texte
+      - champ_candidat: date_expiration_passeport
+        selecteur: "#eef-date-validite-piece"
+        type_champ: date_iso
+
+  - code_etape: saisie_cursus_et_diplomes
+    type_action: remplir_et_televerser
+    selecteur_navigation_onglet: "#onglet-cursus-diplomes-eef"
+    cliquer_brouillon_apres: true
+    prendre_capture_etape: true
+    champs:
+      - champ_candidat: niveau_actuel
+        selecteur: "#eef-dernier-niveau-etudes"
+        type_champ: texte
+    fichiers:
+      - type_piece: passeport
+        selecteur: "#eef-upload-passeport"
+        obligatoire: true
+      - type_piece: photo_identite
+        selecteur: "#eef-upload-photo-identite"
+        obligatoire: true
+      - type_piece: releve_notes_bac
+        selecteur: "#eef-upload-releve-bac"
+        obligatoire: true
+      - type_piece: diplome_bac
+        selecteur: "#eef-upload-diplome-bac"
+        obligatoire: true
+      - type_piece: releves_notes_superieur
+        selecteur: "#eef-upload-releves-superieur"
+        obligatoire: true
+      - type_piece: cv
+        selecteur: "#eef-upload-cv"
+        obligatoire: true
+
+  - code_etape: selection_formations_et_motivations
+    type_action: remplir_champs
+    selecteur_navigation_onglet: "#onglet-panier-formations-eef"
+    cliquer_brouillon_apres: true
+    prendre_capture_etape: true
+    champs:
+      - champ_candidat: programme_vise
+        selecteur: "#eef-intitule-formation-visee"
+        type_champ: texte
+      - champ_candidat: etablissement_vise
+        selecteur: "#eef-etablissement-accueil"
+        type_champ: texte
+
+  - code_etape: controle_avant_validation_humaine
+    type_action: capture_et_arret_avant_envoi
+    selecteur_temoin_pret: "#temoin-rubriques-completes-eef"

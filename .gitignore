@@ -1,0 +1,41 @@
+# Environnements et caches
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+**/*.egg-info/
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Secrets — ne jamais versionner
+.env
+**/.env
+.env.*
+!**/.env.exemple
+!.env.exemple
+*.key
+cle_*.txt
+
+# Données locales (base, documents étudiants, sauvegardes) — jamais dans Git
+etudiants/
+**/etudiants/
+serveur/donnees/
+**/donnees/
+stockage/
+sauvegardes/
+captures/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.be.enc
+
+# Profils navigateur de l'agent local
+agent_local/profil_navigateur/
+**/profil_navigateur*/

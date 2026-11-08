@@ -1,0 +1,97 @@
+code: ircc_permis_etudes
+libelle: "IRCC Canada — Demande de permis d'études"
+description: "Dossier de demande de permis d'études au Canada (portail IRCC)."
+
+# Seuil financier révisé par IRCC (20 635 CAD hors frais de scolarité ≈ 14 500 EUR minimum recommandé)
+seuil_fonds_recommande_eur: 14500
+
+# Veille réglementaire et nouvelles règles IRCC (éditables sans modifier le code — Règle 7)
+veille_reglementaire:
+  - titre: "Relèvement du seuil financier IRCC (coût de la vie)"
+    resume: "Exigence financière relevée à 20 635 $ CAD (environ 14 500 EUR) pour un demandeur seul, en plus des frais de scolarité de la première année et des frais de transport."
+    reference: "IRCC — Exigences financières permis d'études"
+  - titre: "Lettre d'attestation provinciale (LAP / PAL) ou CAQ obligatoire"
+    resume: "La plupart des demandes de permis d'études postsecondaires doivent obligatoirement inclure une LAP/PAL délivrée par la province (ou un CAQ pour le Québec) sous peine de retour immédiat du dossier."
+    reference: "Instructions ministérielles IRCC — Plafond et LAP/PAL"
+  - titre: "Vérification obligatoire de la lettre d'admission (EED / DLI)"
+    resume: "L'établissement d'enseignement désigné doit confirmer l'authenticité de la lettre d'admission directement auprès d'IRCC dans les délais impartis."
+    reference: "Système de vérification des lettres d'admission IRCC"
+  - titre: "Lettre d'explication / Plan d'études"
+    resume: "Bien que facultative techniquement, une lettre explicative détaillant la cohérence du parcours et l'utilité de la formation au retour dans le pays de résidence réduit fortement les motifs de refus liés à l'article 216(1)b) du RIPR."
+    reference: "RIPR art. 216(1)b)"
+
+# Champs du candidat obligatoires avant tout pré-remplissage (Règle 4 : zéro valeur par défaut)
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - programme_vise
+  - etablissement_vise
+  - fonds_disponibles_eur
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport valide (page biographique et tampons)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: lettre_admission_dli
+    libelle: "Lettre d'admission d'un établissement d'enseignement désigné (EED / DLI)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: attestation_provinciale_pal_caq
+    libelle: "Lettre d'attestation provinciale (LAP / PAL) ou CAQ (Québec)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_financiere
+    libelle: "Preuve de ressources financières (relevés bancaires, CPG/GIC, prise en charge)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: photo_identite
+    libelle: "Photographie numérique aux normes IRCC"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: formulaire_imm5645
+    libelle: "Formulaire d'informations sur la famille (IMM 5645)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: lettre_explicative
+    libelle: "Lettre d'explication / plan d'études"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+# Étapes ordonnées de la machine à états (reprise idempotente — Phase 3 & Règle 7)
+etapes_tache:
+  - code: verification_prerequis_dossier
+    libelle: "Vérification des prérequis, seuils financiers et LAP/PAL ou CAQ"
+  - code: ouverture_session_portail_ircc
+    libelle: "Vérification de la session portail IRCC ouverte par l'opérateur"
+  - code: saisie_identite_et_passeport
+    libelle: "Pré-remplissage des données d'identité et du passeport"
+  - code: saisie_projet_etudes_dli
+    libelle: "Pré-remplissage de l'établissement DLI et des capacités financières"
+  - code: televersement_justificatifs_ircc
+    libelle: "Téléversement des pièces justificatives obligatoires"
+  - code: controle_avant_validation_humaine
+    libelle: "Capture de contrôle et arrêt de sécurité avant soumission finale"
+

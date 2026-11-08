@@ -1,0 +1,127 @@
+code_portail: ircc_reel
+code_demarche: ircc_permis_etudes
+nom_portail: "IRCC Canada — Portail officiel Permis d'études"
+mode_portail: reel
+# Règle 6 : statut initial 'non testé' tant que l'opérateur humain n'a pas validé sur le portail réel
+statut_test_initial: "non testé"
+
+# Règle 7 : URL officielle et domaines autorisés en configuration YAML
+url_officielle: "https://portal-portail.apps.cic.gc.ca/signin?lang=fr"
+domaines_autorises:
+  - "portal-portail.apps.cic.gc.ca"
+  - "onlineservices-servicesenligne.cic.gc.ca"
+  - "www.canada.ca"
+chemin_url: "/study-permit-application"
+
+# Règle 3 : l'agent vérifie la session ouverte par l'opérateur (aucune CléGC ni mot de passe stocké)
+temoin_session_ouverte: "#ircc-banniere-compte-actif"
+detecteur_session_fermee: "#gckey-login-form"
+
+# Règle 2 : pause immédiate si une question de sécurité CléGC, un code 2FA ou un CAPTCHA est visible
+detecteurs_blocage_securite:
+  - "#ircc-mfa-prompt"
+  - "#gckey-security-question"
+  - "#bloc-captcha-ircc-reel"
+  - ".h-captcha"
+  - ".g-recaptcha"
+
+# Règle 1 (Option A) : sélecteurs de signature électronique et transmission finale strictement interdits à l'agent
+selecteurs_soumission_interdits:
+  - "#btn-ircc-transmettre-et-payer"
+  - "#btn-ircc-signature-electronique-finale"
+  - "button[data-ircc-action='submit-official-application']"
+  - "button[data-action-officielle='transmettre-demande-ircc']"
+
+# Bouton de sauvegarde de brouillon (autorisé : ne transmet pas la demande à IRCC)
+selecteur_enregistrer_brouillon: "#btn-ircc-sauvegarder-demande"
+
+# Étapes séquentielles idempotentes en mode « pré-remplissage + capture de contrôle + arrêt avant envoi »
+etapes_automatisation:
+  - code_etape: ouverture_session_portail_ircc
+    type_action: verifier_session_et_securite
+
+  - code_etape: saisie_identite_et_passeport
+    type_action: remplir_champs
+    selecteur_navigation_onglet: "#etape-ircc-identite-passeport"
+    cliquer_brouillon_apres: true
+    prendre_capture_etape: true
+    champs:
+      - champ_candidat: nom
+        selecteur: "#ircc-reel-nom-famille"
+        type_champ: texte
+      - champ_candidat: prenom
+        selecteur: "#ircc-reel-prenom"
+        type_champ: texte
+      - champ_candidat: sexe
+        selecteur: "#ircc-reel-sexe"
+        type_champ: liste
+      - champ_candidat: date_naissance
+        selecteur: "#ircc-reel-date-naissance"
+        type_champ: date_iso
+      - champ_candidat: lieu_naissance
+        selecteur: "#ircc-reel-ville-naissance"
+        type_champ: texte
+      - champ_candidat: nationalite
+        selecteur: "#ircc-reel-citoyennete"
+        type_champ: texte
+      - champ_candidat: pays_residence
+        selecteur: "#ircc-reel-pays-residence"
+        type_champ: texte
+      - champ_candidat: email
+        selecteur: "#ircc-reel-courriel"
+        type_champ: texte
+      - champ_candidat: telephone
+        selecteur: "#ircc-reel-telephone"
+        type_champ: texte
+      - champ_candidat: numero_passeport
+        selecteur: "#ircc-reel-numero-passeport"
+        type_champ: texte
+      - champ_candidat: date_expiration_passeport
+        selecteur: "#ircc-reel-expiration-passeport"
+        type_champ: date_iso
+
+  - code_etape: saisie_projet_etudes_dli
+    type_action: remplir_champs
+    selecteur_navigation_onglet: "#etape-ircc-etudes-dli-fonds"
+    cliquer_brouillon_apres: true
+    prendre_capture_etape: true
+    champs:
+      - champ_candidat: etablissement_vise
+        selecteur: "#ircc-reel-etablissement-dli"
+        type_champ: texte
+      - champ_candidat: programme_vise
+        selecteur: "#ircc-reel-programme-etudes"
+        type_champ: texte
+      - champ_candidat: fonds_disponibles_eur
+        selecteur: "#ircc-reel-fonds-disponibles-eur"
+        type_champ: entier
+
+  - code_etape: televersement_justificatifs_ircc
+    type_action: remplir_et_televerser
+    selecteur_navigation_onglet: "#etape-ircc-pieces-justificatives"
+    cliquer_brouillon_apres: true
+    prendre_capture_etape: true
+    champs: []
+    fichiers:
+      - type_piece: passeport
+        selecteur: "#ircc-reel-upload-passeport"
+        obligatoire: true
+      - type_piece: lettre_admission_dli
+        selecteur: "#ircc-reel-upload-loa-dli"
+        obligatoire: true
+      - type_piece: attestation_provinciale_pal_caq
+        selecteur: "#ircc-reel-upload-pal-caq"
+        obligatoire: true
+      - type_piece: preuve_financiere
+        selecteur: "#ircc-reel-upload-preuve-fonds"
+        obligatoire: true
+      - type_piece: photo_identite
+        selecteur: "#ircc-reel-upload-photo"
+        obligatoire: true
+      - type_piece: formulaire_imm5645
+        selecteur: "#ircc-reel-upload-imm5645"
+        obligatoire: true
+
+  - code_etape: controle_avant_validation_humaine
+    type_action: capture_et_arret_avant_envoi
+    selecteur_temoin_pret: "#banniere-ircc-brouillon-pret"
