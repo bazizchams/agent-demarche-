@@ -486,6 +486,7 @@ def test_vue_operateur_capture_controle_humain_et_audit_sans_texte_saisi(
     _dans_page(session, lambda p: p.wait_for_timeout(800))
     url_apres = _dans_page(session, lambda p: p.url)
     assert "pirate" not in url_apres and "/demo/campus-france" in url_apres
+    assert gest.nb_navigations_bloquees >= 1  # c'est bien la garde R6 qui a bloqué (pas une erreur réseau)
 
     # Audit R5 : compte + type d'action, JAMAIS le texte saisi ni d'URL
     rep_audit = admin.get("/api/v1/audit", params={"action": "navigateur.controle_humain", "taille": 50})

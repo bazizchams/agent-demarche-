@@ -7,7 +7,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 RACINE_SERVEUR = Path(__file__).resolve().parents[2]
@@ -88,9 +88,32 @@ class Parametres(BaseSettings):
 
     # Co-Pilote navigateur côté serveur (multi-bureaux). None => mode serveur actif en production :
     # navigateur headless forcé, jamais de rattachement CDP 9222 ni de canal chrome/msedge local.
-    navigateur_serveur: bool | None = None
-    navigateur_max_sessions: int = Field(default=3, ge=1, le=50)
-    navigateur_inactivite_minutes: int = Field(default=15, ge=1, le=240)
+    # Variables d'environnement : BE_NAVIGATEUR_SERVEUR (ou BE_NAVIGATEUR_SERVEUR_ACTIF du docker-compose),
+    # BE_NAVIGATEUR_MAX_SESSIONS (ou ..._SERVEUR_SESSIONS_MAX), BE_NAVIGATEUR_INACTIVITE_MINUTES (ou ..._SERVEUR_...).
+    navigateur_serveur: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("navigateur_serveur", "BE_NAVIGATEUR_SERVEUR", "BE_NAVIGATEUR_SERVEUR_ACTIF"),
+    )
+    navigateur_max_sessions: int = Field(
+        default=3,
+        ge=1,
+        le=50,
+        validation_alias=AliasChoices(
+            "navigateur_max_sessions", "BE_NAVIGATEUR_MAX_SESSIONS", "BE_NAVIGATEUR_SERVEUR_SESSIONS_MAX"
+        ),
+    )
+    navigateur_inactivite_minutes: int = Field(
+        default=15,
+        ge=1,
+        le=240,
+        validation_alias=AliasChoices(
+            "navigateur_inactivite_minutes",
+            "BE_NAVIGATEUR_INACTIVITE_MINUTES",
+            "BE_NAVIGATEUR_SERVEUR_INACTIVITE_MINUTES",
+        ),
+    )
+    # Racine des profils Chromium (un sous-dossier par bureau). Défaut : <dossier_stockage>/profil_navigateur_agent.
+    dossier_profils_navigateur: Path | None = None
     # URL du serveur utilisée par le pont du Co-Pilote hors production quand `url_publique_plateforme` est vide.
     url_serveur_local: str = "http://127.0.0.1:8000"
 

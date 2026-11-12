@@ -1314,6 +1314,7 @@ class GestionnairePiloteNavigateur:
         (domaines HTTPS officiels des YAML) ; None = pas de contrôle (usage local historique / tests
         directs). `url_serveur` : URL injectée dans le panneau du Co-Pilote (vide = pont désactivé)."""
         self._mode_serveur = mode_serveur
+        self.nb_navigations_bloquees = 0
         self._politique_navigation = politique_navigation
         self._url_serveur = (url_serveur or "").rstrip("/")
         self._executor = concurrent.futures.ThreadPoolExecutor(
@@ -1359,7 +1360,9 @@ class GestionnairePiloteNavigateur:
                         and req.frame.parent_frame is None
                         and politique.motif_refus(req.url) is not None
                     ):
-                        route.abort("blockedbyclient")
+                        # 204 : le navigateur ignore la navigation et la page courante reste affichée.
+                        self.nb_navigations_bloquees += 1
+                        route.fulfill(status=204)
                         return
                     route.fallback()
                 except Exception:

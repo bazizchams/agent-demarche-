@@ -62,9 +62,13 @@ def headless_pour(parametres: Parametres, *, ouvrir_fenetre_visible: bool = True
     return not ouvrir_fenetre_visible
 
 
+def racine_profils(parametres: Parametres) -> Path:
+    return parametres.dossier_profils_navigateur or (parametres.dossier_stockage / NOM_DOSSIER_PROFILS)
+
+
 def dossier_profil_bureau(parametres: Parametres, tenant_id: uuid.UUID) -> Path:
     # str(UUID) : aucun caractère de chemin possible (pas de traversée de dossier).
-    return parametres.dossier_stockage / NOM_DOSSIER_PROFILS / str(tenant_id)
+    return racine_profils(parametres) / str(tenant_id)
 
 
 def _fabrique_par_defaut(
@@ -174,7 +178,7 @@ class RegistreSessionsNavigateur:
     def revoquer(self, tenant_id: uuid.UUID, parametres: Parametres) -> None:
         """Révocation d'un bureau : fermeture de sa session ET effacement de son profil navigateur."""
         if not self.fermer(tenant_id, effacer_profil=True):
-            self._effacer_profil(dossier_profil_bureau(parametres, tenant_id), parametres.dossier_stockage)
+            self._effacer_profil(dossier_profil_bureau(parametres, tenant_id))
 
     def purger_inactives(self) -> list[uuid.UUID]:
         a_fermer = self._extraire_inactives()
@@ -212,16 +216,15 @@ class RegistreSessionsNavigateur:
             except Exception as exc:  # fermeture au mieux : ne jamais bloquer les autres bureaux
                 journal.warning("Fermeture session navigateur : %s", type(exc).__name__)
             if effacer_profil:
-                self._effacer_profil(s.dossier_profil, s.dossier_profil.parent.parent)
+                self._effacer_profil(s.dossier_profil)
 
     @staticmethod
-    def _effacer_profil(dossier: Path, racine_stockage: Path) -> None:
-        """N'efface qu'un sous-dossier de `<stockage>/profil_navigateur_agent/`."""
+    def _effacer_profil(dossier: Path) -> None:
+        """N'efface qu'un sous-dossier nommé par un UUID de bureau (jamais la racine des profils)."""
         try:
-            base = (racine_stockage / NOM_DOSSIER_PROFILS).resolve()
-            cible = dossier.resolve()
-            if cible != base and base in cible.parents and cible.exists():
-                shutil.rmtree(cible, ignore_errors=True)
+            uuid.UUID(dossier.name)
+            if dossier.exists():
+                shutil.rmtree(dossier.resolve(), ignore_errors=True)
         except OSError as exc:
             journal.warning("Effacement profil navigateur : %s", type(exc).__name__)
 
