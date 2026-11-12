@@ -54,7 +54,8 @@ def test_statut_sans_cle_et_routes_503(application, deux_bureaux) -> None:
     admin, _ = connecter_client(application, bureau_a.admin.email)
     r = admin.get("/api/v1/ia/statut")
     assert r.status_code == 200
-    assert r.json() == {
+    corps = r.json()
+    assert {k: corps[k] for k in ("active", "appels_ce_mois", "plafond_mensuel")} == {
         "active": False,
         "appels_ce_mois": 0,
         # Bureau en période d'essai : plafond d'essai, quel que soit le forfait.
@@ -62,6 +63,7 @@ def test_statut_sans_cle_et_routes_503(application, deux_bureaux) -> None:
             llm.QUOTA_IA_MENSUEL[ForfaitAbonnement.STARTER], llm.QUOTA_IA_ESSAI
         ),
     }
+    assert corps["fournisseur"] == "anthropic" and corps["donnees_quittent_serveur"] is False
     r = admin.post("/api/v1/ia/procedures/generer", json={"texte": TEXTE_VALIDE})
     assert r.status_code == 503
 

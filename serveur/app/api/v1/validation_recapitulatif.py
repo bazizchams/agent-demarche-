@@ -20,12 +20,14 @@ from app.api.dependances import (
     obtenir_cle_maitresse,
     obtenir_contexte_execution_tache,
 )
+from app.core.config import Parametres, obtenir_parametres
 from app.modeles.utilisateur import Role
 from app.modeles.validation_recapitulatif import (
     StatutValidationRecapitulatif,
     ValidationRecapitulatif,
 )
 from app.schemas.commun import SchemaEntree, SchemaSortie
+from app.services import jetons_courriel
 from app.services import validation_recapitulatif as service
 
 routeur = APIRouter(
@@ -113,7 +115,10 @@ def valider(
     validation_id: uuid.UUID,
     ctx: ContexteAuth = HumainValideur,
     cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
+    parametres: Parametres = Depends(obtenir_parametres),
 ) -> ValidationSortie:
+    # Envoi sensible : adresse e-mail du valideur vérifiée (exigé en production par défaut).
+    jetons_courriel.exiger_adresse_verifiee(ctx.utilisateur, parametres)
     v = service.valider(
         ctx.db, validation_id, utilisateur=ctx.utilisateur, cle_maitresse=cle_maitresse
     )

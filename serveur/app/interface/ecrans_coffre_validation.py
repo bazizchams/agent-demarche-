@@ -3,7 +3,8 @@
 Ce module fournit des fragments HTML/JS insérés dans la page unique de `routeur_interface.py`
 par `assembler_interface`. Règles respectées par tout le code ci-dessous :
 
-- aucune dépendance front nouvelle, aucun CSS nouveau (classes existantes de l'interface) ;
+- aucune dépendance front nouvelle : uniquement les classes du système de design
+  (`design/styles.py`) ;
 - tout contenu affiché passe par `textContent` / création de nœuds DOM (jamais `innerHTML`
   avec une donnée), donc un contenu piégé du type `<script>` reste du texte inerte ;
 - les identifiants du coffre ne sont jamais écrits dans le HTML, ni relus, ni journalisés
@@ -13,31 +14,30 @@ par `assembler_interface`. Règles respectées par tout le code ci-dessous :
 
 from __future__ import annotations
 
+from app.interface.design.shell import bouton_nav
+
 PORTAILS_COFFRE: tuple[tuple[str, str], ...] = (
     ("etudes_en_france", "Études en France (Campus France)"),
     ("ircc", "IRCC Canada (permis d'études)"),
 )
 
-_MARQUEUR_NAV = '<button class="nav-btn" data-vue="vue-procedures">10. Procédures (démarches)</button>'
-_MARQUEUR_DOCUMENTS = "    </section>\n\n    <!-- 4. Discussion & Score d'acceptation -->"
-_MARQUEUR_CENTRE = '<div id="liste-centre-validation" class="panneau-texte">Chargement des dossiers...</div>'
+_MARQUEUR_NAV = "<!-- nav:validation -->"
+_MARQUEUR_DOCUMENTS = "<!-- zone:coffre -->"
+_MARQUEUR_CENTRE = "<!-- zone:lien-recaps -->"
 _MARQUEUR_FIN_MAIN = "  </main>\n\n  <script>"
 _MARQUEUR_JS = "    // Connexion automatique dès l'ouverture de l'interface"
 
-HTML_NAV = (
-    '\n    <button class="nav-btn" data-vue="vue-recaps-valider">'
-    "11. Récapitulatifs à valider</button>"
-)
+HTML_NAV = "\n      " + bouton_nav("vue-recaps-valider", "Récapitulatifs à valider", "recaps")
 
 _MODELE_PORTAIL = """
         <div class="panneau-texte" id="coffre-bloc-{P}" style="margin-bottom:12px;">
           <h4 style="margin-top:0;">{L}</h4>
-          <p id="coffre-statut-{P}">Sélectionnez un candidat pour voir l'état du coffre.</p>
+          <p id="coffre-statut-{P}">Choisissez un dossier pour voir l'état du coffre.</p>
           <div id="coffre-saisie-{P}">
-            <label style="display:block; margin-bottom:10px;">
+            <label class="case" style="margin-bottom:12px;">
               <input id="coffre-consent-{P}" type="checkbox" />
-              Je confirme avoir recueilli le consentement écrit du candidat pour conserver ses
-              identifiants de ce portail dans le coffre du bureau.
+              <span>Je confirme avoir recueilli le consentement écrit du candidat pour conserver ses
+              identifiants de ce portail dans le coffre du bureau.</span>
             </label>
             <div class="grille-form">
               <label>Identifiant du portail
@@ -47,13 +47,13 @@ _MODELE_PORTAIL = """
                 <input id="coffre-mdp-{P}" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" />
               </label>
             </div>
-            <p style="margin-top:10px;">
-              <button id="coffre-enregistrer-{P}" class="btn btn-succes" type="button">Enregistrer dans le coffre</button>
-            </p>
+            <div class="pile-actions">
+              <button id="coffre-enregistrer-{P}" class="btn btn-primaire" type="button">Enregistrer dans le coffre</button>
+            </div>
           </div>
-          <p>
+          <div class="pile-actions">
             <button id="coffre-supprimer-{P}" class="btn btn-danger cache" type="button">Supprimer du coffre (révoquer le consentement)</button>
-          </p>
+          </div>
         </div>"""
 
 
@@ -67,7 +67,7 @@ def _html_portails() -> str:
 def html_bloc_coffre() -> str:
     return (
         '      <div class="carte" id="carte-coffre-identifiants">\n'
-        "        <h3>4. Identifiants portail (Études en France, IRCC) — coffre chiffré</h3>\n"
+        "        <h3>Identifiants portail (Études en France, IRCC) — coffre chiffré</h3>\n"
         '        <div class="banniere-regle">\n'
         "          Les identifiants sont chiffrés avec la clé du bureau et isolés par bureau. Ils ne sont\n"
         "          jamais réaffichés ni renvoyés après la saisie : seul leur statut est visible. Ils ne sont\n"
@@ -84,23 +84,30 @@ def html_bloc_coffre() -> str:
 
 
 HTML_LIEN_CENTRE = """
-      <p>
-        <button id="btn-aller-recaps" class="btn btn-contour" type="button" onclick="allerVersVue('vue-recaps-valider')">
+      <div class="pile-actions" style="margin:0 0 16px;">
+        <button id="btn-aller-recaps" class="btn btn-secondaire" type="button" onclick="allerVersVue('vue-recaps-valider')">
           Récapitulatifs à valider avant envoi officiel (<span id="compteur-recaps-centre">…</span>)
         </button>
-      </p>"""
+      </div>"""
 
 HTML_VUE_RECAPS = """
-    <!-- 11. Récapitulatifs à valider (Règle 1) -->
+    <!-- Récapitulatifs à valider (Règle 1) -->
     <section id="vue-recaps-valider" class="vue-ecran cache">
-      <h2>Récapitulatifs à valider avant envoi officiel (Règle 1)</h2>
+      <header class="page-entete">
+        <div>
+          <h2>Récapitulatifs à valider</h2>
+          <p class="lead">Dernier contrôle avant l'envoi officiel : relisez chaque récapitulatif, puis validez-le ou refusez-le.</p>
+        </div>
+        <div class="page-actions">
+          <button id="btn-actualiser-recaps" class="btn btn-secondaire" type="button">Actualiser</button>
+        </div>
+      </header>
       <div class="banniere-regle">
         L'agent enverra exactement ce contenu ; toute modification annule la validation. Seul un
         administrateur ou un employé peut valider ou refuser. Un récapitulatif dont des champs
         sont manquants ne peut pas être validé : l'agent n'invente jamais de valeur (Règle 4).
       </div>
-      <p><button id="btn-actualiser-recaps" class="btn" type="button">Actualiser les récapitulatifs en attente</button></p>
-      <div id="liste-recaps" class="panneau-texte">Chargement des récapitulatifs...</div>
+      <div id="liste-recaps" class="pile">Chargement des récapitulatifs...</div>
     </section>
 """
 
@@ -332,7 +339,8 @@ JS_COFFRE_VALIDATION = """
       avert.textContent = "L'agent enverra exactement ce contenu ; toute modification annule la validation.";
       carte.appendChild(avert);
 
-      const actions = document.createElement("p");
+      const actions = document.createElement("div");
+      actions.className = "pile-actions";
       const btnValider = document.createElement("button");
       btnValider.type = "button";
       btnValider.className = "btn btn-succes btn-valider-recap";
@@ -356,21 +364,31 @@ JS_COFFRE_VALIDATION = """
       return r.ok ? { ok: true, liste: await r.json() } : { ok: false, statut: r.status };
     }
 
+    function etatVideRecaps(zone, titre, detail) {
+      const bloc = document.createElement("div");
+      bloc.className = "etat-vide";
+      const fort = document.createElement("strong");
+      fort.textContent = titre;
+      bloc.appendChild(fort);
+      bloc.appendChild(document.createTextNode(detail));
+      zone.appendChild(bloc);
+    }
+
     async function rafraichirRecapitulatifs() {
       const zone = document.getElementById("liste-recaps");
       zone.textContent = "";
       if (!utilisateurHumainEcriture()) {
-        zone.textContent = "Accès réservé aux administrateurs et aux employés du bureau.";
+        etatVideRecaps(zone, "Accès réservé.", "Seuls les administrateurs et les employés du bureau peuvent valider un récapitulatif.");
         return;
       }
       if (Object.keys(dictionnaireCandidats).length === 0) await chargerCandidats();
       const res = await chargerRecapitulatifsEnAttente();
       if (!res.ok) {
-        zone.textContent = "Impossible de charger les récapitulatifs (session expirée ou droits insuffisants).";
+        etatVideRecaps(zone, "Chargement impossible.", "Votre session a peut-être expiré : reconnectez-vous (menu de gauche), puis actualisez.");
         return;
       }
       if (res.liste.length === 0) {
-        zone.textContent = "Aucun récapitulatif en attente de validation.";
+        etatVideRecaps(zone, "Aucun récapitulatif en attente.", "Quand l'agent proposera un contenu à envoyer, il apparaîtra ici pour validation.");
         return;
       }
       res.liste.forEach((v) => zone.appendChild(carteRecapitulatif(v)));

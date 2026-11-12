@@ -13,6 +13,7 @@ from app.api.v1 import (
     bureau,
     candidats,
     coffre_identifiants,
+    courriel,
     demarches,
     ia,
     inscription,
@@ -29,6 +30,7 @@ from app.api.v1 import (
 routeur_v1 = APIRouter(prefix="/api/v1")
 routeur_v1.include_router(sante.routeur)
 routeur_v1.include_router(auth.routeur)
+routeur_v1.include_router(courriel.routeur)
 routeur_v1.include_router(utilisateurs.routeur)
 routeur_v1.include_router(bureau.routeur)
 routeur_v1.include_router(candidats.routeur)

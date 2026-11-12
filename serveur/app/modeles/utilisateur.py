@@ -43,6 +43,13 @@ class Utilisateur(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
     echecs_connexion: Mapped[int] = mapped_column(default=0, nullable=False)
     verrouille_jusqua: Mapped[datetime | None] = mapped_column(nullable=True)
     derniere_connexion_le: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Renseigné quand le titulaire a prouvé qu'il lit cette adresse (lien à usage unique ou
+    # réinitialisation du mot de passe par courriel). None => adresse non vérifiée.
+    email_verifie_le: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    @property
+    def email_verifie(self) -> bool:
+        return self.email_verifie_le is not None
 
     def __repr__(self) -> str:  # jamais l'e-mail ni le nom (règle 5)
         return f"<Utilisateur id={self.id} role={self.role.value if self.role else None}>"

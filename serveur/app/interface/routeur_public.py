@@ -239,3 +239,8 @@ minuscules, majuscules, chiffres, symboles.</p>
         corps,
         _SCRIPT_INSCRIPTION,
     )
+
+
+from app.api.pages_courriel import enregistrer_pages_courriel  # noqa: E402
+
+enregistrer_pages_courriel(routeur_public, _page)

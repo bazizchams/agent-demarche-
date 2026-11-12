@@ -22,7 +22,7 @@ from app.modeles.bureau import Bureau
 from app.modeles.journal_audit import ResultatAudit
 from app.modeles.utilisateur import Utilisateur
 from app.services import abonnements as service_abonnements
-from app.services import audit
+from app.services import audit, jetons_courriel
 from app.services.bureaux import provisionner_bureau_et_admin
 
 MESSAGE_EMAIL_INDISPONIBLE = (
@@ -149,6 +149,9 @@ def inscrire_bureau(
         },
     )
     db.commit()
+    # Courriel de confirmation d'adresse (jeton à usage unique, 48 h). Un échec d'envoi
+    # n'empêche pas l'inscription : l'utilisateur pourra demander un nouvel envoi.
+    jetons_courriel.envoyer_verification_adresse(db, utilisateur=admin, parametres=parametres)
     return bureau
 
 

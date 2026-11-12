@@ -16,6 +16,7 @@ from app.modeles.discussion_dossier import (
     MessageDiscussionDossier,
 )
 from app.modeles.document import DocumentCandidat
+from app.modeles.jeton_courriel import JetonCourriel, ObjetJetonCourriel
 from app.modeles.journal_audit import EntreeAudit, ResultatAudit
 from app.modeles.session_utilisateur import SessionUtilisateur
 from app.modeles.tache import (
@@ -43,6 +44,8 @@ __all__ = [
     "EntreeAudit",
     "EtapeTache",
     "IdentifiantPortail",
+    "JetonCourriel",
+    "ObjetJetonCourriel",
     "ValidationRecapitulatif",
     "ForfaitAbonnement",
     "MessageDiscussionDossier",

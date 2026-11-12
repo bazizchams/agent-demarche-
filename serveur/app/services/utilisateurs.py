@@ -22,7 +22,7 @@ from app.modeles.journal_audit import ResultatAudit
 from app.modeles.session_utilisateur import SessionUtilisateur
 from app.modeles.utilisateur import Role, Utilisateur
 from app.schemas.auth import UtilisateurCreation, UtilisateurModification
-from app.services import audit
+from app.services import audit, jetons_courriel
 
 
 def lister_utilisateurs(
@@ -108,6 +108,8 @@ def creer_utilisateur(
         details={"role": nouveau.role.value},
     )
     db.commit()
+    # Confirmation d'adresse du nouveau compte (n'empêche jamais la création en cas d'échec).
+    jetons_courriel.envoyer_verification_adresse(db, utilisateur=nouveau, parametres=parametres)
     return nouveau
 
 

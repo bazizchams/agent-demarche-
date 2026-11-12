@@ -11,7 +11,7 @@ Contrat consommé (réservé aux humains ADMINISTRATEUR / EMPLOYE) :
 
 Règles respectées par tout le code ci-dessous :
 
-- aucune dépendance front, aucun CSS nouveau (classes existantes) ;
+- aucune dépendance front : uniquement les classes du système de design (`design/styles.py`) ;
 - tout affichage passe par `textContent` (jamais `innerHTML`, `eval`, `alert`) ;
 - le texte tapé par l'opérateur (CAPTCHA, code de sécurité) n'est jamais écrit dans le DOM,
   ni relu, ni stocké (pas de localStorage/sessionStorage), ni journalisé (pas de console) ;
@@ -23,63 +23,67 @@ Règles respectées par tout le code ci-dessous :
 
 from __future__ import annotations
 
+from app.interface.design.shell import bouton_nav
+
 ID_VUE = "vue-navigateur-serveur"
 LARGEUR_VIEWPORT = 1280
 HAUTEUR_VIEWPORT = 900
 
-_MARQUEUR_NAV = "11. Récapitulatifs à valider</button>"
+_MARQUEUR_NAV = "<!-- nav:navigateur -->"
 _MARQUEUR_FIN_MAIN = "  </main>\n\n  <script>"
 _MARQUEUR_JS = "    // Connexion automatique dès l'ouverture de l'interface"
 
-HTML_NAV = (
-    '\n    <button class="nav-btn" data-vue="vue-navigateur-serveur">'
-    "12. Navigateur de l'agent</button>"
-)
+HTML_NAV = "\n      " + bouton_nav("vue-navigateur-serveur", "Vue en direct", "moniteur")
 
 HTML_VUE_NAVIGATEUR = """
-    <!-- 12. Navigateur de l'agent (vue et prise en main de l'opérateur) -->
+    <!-- Navigateur de l'agent (vue et prise en main de l'opérateur) -->
     <section id="vue-navigateur-serveur" class="vue-ecran cache">
-      <h2>Navigateur de l'agent</h2>
+      <header class="page-entete">
+        <div>
+          <h2>Navigateur de l'agent</h2>
+          <p class="lead">Suivez en direct ce que fait l'agent et reprenez la main quand le portail demande un CAPTCHA ou un code de sécurité.</p>
+        </div>
+      </header>
       <div class="banniere-regle">
         À utiliser pour un CAPTCHA ou un code de sécurité : l'agent ne les contourne jamais.
         Ce que vous tapez n'est ni enregistré ni affiché dans l'historique.
       </div>
-      <div id="ns-lecture-seule" class="panneau-texte cache" style="margin-bottom:12px;">
+      <div id="ns-lecture-seule" class="notif notif-err cache">
         Compte en lecture seule : la vue et la prise en main du navigateur sont réservées aux
         administrateurs et aux employés.
       </div>
-      <div id="ns-bandeau" class="panneau-texte" style="margin-bottom:12px;">
+      <div id="ns-bandeau" class="panneau-texte" style="margin-bottom:16px;">
         <div><strong>État :</strong> <span id="ns-etat">Chargement...</span></div>
         <div><strong>Adresse :</strong> <span id="ns-url">—</span></div>
         <div><strong>Titre de la page :</strong> <span id="ns-titre">—</span></div>
       </div>
-      <p>
-        <button id="ns-prendre-main" class="btn btn-succes" type="button">Prendre la main</button>
+      <div class="pile-actions" style="margin:0 0 16px;">
+        <button id="ns-prendre-main" class="btn btn-primaire" type="button">Prendre la main</button>
         <button id="ns-rendre-main" class="btn btn-secondaire cache" type="button">Rendre la main à l'agent</button>
         <button id="ns-fermer" class="btn btn-danger" type="button">Fermer le navigateur</button>
-      </p>
-      <div id="ns-controles" class="carte cache">
+      </div>
+      <div id="ns-controles" class="carte carte-action cache">
         <h3>Vous avez la main</h3>
-        <p style="font-size:0.88rem;">
+        <p class="aide">
           Cliquez directement sur l'image pour cliquer dans la page ; la molette fait défiler.
         </p>
         <div class="grille-form">
           <label>Texte à saisir dans la page
             <input id="ns-texte" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" />
           </label>
-          <label>
-            <span><input id="ns-afficher" type="checkbox" /> Afficher la saisie</span>
+          <label class="case" style="align-self:end;">
+            <input id="ns-afficher" type="checkbox" /> <span>Afficher la saisie</span>
           </label>
         </div>
-        <p style="margin-top:10px;">
-          <button id="ns-envoyer-texte" class="btn" type="button">Envoyer le texte</button>
+        <div class="pile-actions">
+          <button id="ns-envoyer-texte" class="btn btn-primaire" type="button">Envoyer le texte</button>
           <button class="btn btn-contour ns-touche" type="button" data-touche="Enter">Entrée</button>
           <button class="btn btn-contour ns-touche" type="button" data-touche="Tab">Tab</button>
           <button class="btn btn-contour ns-touche" type="button" data-touche="Backspace">Retour</button>
           <button class="btn btn-contour ns-touche" type="button" data-touche="Escape">Échap</button>
-        </p>
+        </div>
       </div>
-      <p id="ns-message" class="panneau-texte">Aucune capture pour le moment.</p>
+      <p id="ns-message" class="note">Aucune capture pour le moment.</p>
       <div style="max-width:1280px;">
         <img id="ns-capture" class="capture-apercu cache" alt="Capture du navigateur de l'agent"
              draggable="false" style="width:100%; height:auto; display:block; margin:0;" />

@@ -45,6 +45,10 @@ class StatutIASortie(BaseModel):
     active: bool
     appels_ce_mois: int
     plafond_mensuel: int
+    fournisseur: str
+    modele: str | None
+    donnees_quittent_serveur: bool
+    message: str
 
 
 @routeur.get("/statut", response_model=StatutIASortie)
@@ -52,10 +56,15 @@ def statut(
     ctx: ContexteAuth = Depends(exiger_roles(Role.ADMINISTRATEUR, Role.EMPLOYE, Role.LECTURE_SEULE)),
     parametres: Parametres = Depends(obtenir_parametres),
 ) -> StatutIASortie:
+    etat = llm.etat_ia(parametres)
     return StatutIASortie(
-        active=bool(parametres.cle_api_anthropic),
+        active=etat.active,
         appels_ce_mois=llm.appels_ia_ce_mois(ctx.db),
         plafond_mensuel=llm.plafond_ia(ctx.db),
+        fournisseur=etat.fournisseur,
+        modele=etat.modele,
+        donnees_quittent_serveur=etat.donnees_quittent_serveur,
+        message=etat.message,
     )
 
 

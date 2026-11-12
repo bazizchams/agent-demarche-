@@ -33,6 +33,8 @@ class UtilisateurSortie(SchemaSortie):
     role: Role
     actif: bool
     doit_changer_mot_de_passe: bool
+    # Faux => l'interface affiche un bandeau « confirmez votre adresse e-mail ».
+    email_verifie: bool = False
     cree_le: datetime
     derniere_connexion_le: datetime | None
 

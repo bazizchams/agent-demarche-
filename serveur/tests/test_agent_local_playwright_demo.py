@@ -116,14 +116,15 @@ def test_interface_francais_et_pages_demo_desactivees_en_production(
         texte = rep_ui.text
         assert "Agent Bureau d'Études" in texte
         assert "Tableau de bord" in texte
-        assert "Étudiants &amp; Fiche candidat" in texte
-        assert "Documents &amp; Pièces requises" in texte
-        assert "Discussion &amp; Score d'acceptation" in texte
+        # Navigation refondue : entrées regroupées par tâche, sans numéros d'onglet.
+        assert "Étudiants et fiches" in texte
+        assert "Pièces et identifiants" in texte
+        assert "Conseiller et score" in texte
         assert "Campus France" in texte
         assert "IRCC Canada" in texte
-        assert "Centre de validation humaine" in texte
-        assert "Historique &amp; Erreurs" in texte
-        assert "Paramètres &amp; Sauvegardes" in texte
+        assert "Centre de validation" in texte
+        assert "Journal d'audit" in texte
+        assert "Abonnement et sauvegardes" in texte
 
     # 2. Pages de démonstration disponibles hors production
     assert client.get("/demo/campus-france").status_code == 200

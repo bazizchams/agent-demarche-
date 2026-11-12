@@ -36,6 +36,24 @@
 - Frais de traitement du permis d'études IRCC (hors biométrie 85 CAD) et montant de preuve de fonds IRCC pour le Québec : non trouvés sur les pages consultées.
 - Exigences de LAP pour le Québec, examen médical, certificat de police : non confirmés.
 
+### Domaines d'authentification des portails réels (Règle 6) : tentative de vérification du 2026-11-12
+Les outils de recherche et de lecture web étaient indisponibles lors de cette passe (erreur modèle de WebSearch/WebFetch,
+connexion refusée par algerie.campusfrance.org). Aucun nouveau domaine n'a donc pu être confirmé sur une page officielle
+gouvernementale : **aucun domaine n'a été ajouté aux YAML**. Domaines déjà présents, d'origine connue : URL officielle IRCC
+(`portal-portail.apps.cic.gc.ca`, YAML), relevé de connexion Études en France (`pastel.diplomatie.gouv.fr`,
+`etudesenfrance.diplomatie.gouv.fr`, voir docs/portail_etudes_en_france_reel.md, observé le 2026-11-11).
+
+À vérifier sur le vrai portail (ouvrir une session supervisée, relever les redirections réellement bloquées dans les journaux
+« Navigation refusée (Règle 6) », puis confirmer chaque hôte sur une page officielle canada.ca, diplomatie.gouv.fr ou
+campusfrance.org avant de l'ajouter à `domaines_autorises`, avec la source citée ici) :
+- IRCC : hôte de la CléGC (GCKey) ; hôte(s) de la Connexion partenaire (Sign-In Partner) et de ses banques partenaires ;
+  éventuels hôtes de l'espace sécurisé IRCC autres que `portal-portail.apps.cic.gc.ca` et
+  `onlineservices-servicesenligne.cic.gc.ca` ; services de CAPTCHA si le portail les charge.
+- Études en France : fournisseur d'identité éventuel (si la connexion redirige hors de `pastel.diplomatie.gouv.fr`) ;
+  CDN ou hôtes d'API essentiels si la page ne se charge pas sans eux (à relever dans l'onglet réseau).
+- Règle : hôtes exacts uniquement, jamais de joker ; refuser tout hôte tiers non gouvernemental (CDN publics, services
+  de mesure) sauf s'il est indispensable et documenté.
+
 ### Résidence permanente (Entrée express)
 - Montants de fonds minimaux : la page indiquait une mise à jour du 2025-07-07 (1 personne : 15 263 CAD) ; à revérifier car ces montants sont révisés chaque année.
 - Frais de traitement de la demande de RP, grille SCG, catégories de sélection et seuils d'invitations : non repris dans le YAML.

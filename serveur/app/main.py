@@ -70,6 +70,8 @@ def creer_application(parametres: Parametres | None = None) -> FastAPI:
             ]
             with application.state.fabrique_sessions() as db_init:
                 for nom_b, slug_b, email_b, nom_adm, mdp_adm in comptes_locaux:
+                    # Graine locale : une session ne change pas de bureau, on repart de zéro à chaque bureau.
+                    db_init.info.pop("tenant_id", None)
                     with sans_filtre_tenant(db_init):
                         admin_loc = db_init.scalar(
                             select(Utilisateur).where(Utilisateur.email == email_b)

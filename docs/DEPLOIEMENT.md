@@ -288,6 +288,8 @@ en cas de problème, revenez à la version précédente du code **et** restaurez
 3. Relancez : `docker compose ... up -d` (le conteneur est recréé avec la nouvelle variable).
 4. Vérifiez : `GET /api/v1/ia/statut` doit indiquer que l'assistant est actif. Sans clé, les fonctions IA répondent 503 et le reste fonctionne.
 
+Sans clé payante : IA locale (Ollama) ou niveau gratuit hébergé via `BE_IA_FOURNISSEUR=openai_compatible`, `BE_IA_URL_BASE`, `BE_IA_MODELE`, `BE_IA_CLE` : voir `docs/IA_GRATUITE.md` (risques RGPD / loi 18-07 inclus).
+
 ### 9.2 Stripe : **non prêt**
 
 Le code actuel **ne permet pas encore une facturation réelle** :
@@ -328,10 +330,18 @@ Cochez chaque point. Un point non coché bloque la mise en service.
 
 ## 11. Limites connues (ce qui n'est pas encore prêt)
 
-1. **Co-Pilote navigateur : deux modes.** Le Co-Pilote historique (`agent_local/`) tourne sur le poste Windows de l'opérateur.
-   Le **navigateur de l'agent en ligne** (Chromium headless sur le serveur, section 12) est installé dans l'image mais **désactivé
-   par défaut** et **non testé en conteneur** (l'image n'a pas été construite). Les routes `/api/v1/portails/...` qui lancent
-   un navigateur sur le serveur échouent tant que `BE_NAVIGATEUR_SERVEUR_ACTIF` n'est pas à `true`.
+1. **Co-Pilote en ligne : livré, mais non éprouvé en production.** Le Co-Pilote historique (`agent_local/`) tourne toujours sur
+   le poste Windows de l'opérateur. Le **Co-Pilote en ligne** (section 12) est livré : une session Chromium headless par bureau,
+   pont sécurisé, vue opérateur pour résoudre CAPTCHA et double authentification (l'agent ne les contourne jamais), et garde
+   Règle 6 limitée aux domaines HTTPS officiels des YAML. Il est **désactivé par défaut** : les routes qui lancent un navigateur
+   sur le serveur échouent tant que `BE_NAVIGATEUR_SERVEUR_ACTIF` n'est pas à `true`. Restent à faire :
+   - l'image n'a **pas été construite ni testée en conteneur** ;
+   - la liste des **domaines officiels** est incomplète : un domaine d'authentification absent des YAML (CléGC, Connexion
+     partenaire IRCC, fournisseur d'identité ou CDN d'Études en France) bloque la redirection ; ils sont à vérifier sur le vrai
+     portail (`docs/sources_demarches.md`), jamais à deviner ;
+   - les **profils de navigateur** (cookies de session des portails) sont à persister sur un volume dédié et à **chiffrer**
+     (disque chiffré ou volume chiffré) ; leur sauvegarde est un choix à assumer, ce sont des secrets ;
+   - les sélecteurs des portails réels restent « non testés » tant que l'administrateur n'a pas attesté la validation (Règle 6).
 2. **Stripe non fonctionnel** pour la souscription réelle (section 9.2).
 3. **Sauvegardes incomplètes** : l'application ne crée que des archives de métadonnées et n'a pas de commande de restauration.
    La sauvegarde complète passe par `pg_dump` et le volume de documents (section 7).
@@ -348,6 +358,22 @@ Cochez chaque point. Un point non coché bloque la mise en service.
 10. **Base SQLite interdite en production** : le code la supporte pour le développement, mais la production utilise PostgreSQL uniquement.
 11. **Expiration des archives** : la purge des dossiers archivés expirés (`POST /api/v1/conformite/purger-archives-expirees`) est manuelle.
 12. **Aucun test de bout en bout du déploiement n'a été exécuté** (voir la première section de ce document).
+
+---
+
+## 11 bis. Liste de contrôle « avant ouverture au public »
+
+À cocher en plus de la section 10. Un point non coché bloque l'ouverture.
+
+- [ ] **Mode serveur** : `BE_ENVIRONNEMENT=production`, PostgreSQL uniquement, pages de démonstration `/demo/` refusées par la garde Règle 6.
+- [ ] **URL publique** : nom de domaine définitif, DNS et HTTPS valides, `URL publique` renseignée dans `.env.production` (liens des e-mails, retours de paiement, webhooks).
+- [ ] **SMTP** : serveur d'envoi configuré et testé (réinitialisation de mot de passe, invitations), expéditeur authentifié (SPF, DKIM, DMARC) pour éviter le dossier spam.
+- [ ] **SATIM non intégré** : le paiement local par carte CIB/Edahabia n'est pas branché ; ne pas l'annoncer. Stripe non plus (section 9.2). Prévoir un encaissement manuel hors plateforme tant que ce n'est pas fait.
+- [ ] **Sauvegardes** : sauvegarde complète (`pg_dump` + documents + clé) programmée, **restauration testée** sur un serveur de test, copie hors serveur.
+- [ ] **Clé de secours** : copie de `BE_CLE_MAITRESSE_BASE64` rangée hors du serveur et hors Git (sans elle, documents et identifiants chiffrés sont perdus).
+- [ ] **RGPD / loi 18-07** : conditions d'utilisation, consentement des candidats, durées de conservation et purge des archives, registre des traitements et contact de protection des données validés juridiquement.
+- [ ] **Co-Pilote en ligne** (si activé) : `BE_NAVIGATEUR_SERVEUR_ACTIF=true` après un essai concluant sur serveur de test, volume de profils chiffré, domaines officiels vérifiés (section 12.5), mémoire dimensionnée (12.3), procédure CAPTCHA/2FA expliquée aux opérateurs (12.4).
+- [ ] **Validation humaine** : les opérateurs savent qu'aucune soumission officielle n'est automatique (Règle 1).
 
 ---
 

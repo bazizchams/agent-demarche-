@@ -73,6 +73,15 @@ class Parametres(BaseSettings):
     modele_llm: str = "claude-sonnet-5-5"
     url_api_anthropic: str = "https://api.anthropic.com/v1/messages"
     delai_llm_secondes: int = Field(default=90, ge=5, le=300)
+    # Fournisseur d'IA : "anthropic" (défaut) ou "openai_compatible" (Ollama, llama.cpp, Groq,
+    # Gemini, Mistral, OpenRouter...). Variables : BE_IA_FOURNISSEUR, BE_IA_URL_BASE (ex.
+    # http://127.0.0.1:11434/v1), BE_IA_MODELE, BE_IA_CLE (facultative en local),
+    # BE_IA_TENTATIVES. Hors serveur local, le texte est anonymisé avant envoi (docs/IA_GRATUITE.md).
+    ia_fournisseur: str = "anthropic"
+    ia_url_base: str | None = None
+    ia_modele: str | None = None
+    ia_cle: str | None = None
+    ia_tentatives: int = Field(default=2, ge=1, le=5)
 
     # Inscription en libre-service des agences
     inscriptions_ouvertes: bool = True
@@ -117,6 +126,27 @@ class Parametres(BaseSettings):
     # URL du serveur utilisée par le pont du Co-Pilote hors production quand `url_publique_plateforme` est vide.
     url_serveur_local: str = "http://127.0.0.1:8000"
 
+    # Courriels (SMTP) : variables BE_SMTP_*. Transport « smtp » uniquement en production avec hôte et
+    # expéditeur renseignés ; sinon transport « memoire » (rien n'est envoyé sur le réseau, utilisé par
+    # les tests). `courriel_transport` : "auto" (défaut), "smtp" ou "memoire".
+    courriel_transport: str = "auto"
+    smtp_hote: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_securite: str = "starttls"  # "starttls", "ssl" ou "aucune"
+    smtp_utilisateur: str | None = None
+    smtp_mot_de_passe: str | None = None
+    smtp_expediteur: str | None = None
+    smtp_delai_secondes: int = Field(default=15, ge=1, le=120)
+    # Jetons à usage unique envoyés par courriel (stockés hachés) et limites de débit.
+    duree_jeton_verification_heures: int = Field(default=48, ge=1, le=24 * 14)
+    duree_jeton_reinitialisation_minutes: int = Field(default=60, ge=5, le=24 * 60)
+    reinitialisation_max_par_heure_par_ip: int = Field(default=10, ge=1, le=1000)
+    reinitialisation_max_par_heure_par_compte: int = Field(default=3, ge=1, le=100)
+    reinitialisation_limite_active_en_test: bool = False
+    # Adresse non vérifiée : connexion permise (bandeau), mais validation humaine d'un récapitulatif
+    # (envoi sensible, règle 1) refusée. None => exigé uniquement en production.
+    exiger_adresse_verifiee: bool | None = None
+
     # Divers
     niveau_journal: str = "INFO"
     docs_api_actives: bool | None = None  # None => actives sauf en production
@@ -145,6 +175,23 @@ class Parametres(BaseSettings):
         if self.navigateur_serveur is not None:
             return self.navigateur_serveur
         return self.environnement is Environnement.PRODUCTION
+
+    @property
+    def adresse_verifiee_exigee(self) -> bool:
+        if self.exiger_adresse_verifiee is not None:
+            return self.exiger_adresse_verifiee
+        return self.environnement is Environnement.PRODUCTION
+
+    @property
+    def transport_courriel_effectif(self) -> str:
+        """"smtp" ou "memoire". Hors production ou sans configuration complète : "memoire"."""
+        choix = self.courriel_transport.strip().lower()
+        configure = bool(self.smtp_hote and self.smtp_expediteur)
+        if choix == "memoire" or not configure:
+            return "memoire"
+        if choix == "smtp" or self.environnement is Environnement.PRODUCTION:
+            return "smtp"
+        return "memoire"
 
     @property
     def url_serveur_copilote(self) -> str:
