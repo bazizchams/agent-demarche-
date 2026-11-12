@@ -28,6 +28,7 @@ class StatutPieceRequise(str, enum.Enum):
     EXPIREE = "expiree"
     VALIDITE_INSUFFISANTE = "validite_insuffisante"
     EXPIRATION_NON_RENSEIGNEE = "expiration_non_renseignee"
+    NON_APPLICABLE = "non_applicable"
 
 
 class VerificationPieceSortie(SchemaSortie):
@@ -47,6 +48,8 @@ class EtatCompletudeDemarcheSortie(SchemaSortie):
     champs_candidat_manquants: list[str]
     pieces_manquantes_ou_invalides: list[str]
     pieces: list[VerificationPieceSortie]
+    pieces_non_applicables: list[str] = []
+    champs_non_applicables: list[str] = []
 
 
 class DemarcheResumeSortie(SchemaSortie):

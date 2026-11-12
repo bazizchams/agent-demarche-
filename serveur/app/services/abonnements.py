@@ -1,4 +1,4 @@
-"""Service de gestion des abonnements SaaS mensuels, de la facturation Stripe,
+﻿"""Service de gestion des abonnements SaaS mensuels, de la facturation Stripe,
 des quotas par bureau et de l'acceptation des Conditions Générales d'Utilisation (Phase 6)."""
 
 from __future__ import annotations
@@ -8,13 +8,13 @@ import hmac
 import json
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import Parametres
-from app.core.erreurs import AccesRefuse, Conflit, DonneesInvalides, NonTrouve
+from app.core.config import Environnement, Parametres
+from app.core.erreurs import AccesRefuse, Conflit, DonneesInvalides, ServiceIndisponible
 from app.db.base import maintenant_utc
 from app.db.tenant import definir_tenant, sans_filtre_tenant, tenant_courant
 from app.modeles.abonnement import AbonnementBureau, ForfaitAbonnement
@@ -28,7 +28,7 @@ from app.schemas.abonnement_conformite import (
     SessionCheckoutStripeSortie,
     TexteCGUSortie,
 )
-from app.services import audit
+from app.services import audit, paiement_stripe
 
 CATALOGUE_FORFAITS: dict[ForfaitAbonnement, tuple[str, int, int]] = {
     ForfaitAbonnement.STARTER: ("Forfait Starter (Petit Bureau)", 49, 30),
@@ -199,7 +199,10 @@ def creer_session_checkout_stripe(
     acteur_id: uuid.UUID,
     parametres: Parametres,
 ) -> SessionCheckoutStripeSortie:
-    """Prépare une session de souscription Stripe pour le bureau (exige que les CGU aient été acceptées)."""
+    """Prépare une session de souscription Stripe pour le bureau (exige que les CGU aient été acceptées).
+
+    Avec `stripe_cle_secrete` : appel réel à Stripe. Sans clé : indisponible en production,
+    comportement simulé (sans appel réseau) en local et en test."""
     tid = _exiger_tenant(db)
     abo = _obtenir_ou_creer_abonnement_orm(db)
     if abo.cgu_version_acceptee != parametres.version_cgu_courante:
@@ -208,11 +211,23 @@ def creer_session_checkout_stripe(
         )
 
     _libelle, prix, _quota = CATALOGUE_FORFAITS[forfait]
-    session_id = f"cs_test_{uuid.uuid4().hex[:24]}"
-    url_checkout = (
-        f"https://checkout.stripe.com/c/pay/{session_id}"
-        f"?client_reference_id={tid}&plan={forfait.value}"
-    )
+    simulation = False
+    if parametres.stripe_cle_secrete:
+        session_id, url_checkout = paiement_stripe.creer_session_checkout(
+            parametres,
+            tenant_id=tid,
+            forfait=forfait,
+            stripe_customer_id=abo.stripe_customer_id,
+        )
+    elif parametres.environnement is Environnement.PRODUCTION:
+        raise ServiceIndisponible("Paiement en ligne non configuré")
+    else:
+        simulation = True
+        session_id = f"cs_test_{uuid.uuid4().hex[:24]}"
+        url_checkout = (
+            f"https://checkout.stripe.com/c/pay/{session_id}"
+            f"?client_reference_id={tid}&plan={forfait.value}"
+        )
 
     audit.journaliser(
         db,
@@ -225,6 +240,7 @@ def creer_session_checkout_stripe(
             "forfait_demande": forfait.value,
             "prix_mensuel_eur": prix,
             "session_id": session_id,
+            "simulation": simulation,
         },
     )
     db.commit()
@@ -233,6 +249,7 @@ def creer_session_checkout_stripe(
         url_checkout=url_checkout,
         forfait=forfait,
         prix_mensuel_eur=prix,
+        simulation=simulation,
     )
 
 
@@ -297,6 +314,114 @@ def verifier_signature_webhook_stripe(
         raise DonneesInvalides("Corps JSON du webhook Stripe invalide.") from exc
 
 
+SECRET_WEBHOOK_DEVELOPPEMENT = "whsec_dev_local_secret_change_me"
+
+_STATUTS_STRIPE_ACTIFS = {"active", "trialing"}
+_STATUTS_STRIPE_IMPAYES = {"past_due", "unpaid"}
+_STATUTS_STRIPE_RESILIES = {"canceled", "incomplete_expired"}
+
+
+def _dict(valeur: object) -> dict:
+    return valeur if isinstance(valeur, dict) else {}
+
+
+def _texte(valeur: object) -> str | None:
+    return valeur if isinstance(valeur, str) and valeur else None
+
+
+def _tenant_depuis_evenement(objet: dict) -> uuid.UUID | None:
+    """Cherche le bureau dans l'ordre : client_reference_id, metadata, subscription_details."""
+    candidats = [
+        objet.get("client_reference_id"),
+        _dict(objet.get("metadata")).get("tenant_id"),
+        _dict(_dict(objet.get("subscription_details")).get("metadata")).get("tenant_id"),
+        _dict(
+            _dict(_dict(objet.get("parent")).get("subscription_details")).get("metadata")
+        ).get("tenant_id"),
+    ]
+    for candidat in candidats:
+        if not candidat:
+            continue
+        try:
+            return uuid.UUID(str(candidat))
+        except ValueError:
+            continue
+    return None
+
+
+def _identifiant_abonnement_stripe(objet: dict, type_evt: str) -> str | None:
+    direct = _texte(objet.get("subscription"))
+    if direct:
+        return direct
+    parent = _dict(_dict(objet.get("parent")).get("subscription_details"))
+    depuis_parent = _texte(parent.get("subscription"))
+    if depuis_parent:
+        return depuis_parent
+    if type_evt.startswith("customer.subscription.") or objet.get("object") == "subscription":
+        return _texte(objet.get("id"))
+    return None
+
+
+def _resoudre_bureau(
+    db: Session, objet: dict, type_evt: str
+) -> tuple[uuid.UUID, Bureau] | None:
+    """Retrouve le bureau concerné ; None si introuvable (l'événement est alors ignoré)."""
+    with sans_filtre_tenant(db):
+        tid = _tenant_depuis_evenement(objet)
+        if tid is not None:
+            bureau = db.get(Bureau, tid)
+            if bureau is not None:
+                return tid, bureau
+
+        client = _texte(objet.get("customer"))
+        abo = None
+        if client:
+            abo = db.scalar(
+                select(AbonnementBureau).where(AbonnementBureau.stripe_customer_id == client)
+            )
+        if abo is None:
+            sub = _identifiant_abonnement_stripe(objet, type_evt)
+            if sub:
+                abo = db.scalar(
+                    select(AbonnementBureau).where(
+                        AbonnementBureau.stripe_subscription_id == sub
+                    )
+                )
+        if abo is None:
+            return None
+        bureau = db.get(Bureau, abo.tenant_id)
+        if bureau is None:
+            return None
+        return abo.tenant_id, bureau
+
+
+def _fin_de_periode_facture(objet: dict) -> datetime:
+    lignes = _dict(objet.get("lines")).get("data")
+    if isinstance(lignes, list) and lignes:
+        fin = _dict(_dict(lignes[0]).get("period")).get("end")
+        if isinstance(fin, int) and not isinstance(fin, bool) and fin > 0:
+            try:
+                return datetime.fromtimestamp(fin, tz=timezone.utc)
+            except (OverflowError, OSError, ValueError):
+                pass
+    return maintenant_utc() + timedelta(days=30)
+
+
+def _appliquer_forfait_metadata(abo: AbonnementBureau, objet: dict) -> ForfaitAbonnement | None:
+    code = _dict(objet.get("metadata")).get("forfait")
+    if not code:
+        return None
+    try:
+        forfait = ForfaitAbonnement(code)
+    except ValueError:
+        return None
+    _libelle, prix, quota = CATALOGUE_FORFAITS[forfait]
+    abo.forfait = forfait
+    abo.prix_mensuel_eur = prix
+    abo.quota_dossiers_mensuels = quota
+    return forfait
+
+
 def traiter_evenement_webhook_stripe(
     db: Session,
     *,
@@ -304,55 +429,42 @@ def traiter_evenement_webhook_stripe(
     en_tete_signature: str | None,
     parametres: Parametres,
 ) -> dict[str, str]:
-    """Traite les événements Stripe vérifiés (`checkout.session.completed`,
-    `invoice.payment_failed`, `customer.subscription.deleted`)."""
+    """Traite les événements Stripe vérifiés : `checkout.session.completed`,
+    `customer.subscription.updated` / `.deleted`, `invoice.paid`,
+    `invoice.payment_succeeded` et `invoice.payment_failed`."""
+    if (
+        parametres.environnement is Environnement.PRODUCTION
+        and parametres.stripe_secret_webhook == SECRET_WEBHOOK_DEVELOPPEMENT
+    ):
+        # Secret public de développement : n'importe qui pourrait forger un événement.
+        raise AccesRefuse("Webhook Stripe refusé : secret de signature non configuré.")
+
     evenement = verifier_signature_webhook_stripe(
         charge_utile_octets,
         en_tete_signature,
         parametres.stripe_secret_webhook,
     )
     type_evt = str(evenement.get("type", ""))
-    objet = evenement.get("data", {}).get("object", {}) or {}
-    tenant_str = objet.get("client_reference_id") or (
-        objet.get("metadata", {}) or {}
-    ).get("tenant_id")
-    if not tenant_str:
-        raise DonneesInvalides("Identifiant de bureau (tenant_id) absent de l'événement Stripe.")
+    objet = _dict(_dict(evenement.get("data")).get("object"))
 
-    try:
-        tid = uuid.UUID(str(tenant_str))
-    except ValueError as exc:
-        raise DonneesInvalides("Format tenant_id invalide dans l'événement Stripe.") from exc
-
-    with sans_filtre_tenant(db):
-        bureau = db.get(Bureau, tid)
-        if bureau is None:
-            raise NonTrouve("Bureau introuvable pour cet événement Stripe.")
+    resolu = _resoudre_bureau(db, objet, type_evt)
+    if resolu is None:
+        # 200 volontaire : une erreur ferait rejouer l'événement indéfiniment par Stripe.
+        return {"statut": "ignore", "type": type_evt}
+    tid, _bureau = resolu
 
     definir_tenant(db, tid)
     abo = _obtenir_ou_creer_abonnement_orm(db)
 
-    if type_evt in {"checkout.session.completed", "customer.subscription.updated"}:
-        code_forfait = (objet.get("metadata", {}) or {}).get("forfait", abo.forfait.value)
-        try:
-            forfait_cible = ForfaitAbonnement(code_forfait)
-        except ValueError:
-            forfait_cible = ForfaitAbonnement.STARTER
+    client = _texte(objet.get("customer"))
+    sub = _identifiant_abonnement_stripe(objet, type_evt)
 
-        _libelle, prix, quota = CATALOGUE_FORFAITS[forfait_cible]
-        abo.forfait = forfait_cible
-        abo.prix_mensuel_eur = prix
-        abo.quota_dossiers_mensuels = quota
-        abo.stripe_customer_id = objet.get("customer") or abo.stripe_customer_id
-        abo.stripe_subscription_id = (
-            objet.get("subscription") or objet.get("id") or abo.stripe_subscription_id
-        )
+    if type_evt == "checkout.session.completed":
+        forfait_cible = _appliquer_forfait_metadata(abo, objet) or abo.forfait
+        abo.stripe_customer_id = client or abo.stripe_customer_id
+        abo.stripe_subscription_id = sub or abo.stripe_subscription_id
         abo.statut_stripe = "active"
         abo.periode_courante_fin = maintenant_utc() + timedelta(days=30)
-
-        with sans_filtre_tenant(db):
-            bureau.actif = True
-
         audit.journaliser(
             db,
             "abonnement.webhook_activation_stripe",
@@ -362,19 +474,67 @@ def traiter_evenement_webhook_stripe(
             details={
                 "type_evenement": type_evt,
                 "forfait": forfait_cible.value,
-                "quota_dossiers_mensuels": quota,
+                "quota_dossiers_mensuels": abo.quota_dossiers_mensuels,
             },
         )
         db.commit()
         return {"statut": "active", "forfait": forfait_cible.value}
 
+    if type_evt == "customer.subscription.updated":
+        statut_reel = str(objet.get("status", ""))
+        forfait_cible = _appliquer_forfait_metadata(abo, objet)
+        abo.stripe_customer_id = abo.stripe_customer_id or client
+        abo.stripe_subscription_id = abo.stripe_subscription_id or sub
+        if statut_reel in _STATUTS_STRIPE_ACTIFS:
+            nouveau = "active"
+        elif statut_reel in _STATUTS_STRIPE_IMPAYES:
+            nouveau = "past_due"
+        elif statut_reel in _STATUTS_STRIPE_RESILIES:
+            nouveau = "canceled"
+        else:
+            nouveau = None
+        if nouveau is not None:
+            abo.statut_stripe = nouveau
+        audit.journaliser(
+            db,
+            "abonnement.webhook_mise_a_jour_stripe",
+            ResultatAudit.SUCCES,
+            ressource_type="abonnement",
+            ressource_id=abo.id,
+            details={
+                "type_evenement": type_evt,
+                "statut_stripe": abo.statut_stripe,
+                "forfait": abo.forfait.value,
+            },
+        )
+        db.commit()
+        if nouveau is None:
+            return {"statut": "inchange", "forfait": abo.forfait.value}
+        return {
+            "statut": "active" if nouveau == "active" else "suspendu",
+            "forfait": abo.forfait.value,
+        }
+
+    if type_evt in {"invoice.paid", "invoice.payment_succeeded"}:
+        abo.stripe_customer_id = abo.stripe_customer_id or client
+        abo.stripe_subscription_id = abo.stripe_subscription_id or sub
+        abo.statut_stripe = "active"
+        abo.periode_courante_fin = _fin_de_periode_facture(objet)
+        audit.journaliser(
+            db,
+            "abonnement.webhook_paiement_stripe",
+            ResultatAudit.SUCCES,
+            ressource_type="abonnement",
+            ressource_id=abo.id,
+            details={"type_evenement": type_evt, "statut_stripe": "active"},
+        )
+        db.commit()
+        return {"statut": "active", "forfait": abo.forfait.value}
+
     if type_evt in {"invoice.payment_failed", "customer.subscription.deleted"}:
         abo.statut_stripe = (
             "past_due" if type_evt == "invoice.payment_failed" else "canceled"
         )
-        with sans_filtre_tenant(db):
-            bureau.actif = False
-
         audit.journaliser(
             db,
             "abonnement.webhook_suspension_stripe",

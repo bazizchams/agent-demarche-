@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from app.agent_local.sessions_navigateur import RegistreSessionsNavigateur
 from app.core.config import Parametres, obtenir_parametres
 from app.core.erreurs import AccesRefuse, NonAuthentifie
 from app.core.securite import comparer_constant
@@ -15,6 +16,7 @@ from app.modeles.agent_local import AgentLocal
 from app.modeles.journal_audit import ResultatAudit
 from app.modeles.session_utilisateur import SessionUtilisateur
 from app.modeles.utilisateur import Role, Utilisateur
+from app.services import acces_abonnement
 from app.services import agents_locaux as service_agents
 from app.services import audit
 from app.services.auth import verifier_et_rafraichir_session
@@ -35,6 +37,15 @@ def obtenir_db(requete: Request) -> Iterator[Session]:
 
 def obtenir_cle_maitresse(requete: Request) -> bytes:
     return requete.app.state.cle_maitresse
+
+
+def obtenir_registre_navigateur(requete: Request) -> RegistreSessionsNavigateur:
+    """Registre des sessions du Co-Pilote navigateur (une session par bureau), propre à l'application."""
+    registre = getattr(requete.app.state, "registre_navigateur", None)
+    if registre is None:
+        registre = RegistreSessionsNavigateur()
+        requete.app.state.registre_navigateur = registre
+    return registre
 
 
 @dataclass(frozen=True)
@@ -72,6 +83,12 @@ def obtenir_contexte_auth_brut(
             )
             db.commit()
             raise AccesRefuse("Jeton de protection CSRF manquant ou invalide.")
+
+    # Abonnement expiré ou suspendu : le bureau est en lecture seule (402 sur les écritures,
+    # sauf connexion, paiement et droits des candidats).
+    acces_abonnement.exiger_ecriture_autorisee(
+        methode=requete.method, chemin=requete.url.path, db=db, parametres=parametres
+    )
 
     return ContexteAuth(utilisateur=utilisateur, session=session_obj, db=db)
 
@@ -135,6 +152,10 @@ def obtenir_contexte_execution_tache(
     if jeton_agent:
         agent = service_agents.verifier_jeton_agent_local(
             db, jeton_clair=jeton_agent
+        )
+        # Un agent local ne contourne pas le mode lecture seule de son bureau.
+        acces_abonnement.exiger_ecriture_autorisee(
+            methode=requete.method, chemin=requete.url.path, db=db, parametres=parametres
         )
         return ContexteExecutionTache(
             db=db, utilisateur=None, agent_local=agent

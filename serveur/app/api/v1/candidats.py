@@ -248,7 +248,9 @@ def generer_specimens_demonstration(
     types_a_creer: list[str] = []
     for c_dem in codes:
         try:
-            dem = service_pieces.obtenir_demarche(parametres.dossier_demarches, c_dem)
+            dem = service_pieces.obtenir_demarche(
+                parametres.dossier_demarches, c_dem, ctx.db
+            )
             for p in dem.pieces_requises:
                 if p.type_piece not in docs_existants and p.type_piece not in types_a_creer:
                     types_a_creer.append(p.type_piece)
@@ -301,7 +303,7 @@ def verifier_completude(
         ctx.db, candidat_id=candidat_id
     )
     demarche = service_pieces.obtenir_demarche(
-        parametres.dossier_demarches, code_demarche
+        parametres.dossier_demarches, code_demarche, ctx.db
     )
     return service_pieces.verifier_completude_dossier(
         candidat=candidat,
@@ -332,7 +334,7 @@ def evaluer_dossier(
         ctx.db, candidat_id=candidat_id
     )
     demarche = service_pieces.obtenir_demarche(
-        parametres.dossier_demarches, code_demarche
+        parametres.dossier_demarches, code_demarche, ctx.db
     )
     return service_conseiller.evaluer_dossier(
         candidat=candidat,

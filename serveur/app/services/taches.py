@@ -326,7 +326,9 @@ def creer_tache(
         db, candidat_id=donnees.candidat_id, cle_maitresse=cle_maitresse
     )
     docs_orm = lister_documents_orm(db, candidat_id=candidat.id)
-    demarche = obtenir_demarche(parametres.dossier_demarches, donnees.code_demarche)
+    demarche = obtenir_demarche(
+        parametres.dossier_demarches, donnees.code_demarche, db
+    )
 
     tache_ouverte = db.scalar(
         select(TacheDossier.id).where(
@@ -501,7 +503,9 @@ def demarrer_tache(
         db, candidat_id=tache.candidat_id, cle_maitresse=cle_maitresse
     )
     docs_orm = lister_documents_orm(db, candidat_id=tache.candidat_id)
-    demarche = obtenir_demarche(parametres.dossier_demarches, tache.code_demarche)
+    demarche = obtenir_demarche(
+        parametres.dossier_demarches, tache.code_demarche, db
+    )
     completude = verifier_completude_dossier(
         candidat=candidat, documents=docs_orm, demarche=demarche
     )
@@ -827,7 +831,9 @@ def reprendre_tache(
         db, candidat_id=tache.candidat_id, cle_maitresse=cle_maitresse
     )
     docs_orm = lister_documents_orm(db, candidat_id=tache.candidat_id)
-    demarche = obtenir_demarche(parametres.dossier_demarches, tache.code_demarche)
+    demarche = obtenir_demarche(
+        parametres.dossier_demarches, tache.code_demarche, db
+    )
     completude = verifier_completude_dossier(
         candidat=candidat, documents=docs_orm, demarche=demarche
     )

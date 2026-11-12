@@ -86,6 +86,10 @@ class ConfigPortailYAML(BaseModel):
     detecteurs_blocage_securite: list[str] = Field(default_factory=list)
     selecteurs_soumission_interdits: list[str] = Field(default_factory=list)
     selecteur_enregistrer_brouillon: str | None = None
+    # Connexion automatisee via le coffre (regle 3) : optionnels ; sans eux -> connexion manuelle.
+    selecteur_identifiant: str | None = Field(default=None, max_length=200)
+    selecteur_mot_de_passe: str | None = Field(default=None, max_length=200)
+    selecteur_bouton_connexion: str | None = Field(default=None, max_length=200)
     etapes_automatisation: list[ConfigEtapeAutomatisation] = Field(default_factory=list)
 
 

@@ -432,7 +432,7 @@ def poser_question_dossier(
 
     candidat = obtenir_candidat(db, candidat_id=candidat_id, cle_maitresse=cle_maitresse)
     docs_orm = lister_documents_orm(db, candidat_id=candidat_id)
-    demarche = obtenir_demarche(parametres.dossier_demarches, code_demarche)
+    demarche = obtenir_demarche(parametres.dossier_demarches, code_demarche, db)
 
     evaluation = evaluer_dossier(
         candidat=candidat,

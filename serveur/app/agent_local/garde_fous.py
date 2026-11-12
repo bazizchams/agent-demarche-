@@ -67,13 +67,10 @@ def cliquer_securise(
     loc.first.click()
 
 
-def verifier_session_et_absence_captcha(
+def verifier_absence_captcha_2fa(
     page: Page, config_portail: ConfigPortailYAML, *, code_etape: str
 ) -> None:
-    """Applique les Règles 2 et 3 sur la page courante :
-    - Si un détecteur de CAPTCHA ou 2FA est visible -> suspend la tâche (`action_utilisateur_portail`).
-    - Si la session portail n'est pas ouverte par l'opérateur -> suspend la tâche (`action_utilisateur_portail`)."""
-    # 1. Règle 2 : détection CAPTCHA / 2FA en priorité
+    """Règle 2 seule : suspend si un CAPTCHA ou un contrôle 2FA est visible. Jamais de contournement."""
     for sel_sec in config_portail.detecteurs_blocage_securite:
         loc_sec = page.locator(sel_sec)
         if loc_sec.count() > 0 and loc_sec.first.is_visible():
@@ -86,6 +83,26 @@ def verifier_session_et_absence_captcha(
                 code_etape=code_etape,
             )
 
+
+def session_portail_ouverte(page: Page, config_portail: ConfigPortailYAML) -> bool:
+    """Vrai si le témoin de session ouverte est visible et le détecteur de session fermée absent."""
+    if config_portail.detecteur_session_fermee:
+        loc_fermee = page.locator(config_portail.detecteur_session_fermee)
+        if loc_fermee.count() > 0 and loc_fermee.first.is_visible():
+            return False
+    loc_ouverte = page.locator(config_portail.temoin_session_ouverte)
+    return loc_ouverte.count() > 0 and loc_ouverte.first.is_visible()
+
+
+def verifier_session_et_absence_captcha(
+    page: Page, config_portail: ConfigPortailYAML, *, code_etape: str
+) -> None:
+    """Applique les Règles 2 et 3 sur la page courante :
+    - Si un détecteur de CAPTCHA ou 2FA est visible -> suspend la tâche (`action_utilisateur_portail`).
+    - Si la session portail n'est pas ouverte par l'opérateur -> suspend la tâche (`action_utilisateur_portail`)."""
+    # 1. Règle 2 : détection CAPTCHA / 2FA en priorité
+    verifier_absence_captcha_2fa(page, config_portail, code_etape=code_etape)
+
     # 2. Règle 3 : détection d'une session non connectée
     if config_portail.detecteur_session_fermee:
         loc_fermee = page.locator(config_portail.detecteur_session_fermee)
@@ -94,7 +111,7 @@ def verifier_session_et_absence_captcha(
                 motif=MotifSuspensionTache.ACTION_UTILISATEUR_PORTAIL,
                 message_alerte=(
                     "Session portail non connectée : veuillez ouvrir la session dans le navigateur "
-                    "avant de reprendre la tâche (règle 3 : aucun mot de passe stocké)."
+                    "avant de reprendre la tâche (règle 3 : connexion manuelle, ou via le coffre chiffré si le candidat y a consenti)."
                 ),
                 code_etape=code_etape,
             )

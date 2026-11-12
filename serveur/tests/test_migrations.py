@@ -40,6 +40,8 @@ def test_cycle_complet_migrations_alembic(tmp_path: Path) -> None:
             "decisions_validation_humaine",
             "abonnements_bureaux",
             "preuves_consentement_candidats",
+            "demarches_bureaux",
+            "voeux_formations",
             "alembic_version",
         }.issubset(tables)
     finally:

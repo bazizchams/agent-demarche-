@@ -1,0 +1,83 @@
+code: canada_residence_permanente
+libelle: "Résidence permanente au Canada — Entrée express (préparation)"
+description: "Étapes de préparation avant création du profil Entrée express : évaluation des diplômes, tests de langue, documents à réunir. Ne couvre pas le dépôt de la demande."
+
+# Sources officielles consultées le 2026-11-11 : canada.ca (Entrée express). Montants des fonds exigés et frais : voir docs/sources_demarches.md (À vérifier).
+veille_reglementaire:
+  - titre: "Résultats de test de langue approuvé"
+    resume: "Tests acceptés : CELPIP-General, IELTS General Training et PTE Core (anglais) ; TEF Canada et TCF Canada (français). Les résultats doivent avoir moins de 2 ans au moment de la création du profil et au moment du dépôt de la demande de résidence permanente ; des résultats expirés entraînent le refus."
+    reference: "IRCC — Entrée express : résultats de test de langue"
+  - titre: "Évaluation des diplômes d'études (ÉDÉ)"
+    resume: "Une ÉDÉ est nécessaire pour les études faites hors du Canada si l'on souhaite être admissible au Programme des travailleurs qualifiés (fédéral) ou obtenir des points pour ces études. Elle doit être émise par un organisme désigné (par ex. WES, ICAS, CES, IQAS, ICES) et avoir moins de 5 ans à la création du profil et au dépôt de la demande."
+    reference: "IRCC — Entrée express : évaluation des diplômes"
+  - titre: "Documents à préparer pour Entrée express"
+    resume: "IRCC liste : passeport (à renouveler s'il expire dans les 6 mois suivant la demande), résultats de langue, preuve d'études canadiennes ou ÉDÉ, offre d'emploi écrite le cas échéant, preuves d'expérience de travail, attestation de qualification (métiers) le cas échéant, preuve de fonds, certificats de police."
+    reference: "IRCC — Entrée express : préparer vos documents"
+  - titre: "Création du profil et bassin de candidats"
+    resume: "Le profil doit être soumis dans les 60 jours après son début, sinon il faut recommencer. Un profil admissible entre dans le bassin et reçoit une note du Système de classement global (SCG). Entrer dans le bassin ne garantit pas une invitation : seule l'invitation à présenter une demande permet de demander la résidence permanente."
+    reference: "IRCC — Entrée express : créer un profil"
+  - titre: "Délai après invitation à présenter une demande"
+    resume: "Un candidat invité dispose de 60 jours pour présenter sa demande de résidence permanente ; sans demande dans ce délai, l'invitation expire et le profil est retiré du bassin."
+    reference: "IRCC — Présenter une demande de résidence permanente"
+  - titre: "Preuve de fonds : exemptions et lettre bancaire"
+    resume: "La preuve de fonds est exigée pour le Programme des travailleurs qualifiés (fédéral) et celui des métiers spécialisés ; elle n'est pas exigée pour la Catégorie de l'expérience canadienne ni pour un candidat autorisé à travailler avec une offre d'emploi valide. La lettre bancaire doit être sur papier à en-tête, indiquer les dettes en cours et, pour chaque compte, son numéro, sa date d'ouverture, le solde actuel et le solde moyen sur 6 mois."
+    reference: "IRCC — Entrée express : preuve de fonds"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - adresse
+  - niveau_actuel
+  - fonds_disponibles_eur
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport (à renouveler s'il expire dans les 6 mois suivant la demande)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: resultats_test_langue
+    libelle: "Résultats de test de langue approuvé (TEF Canada, TCF Canada, IELTS GT, CELPIP-G, PTE Core), moins de 2 ans"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: rapport_eca_diplomes
+    libelle: "Rapport d'évaluation des diplômes d'études (ÉDÉ / ECA), moins de 5 ans"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: diplomes_et_releves
+    libelle: "Diplômes et relevés de notes (base de l'évaluation des diplômes)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_experience_travail
+    libelle: "Lettres de référence ou d'employeur prouvant l'expérience de travail"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: lettre_bancaire_preuve_fonds
+    libelle: "Lettre bancaire de preuve de fonds (non exigée pour la Catégorie de l'expérience canadienne)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: certificat_police
+    libelle: "Certificats de police"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0

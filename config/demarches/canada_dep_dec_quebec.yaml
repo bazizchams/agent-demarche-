@@ -1,0 +1,79 @@
+code: canada_dep_dec_quebec
+libelle: "Québec — Admission DEP / DEC, CAQ pour études et permis d'études IRCC"
+description: "Admission dans un établissement québécois (formation professionnelle DEP ou collégial DEC), demande de CAQ pour études au MIFI via Arrima, puis permis d'études IRCC."
+
+# Sources officielles consultées le 2026-11-11 : quebec.ca (demande de sélection temporaire pour études), canada.ca (IRCC).
+# Seuil de capacité financière : non publié sur les pages consultées, donc non renseigné (voir docs/sources_demarches.md).
+veille_reglementaire:
+  - titre: "CAQ pour études obligatoire avant le permis d'études"
+    resume: "Un permis d'études ne peut être délivré pour étudier au Québec sans Certificat d'acceptation du Québec (CAQ), sauf exceptions (par ex. programme de 6 mois ou moins). L'attestation de délivrance du CAQ doit être jointe à la demande de permis. Le CAQ peut être délivré pour 49 mois au maximum selon la durée du programme. L'exigence de CAQ est distincte de celle de la lettre d'attestation provinciale (LAP) : les deux sont à vérifier séparément."
+    reference: "IRCC — Étudiants qui se rendent au Québec"
+  - titre: "Frais et délai de traitement du CAQ études"
+    resume: "Frais de 135 $ CAN pour un étudiant étranger à partir du 1er janvier 2026, ajustés chaque année, payables en entier par carte de crédit, non remboursables sauf demande jugée irrecevable. Décision dans les 25 jours ouvrables suivant la réception d'une demande complète pour 80 % des demandes."
+    reference: "Québec.ca — Demande de sélection temporaire pour études"
+  - titre: "Modalités de la demande en ligne (Arrima)"
+    resume: "Compte Arrima avec des noms identiques à ceux du passeport. Le paiement doit être fait dans l'heure suivant la soumission, sinon la demande n'est pas considérée comme présentée ; les documents sont à transmettre dans les 15 jours suivant le paiement. La demande doit respecter le plafond de demandes de l'établissement, sauf exemption (niveaux formation professionnelle, collégial et universitaire concernés)."
+    reference: "Québec.ca — Demande de sélection temporaire pour études"
+  - titre: "Contenu de la lettre d'admission"
+    resume: "La lettre d'admission de l'établissement québécois doit indiquer le programme, le type de diplôme, les dates de début et de fin, le nombre de crédits, les heures de formation (présentiel, en ligne ou à l'étranger), les heures de stage et conditions d'admission le cas échéant, avec le sceau ou la signature du registraire."
+    reference: "Québec.ca — Documents à transmettre (CAQ études)"
+  - titre: "Preuve de capacité financière"
+    resume: "Sont acceptés notamment : relevés bancaires des 6 derniers mois, bulletins de paie des 4 derniers mois avec relevés du compte de dépôt, preuve de bourse, certificat de placement garanti, preuve de prêt étudiant, preuve de paiement partiel ou total des frais de scolarité. Si un tiers paie, fournir la Déclaration de soutien financier signée et ses justificatifs. Documents en français ou en anglais, sinon traduction authentifiée ; signatures manuscrites uniquement."
+    reference: "Québec.ca — Documents à transmettre (CAQ études)"
+  - titre: "Frais de biométrie du permis d'études IRCC"
+    resume: "Frais de biométrie de 85 $ CAN par personne (maximum 170 $ CAN pour une famille déposant en même temps), payés au dépôt ; la biométrie n'est requise qu'une fois tous les 10 ans. La demande de permis d'études se fait en ligne, avec la lettre d'acceptation de l'établissement désigné."
+    reference: "IRCC — Présenter une demande de permis d'études"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - niveau_actuel
+  - programme_vise
+  - etablissement_vise
+  - fonds_disponibles_eur
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport valide (pages d'identité : photo, signature, date d'expiration)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: lettre_admission_etablissement_quebec
+    libelle: "Lettre d'admission d'un établissement québécois (DEP ou DEC)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: declaration_engagements_autorisations
+    libelle: "Formulaire « Déclaration, engagements et autorisations » signé"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_capacite_financiere
+    libelle: "Preuve de capacité financière (relevés bancaires 6 mois, bourse, CPG, prêt, paiement de frais de scolarité)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: declaration_soutien_financier
+    libelle: "Déclaration de soutien financier signée (si un tiers paie les frais)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: attestation_caq_etudes
+    libelle: "Attestation de délivrance du CAQ pour études (à joindre à la demande de permis d'études)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0

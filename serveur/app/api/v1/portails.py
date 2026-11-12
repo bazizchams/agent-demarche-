@@ -4,7 +4,6 @@ et de pilotage direct en temps réel du navigateur Co-Pilote IA (style Perplexit
 
 from __future__ import annotations
 
-import secrets
 import uuid
 from datetime import datetime
 from typing import Any
@@ -22,7 +21,20 @@ from app.agent_local.config_portail import (
     lister_configs_portails,
 )
 from app.agent_local.portails.verificateur_portail import verifier_url_officielle_portail
-from app.api.dependances import ContexteAuth, exiger_roles, obtenir_contexte_auth
+from app.agent_local.domaines_officiels import politique_depuis_parametres
+from app.agent_local.sessions_navigateur import (
+    RegistreSessionsNavigateur,
+    SessionNavigateur,
+    etat_session_absente,
+    headless_pour,
+)
+from app.api.dependances import (
+    ContexteAuth,
+    exiger_roles,
+    obtenir_contexte_auth,
+    obtenir_db,
+    obtenir_registre_navigateur,
+)
 from app.core.config import Parametres, obtenir_parametres
 from app.core.erreurs import DonneesInvalides, NonAutorise, NonTrouve
 from app.modeles.journal_audit import EntreeAudit, ResultatAudit
@@ -186,6 +198,17 @@ def enregistrer_validation_humaine_portail_reel(
 ExigerOperateurHumain = Depends(exiger_roles(Role.ADMINISTRATEUR, Role.EMPLOYE))
 
 
+class VoeuPanierEntree(SchemaEntree):
+    """Un vœu à ajouter au panier Campus France. La validité de la motivation (non vide, 4 000 caractères
+    max) est contrôlée par le Co-Pilote et rapportée par vœu (statut `motivation_invalide`)."""
+
+    voeu_id: str = Field(min_length=1, max_length=80)
+    intitule: str = Field(default="", max_length=300)
+    etablissement: str = Field(default="", max_length=300)
+    niveau: str | None = Field(default=None, max_length=100)
+    motivation: str = Field(default="", max_length=20000)
+
+
 class PilotageNavigateurEntree(SchemaEntree):
     candidat_id: uuid.UUID
     code_demarche: str = Field(default="campus_france", min_length=2, max_length=60)
@@ -195,6 +218,8 @@ class PilotageNavigateurEntree(SchemaEntree):
     ouvrir_fenetre_visible: bool = True
     synchroniser_tache: bool = True
     prendre_capture: bool = True
+    # Action « ajouter_voeux_panier » : liste des vœux (optionnelle, ignorée pour les autres actions)
+    voeux: list[VoeuPanierEntree] | None = Field(default=None, max_length=20)
 
 
 class PilotageNavigateurSortie(SchemaSortie):
@@ -221,6 +246,10 @@ class PilotageNavigateurSortie(SchemaSortie):
     tache_id: uuid.UUID | None = None
     statut_tache: str | None = None
     pieces_manquantes_tache: list[str] = Field(default_factory=list)
+    # Résultat par vœu : voeu_id, intitule, etablissement, statut, motivation_enregistree, nb_caracteres
+    resultats_voeux: list[dict[str, Any]] = Field(default_factory=list)
+    # Chemin du fichier de calibration écrit par l'action « cartographier_page »
+    fichier_calibration: str | None = None
 
 
 class ActionDomDirecteEntree(SchemaEntree):
@@ -248,45 +277,45 @@ def obtenir_guide_campus_france_2026(
 
 @routeur.get("/etat-navigateur")
 def obtenir_etat_temps_reel_navigateur(
-    _ctx: ContexteAuth = Depends(obtenir_contexte_auth),
+    ctx: ContexteAuth = ExigerOperateurHumain,
+    registre: RegistreSessionsNavigateur = Depends(obtenir_registre_navigateur),
 ) -> dict[str, Any]:
     """Retourne en temps réel (< 25 ms, sans capture d'écran) l'état de l'onglet actif
-    du navigateur, ses champs et boutons interactifs et le journal d'actions."""
-    from app.agent_local.pilote_navigateur import pilote_navigateur_global
-
-    return pilote_navigateur_global.obtenir_etat_temps_reel()
+    du navigateur DU BUREAU, ses champs et boutons interactifs et le journal d'actions.
+    Ne crée jamais de session."""
+    session = registre.existante(ctx.utilisateur.tenant_id)
+    if session is None:
+        return etat_session_absente()
+    return session.gestionnaire.obtenir_etat_temps_reel()
 
 
 @routeur.post("/action-dom-directe")
 def executer_action_dom_directe_navigateur(
     donnees: ActionDomDirecteEntree,
-    _ctx: ContexteAuth = ExigerOperateurHumain,
+    ctx: ContexteAuth = ExigerOperateurHumain,
     parametres: Parametres = Depends(obtenir_parametres),
+    registre: RegistreSessionsNavigateur = Depends(obtenir_registre_navigateur),
 ) -> dict[str, Any]:
-    """Exécute instantanément une action directe dans le DOM du navigateur (clic, saisie,
-    navigation, défilement, mise au premier plan de la fenêtre) sans capture d'écran."""
-    from app.agent_local.pilote_navigateur import pilote_navigateur_global
-    from app.core.config import Environnement
-
-    headless = (
-        True
-        if parametres.environnement == Environnement.TEST
-        else (not donnees.ouvrir_fenetre_visible)
-    )
-    dossier_profil = parametres.dossier_stockage / "profil_navigateur_agent"
-    return pilote_navigateur_global.executer_action_dom_directe(
+    """Exécute instantanément une action directe dans le DOM du navigateur du bureau (clic, saisie,
+    navigation, défilement, mise au premier plan de la fenêtre) sans capture d'écran.
+    Toute navigation est soumise à la Règle 6 (domaines HTTPS officiels des YAML)."""
+    session = registre.obtenir(ctx.utilisateur.tenant_id, parametres)
+    return session.gestionnaire.executer_action_dom_directe(
         type_operation=donnees.type_operation,
         selecteur=donnees.selecteur,
         valeur=donnees.valeur,
         url_destination=donnees.url_destination,
-        dossier_profil=dossier_profil,
-        headless=headless,
+        dossier_profil=session.dossier_profil,
+        headless=headless_pour(parametres, ouvrir_fenetre_visible=donnees.ouvrir_fenetre_visible),
     )
 
 
-def _en_tetes_cors_copilote() -> dict[str, str]:
+def _en_tetes_cors_copilote(origine: str | None) -> dict[str, str]:
+    """CORS du pont : jamais « * » ni cookies (pas d'Allow-Credentials). L'origine n'est reflétée que si
+    c'est celle d'une page officielle (HTTPS, domaines des YAML) ou de démonstration hors production."""
     return {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": origine or "null",
+        "Vary": "Origin",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, X-Copilote-Bridge-Token",
         "Access-Control-Allow-Private-Network": "true",
@@ -294,8 +323,14 @@ def _en_tetes_cors_copilote() -> dict[str, str]:
 
 
 @routeur.options("/copilote-bridge")
-def options_copilote_bridge() -> Response:
-    return Response(status_code=204, headers=_en_tetes_cors_copilote())
+def options_copilote_bridge(
+    requete: Request,
+    parametres: Parametres = Depends(obtenir_parametres),
+) -> Response:
+    origine = requete.headers.get("origin")
+    if not politique_depuis_parametres(parametres).origine_autorisee(origine):
+        return Response(status_code=403, headers={"Vary": "Origin"})
+    return Response(status_code=204, headers=_en_tetes_cors_copilote(origine))
 
 
 @routeur.post("/copilote-bridge")
@@ -304,38 +339,58 @@ def executer_depuis_barre_laterale_navigateur(
     requete: Request,
     x_copilote_bridge_token: str | None = Header(default=None),
     parametres: Parametres = Depends(obtenir_parametres),
+    registre: RegistreSessionsNavigateur = Depends(obtenir_registre_navigateur),
+    db: Session = Depends(obtenir_db),
 ) -> JSONResponse:
-    """Pont temps réel appelé directement par la barre latérale Co-Pilote IA injectée
-    dans la fenêtre du navigateur (même sur un domaine externe comme `etudesenfrance.diplomatie.gouv.fr`)."""
-    from app.agent_local.pilote_navigateur import pilote_navigateur_global
-    from app.core.config import Environnement
+    """Pont temps réel appelé par la barre latérale Co-Pilote IA injectée dans la page du navigateur
+    (même sur un domaine externe comme `etudesenfrance.diplomatie.gouv.fr`).
 
-    jeton_attendu = pilote_navigateur_global.jeton_bridge_local
-    jeton_fourni = (x_copilote_bridge_token or "").strip()
-    cookie_session = requete.cookies.get(parametres.nom_cookie_session)
+    Authentification : UNIQUEMENT le jeton propre à la session navigateur du bureau
+    (`X-Copilote-Bridge-Token`, aléatoire, régénéré à chaque session). La simple présence d'un
+    cookie de session ne suffit plus (la page officielle n'envoie de toute façon pas nos cookies)."""
+    from app.core.erreurs import AccesRefuse
+    from app.db.tenant import definir_tenant
+    from app.services import acces_abonnement
 
-    if not (
-        (jeton_fourni and secrets.compare_digest(jeton_fourni, jeton_attendu))
-        or cookie_session
-    ):
+    origine = requete.headers.get("origin")
+    if origine and not politique_depuis_parametres(parametres).origine_autorisee(origine):
+        raise AccesRefuse("Origine non autorisée pour le pont Co-Pilote.")
+
+    session = registre.par_jeton(x_copilote_bridge_token)
+    if session is None:
         raise NonAutorise("Jeton de pont Co-Pilote navigateur invalide.")
 
-    headless = parametres.environnement == Environnement.TEST
-    dossier_profil = parametres.dossier_stockage / "profil_navigateur_agent"
-    resultat = pilote_navigateur_global.executer_action(
-        code_demarche=pilote_navigateur_global._derniere_demarche,
-        cible=pilote_navigateur_global._derniere_cible,
+    # Le bureau de la session pilote l'isolation ORM, l'abonnement (lecture seule => 402) et l'audit.
+    definir_tenant(db, session.tenant_id)
+    acces_abonnement.exiger_ecriture_autorisee(
+        methode="POST", chemin=requete.url.path, db=db, parametres=parametres
+    )
+    registre.toucher(session.tenant_id)
+
+    gest = session.gestionnaire
+    resultat = gest.executer_action(
+        code_demarche=gest._derniere_demarche,
+        cible=gest._derniere_cible,
         action="instruction_libre",
         instruction_libre=donnees.instruction_libre,
-        candidat=dict(pilote_navigateur_global._dernier_candidat),
+        candidat=dict(gest._dernier_candidat),
         documents_dechiffres=[],
-        dossier_profil=dossier_profil,
-        headless=headless,
+        dossier_profil=session.dossier_profil,
+        headless=headless_pour(parametres),
         prendre_capture=False,
     )
+    # R5 : ni le texte de l'instruction ni l'URL dans l'audit.
+    audit.journaliser(
+        db,
+        "navigateur.pont_copilote",
+        ResultatAudit.SUCCES if resultat.succes else ResultatAudit.REFUS,
+        ressource_type="navigateur",
+        details={"action": "instruction_libre"},
+    )
+    db.commit()
     return JSONResponse(
         status_code=200,
-        headers=_en_tetes_cors_copilote(),
+        headers=_en_tetes_cors_copilote(origine) if origine else None,
         content={
             "succes": resultat.succes,
             "resume_francais": resultat.resume_francais,
@@ -393,6 +448,7 @@ def piloter_navigateur_portail(
     donnees: PilotageNavigateurEntree,
     ctx: ContexteAuth = ExigerOperateurHumain,
     parametres: Parametres = Depends(obtenir_parametres),
+    registre: RegistreSessionsNavigateur = Depends(obtenir_registre_navigateur),
     cle_maitresse: bytes = Depends(
         __import__("app.api.dependances", fromlist=["obtenir_cle_maitresse"]).obtenir_cle_maitresse
     ),
@@ -400,8 +456,10 @@ def piloter_navigateur_portail(
     """Pilote directement le navigateur en temps réel via Playwright sur le vrai site
     Campus France / IRCC ou sur la page locale, comprend et exécute l'instruction en langage naturel
     de l'opérateur, et retourne l'état interactif en direct ainsi que la réponse du Co-Pilote."""
-    from app.agent_local.pilote_navigateur import pilote_navigateur_global
-    from app.core.config import Environnement
+    from app.agent_local.pilote_navigateur import (
+        ACTION_AJOUTER_VOEUX_PANIER,
+        ACTIONS_PANIER_ET_CALIBRATION,
+    )
     from app.modeles.tache import StatutTache, TacheDossier
     from app.schemas.candidat import CandidatModification
     from app.schemas.tache import (
@@ -436,19 +494,54 @@ def piloter_navigateur_portail(
             except Exception:
                 continue
 
-    headless = (
-        True
-        if parametres.environnement == Environnement.TEST
-        else (not donnees.ouvrir_fenetre_visible)
-    )
-    dossier_profil = parametres.dossier_stockage / "profil_navigateur_agent"
+    session_bureau: SessionNavigateur = registre.obtenir(ctx.utilisateur.tenant_id, parametres)
+    headless = headless_pour(parametres, ouvrir_fenetre_visible=donnees.ouvrir_fenetre_visible)
+    dossier_profil = session_bureau.dossier_profil
 
     # Si synchroniser_tache est actif pour un pré-remplissage complet, on prend une capture de contrôle Règle 1
     besoin_capture = donnees.prendre_capture or (
         donnees.synchroniser_tache and donnees.action == "preremplissage_complet"
     )
 
-    resultat = pilote_navigateur_global.executer_action(
+    # Règle 6 : « homologué » = le portail réel de cette démarche porte le statut « validé sur portail réel »
+    # (attestation humaine de l'administrateur). Sans cela, l'ajout de vœux est refusé hors page de démo.
+    est_action_panier = donnees.action in ACTIONS_PANIER_ET_CALIBRATION
+    portail_homologue = False
+    if donnees.action == ACTION_AJOUTER_VOEUX_PANIER and not donnees.cible.startswith("demo_"):
+        for cfg_portail in lister_configs_portails(parametres.dossier_portails).values():
+            if cfg_portail.mode_portail == ModePortail.REEL and cfg_portail.code_demarche == donnees.code_demarche:
+                synthese = _construire_synthese_portail(ctx.db, cfg_portail)
+                if synthese.statut_test_regle6 == StatutTestFonctionnalite.VALIDE_SUR_PORTAIL_REEL:
+                    portail_homologue = True
+                    break
+
+    # Vœux à envoyer au panier : ceux fournis explicitement, sinon UNIQUEMENT les vœux VALIDÉS par
+    # l'opérateur en base (lettre relue, sans repère « À COMPLÉTER »). Rien n'est jamais inventé (R4).
+    voeux_a_envoyer: list[dict[str, Any]] | None = (
+        [v.model_dump() for v in donnees.voeux] if donnees.voeux else None
+    )
+    if donnees.action == ACTION_AJOUTER_VOEUX_PANIER and voeux_a_envoyer is None:
+        from app.core.erreurs import DonneesInvalides
+        from app.services import voeux as service_voeux
+
+        valides = service_voeux.lister_voeux_pour_panier(ctx.db, cand.id, cle_maitresse)
+        voeux_a_envoyer = [
+            {
+                "voeu_id": str(v["voeu_id"]),
+                "intitule": v["intitule"],
+                "etablissement": v["etablissement"],
+                "niveau": v["niveau"],
+                "motivation": v["motivation"] or "",
+            }
+            for v in valides
+        ]
+        if not voeux_a_envoyer:
+            raise DonneesInvalides(
+                "Aucun vœu validé pour ce candidat : rédigez puis validez au moins un vœu "
+                "(onglet Campus France, « Vœux et lettres de motivation »)."
+            )
+
+    resultat = session_bureau.gestionnaire.executer_action(
         code_demarche=donnees.code_demarche,
         cible=donnees.cible,
         action=donnees.action,
@@ -458,7 +551,32 @@ def piloter_navigateur_portail(
         dossier_profil=dossier_profil,
         headless=headless,
         prendre_capture=besoin_capture,
+        voeux=voeux_a_envoyer,
+        portail_homologue=portail_homologue,
     )
+
+    # Les vœux réellement ajoutés au panier passent au statut « dans le panier ». Jamais après un
+    # essai sur la page de démonstration : le vrai panier de l'étudiante n'a alors pas changé.
+    if (
+        donnees.action == ACTION_AJOUTER_VOEUX_PANIER
+        and not donnees.cible.startswith("demo_")
+        and resultat.resultats_voeux
+    ):
+        from app.core.erreurs import ErreurMetier
+        from app.services import voeux as service_voeux
+
+        for r in resultat.resultats_voeux:
+            if r.get("statut") == "ajoute" and r.get("motivation_enregistree"):
+                try:
+                    service_voeux.marquer_ajoute_au_panier(
+                        ctx.db,
+                        candidat_id=cand.id,
+                        voeu_id=uuid.UUID(str(r["voeu_id"])),
+                        acteur_id=ctx.utilisateur.id,
+                        cle_maitresse=cle_maitresse,
+                    )
+                except (ErreurMetier, ValueError):
+                    continue  # vœu fourni hors base ou pas au statut validé : rien à marquer
 
     # Si l'opérateur a dicté de nouvelles valeurs en langage naturel (ex: « mets Oran comme ville »),
     # on met à jour automatiquement la fiche chiffrée du candidat.
@@ -501,7 +619,11 @@ def piloter_navigateur_portail(
     pieces_manquantes_tache: list[str] = []
 
     # Synchronisation optionnelle avec la machine à états des tâches et le Centre de validation humaine
-    if donnees.synchroniser_tache and donnees.code_demarche in {"campus_france", "ircc_permis_etudes"}:
+    if (
+        donnees.synchroniser_tache
+        and not est_action_panier
+        and donnees.code_demarche in {"campus_france", "ircc_permis_etudes"}
+    ):
         try:
             tache_existante = ctx.db.scalar(
                 select(TacheDossier).where(
@@ -630,6 +752,29 @@ def piloter_navigateur_portail(
         except Exception:
             pass
 
+    details_audit: dict[str, Any] = {
+        "code_demarche": donnees.code_demarche,
+        "cible": donnees.cible,
+        "action": donnees.action,
+        "nb_champs_remplis": len(resultat.champs_remplis_libelles),
+        "nb_pieces_televersees": len(resultat.pieces_televersees_libelles),
+        "arret_regle1": resultat.arret_regle1_avant_soumission,
+    }
+    if est_action_panier:
+        # R5 : uniquement des compteurs — jamais de texte de motivation, d'intitulé ni de nom
+        details_audit["nb_voeux_demandes"] = len(voeux_a_envoyer or [])
+        for statut_voeu in {r["statut"] for r in resultat.resultats_voeux}:
+            details_audit[f"nb_voeux_{statut_voeu}"] = sum(
+                1 for r in resultat.resultats_voeux if r["statut"] == statut_voeu
+            )
+        details_audit["nb_motivations_enregistrees"] = sum(
+            1 for r in resultat.resultats_voeux if r["motivation_enregistree"]
+        )
+        details_audit["portail_homologue"] = portail_homologue
+        details_audit["blocage_captcha_ou_2fa"] = resultat.blocage_captcha_ou_2fa
+        if resultat.fichier_calibration:
+            details_audit["calibration_enregistree"] = True
+
     audit.journaliser(
         ctx.db,
         "portail.pilotage_navigateur",
@@ -637,14 +782,7 @@ def piloter_navigateur_portail(
         acteur_id=ctx.utilisateur.id,
         ressource_type="candidat",
         ressource_id=cand.id,
-        details={
-            "code_demarche": donnees.code_demarche,
-            "cible": donnees.cible,
-            "action": donnees.action,
-            "nb_champs_remplis": len(resultat.champs_remplis_libelles),
-            "nb_pieces_televersees": len(resultat.pieces_televersees_libelles),
-            "arret_regle1": resultat.arret_regle1_avant_soumission,
-        },
+        details=details_audit,
     )
     ctx.db.commit()
 
@@ -672,4 +810,6 @@ def piloter_navigateur_portail(
         tache_id=tache_id_retour,
         statut_tache=statut_tache_retour,
         pieces_manquantes_tache=pieces_manquantes_tache,
+        resultats_voeux=resultat.resultats_voeux,
+        fichier_calibration=resultat.fichier_calibration,
     )

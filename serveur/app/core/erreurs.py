@@ -39,3 +39,20 @@ NonAutorise = NonAuthentifie
 class AccesRefuse(ErreurMetier):
     statut_http = 403
     code = "acces_refuse"
+
+
+class PaiementRequis(ErreurMetier):
+    """Abonnement expiré ou suspendu : le bureau est en lecture seule."""
+
+    statut_http = 402
+    code = "abonnement_requis"
+
+
+class LimiteAtteinte(ErreurMetier):
+    statut_http = 429
+    code = "limite_atteinte"
+
+
+class ServiceIndisponible(ErreurMetier):
+    statut_http = 503
+    code = "service_indisponible"

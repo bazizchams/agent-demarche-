@@ -1,0 +1,53 @@
+# Contexte de construction de l'image serveur (racine du dépôt).
+# Règle : seuls le code de serveur/app, serveur/alembic, serveur/pyproject.toml, serveur/alembic.ini
+# et config/ doivent entrer dans l'image (voir deploiement/Dockerfile).
+
+# Versionnement et environnements locaux
+.git
+**/.git
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/htmlcov
+**/.coverage
+
+# Secrets : aucun fichier d'environnement réel, aucune clé
+.env
+**/.env
+**/.env.*
+!**/.env.exemple
+!**/.env.production.exemple
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/*.dpapi
+**/cle_*.txt
+
+# Données réelles : base, documents étudiants, sauvegardes, captures
+serveur/donnees
+**/donnees
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+**/*.be.enc
+**/stockage
+**/calibration
+**/sauvegardes
+**/captures
+**/etudiants
+**/profil_navigateur*
+
+# Tests, documentation et code du poste opérateur (non nécessaires au serveur en ligne)
+serveur/tests
+agent_local
+docs
+deploiement/.env*
+CLAUDE.md
+README.md

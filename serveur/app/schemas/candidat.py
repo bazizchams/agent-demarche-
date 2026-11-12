@@ -9,11 +9,27 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from pydantic import Field
+from typing import Annotated
+
+from pydantic import BeforeValidator, Field
 
 from app.modeles.candidat import SexeCandidat, StatutCandidat
 from app.schemas.auth import EmailNormalise
 from app.schemas.commun import SchemaEntree, SchemaSortie
+
+
+def _normaliser_niveau(valeur):
+    if valeur is None:
+        return None
+    if not isinstance(valeur, str):
+        raise ValueError("niveau CECRL invalide")
+    v = valeur.strip().upper()
+    if v not in {"A1", "A2", "B1", "B2", "C1", "C2"}:
+        raise ValueError("niveau attendu : A1, A2, B1, B2, C1 ou C2")
+    return v
+
+
+NiveauCECRL = Annotated[str | None, BeforeValidator(_normaliser_niveau)]
 
 
 class CandidatCreation(SchemaEntree):
@@ -30,6 +46,8 @@ class CandidatCreation(SchemaEntree):
     date_expiration_passeport: date | None = None
     adresse: str | None = Field(default=None, min_length=1, max_length=300)
     niveau_actuel: str | None = Field(default=None, min_length=1, max_length=160)
+    niveau_francais: NiveauCECRL = None
+    niveau_anglais: NiveauCECRL = None
     programme_vise: str | None = Field(default=None, min_length=1, max_length=200)
     etablissement_vise: str | None = Field(default=None, min_length=1, max_length=200)
     fonds_disponibles_eur: int | None = Field(default=None, ge=0)
@@ -51,6 +69,8 @@ class CandidatModification(SchemaEntree):
     date_expiration_passeport: date | None = None
     adresse: str | None = Field(default=None, min_length=1, max_length=300)
     niveau_actuel: str | None = Field(default=None, min_length=1, max_length=160)
+    niveau_francais: NiveauCECRL = None
+    niveau_anglais: NiveauCECRL = None
     programme_vise: str | None = Field(default=None, min_length=1, max_length=200)
     etablissement_vise: str | None = Field(default=None, min_length=1, max_length=200)
     fonds_disponibles_eur: int | None = Field(default=None, ge=0)
@@ -73,6 +93,8 @@ class CandidatSortie(SchemaSortie):
     date_expiration_passeport: date | None
     adresse: str | None
     niveau_actuel: str | None
+    niveau_francais: str | None = None
+    niveau_anglais: str | None = None
     programme_vise: str | None
     etablissement_vise: str | None
     fonds_disponibles_eur: int | None

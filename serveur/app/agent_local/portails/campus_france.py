@@ -18,6 +18,8 @@ from playwright.sync_api import Page
 from app.agent_local.config_portail import ConfigPortailYAML, charger_config_portail
 from app.agent_local.executeur_playwright import (
     ClientHttpAgentProtocol,
+    ParametresConnexionCoffre,
+    ParametresSoumissionValidee,
     ResultatExecutionAgentLocal,
     executer_tache_sur_page_playwright,
 )
@@ -73,6 +75,8 @@ class ModulePortailCampusFrance:
         parametres_url: str = "",
         naviguer_au_demarrage: bool = True,
         dossier_captures_locales: Path | None = None,
+        connexion: ParametresConnexionCoffre | None = None,
+        soumission: ParametresSoumissionValidee | None = None,
     ) -> ResultatExecutionAgentLocal:
         return executer_tache_sur_page_playwright(
             page,
@@ -83,4 +87,6 @@ class ModulePortailCampusFrance:
             parametres_url=parametres_url,
             naviguer_au_demarrage=naviguer_au_demarrage,
             dossier_captures_locales=dossier_captures_locales,
+            connexion=connexion,
+            soumission=soumission,
         )

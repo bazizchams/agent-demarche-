@@ -39,11 +39,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from urllib.parse import urlparse
+
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, Route, sync_playwright
 
+from app.agent_local.domaines_officiels import PolitiqueNavigation
 from app.agent_local.guide_campus_france_2026 import (
     GUIDE_CAMPUS_FRANCE_SEPTEMBRE_2026,
     repondre_question_guide_campus_france,
+)
+from app.agent_local.portails.panier_voeux import (
+    PROFIL_PANIER_DEMO,
+    PROFIL_PANIER_REEL,
+    profil_maquette_eef,
+    STATUT_ERREUR as STATUT_ERREUR_VOEU,
+    ProfilSelecteursPanier,
+    ajouter_voeux_au_panier,
+    cartographier_page,
 )
 from app.services.conseiller_dossier import LIBELLES_CHAMPS_CANDIDAT_FR
 
@@ -55,6 +67,8 @@ URLS_CIBLES_OFFICIELS: dict[str, str] = {
     "campus_france_algerie": "https://www.algerie.campusfrance.org/horaires-d-attention-au-public",
     "paiement_ifa_algerie": "https://paiement.if-algerie.com",
     "demo_campus_france": "http://portail.local/demo/campus-france",
+    # Maquette fidèle du vrai portail Études en France (structure observée) : tests uniquement
+    "demo_eef_reel": "http://portail.local/demo/eef-reel/catalogue-formations",
     "ircc_officiel": "https://portal-portail.apps.cic.gc.ca/signin?lang=fr",
     "ircc_canada_info": "https://www.canada.ca/fr/immigration-refugies-citoyennete/services/etudier-canada/permis-etudes.html",
     "demo_ircc": "http://portail.local/demo/ircc",
@@ -65,6 +79,7 @@ DOMAINES_FAMILLE_CAMPUS_FRANCE: tuple[str, ...] = (
     "campusfrance.org",
     "if-algerie.com",
     "demo/campus-france",
+    "demo/eef-reel",
 )
 
 DOMAINES_FAMILLE_IRCC: tuple[str, ...] = (
@@ -130,6 +145,8 @@ CLAUSES_NEGATION_SECURITE_REGLE1: tuple[str, ...] = (
 
 SCRIPT_COPILOTE_COWORK_INJECTE = """
 (() => {
+  // Jamais dans un iframe (ex. éditeur de texte riche du panier) : le panneau y polluerait le contenu saisi.
+  if (window.top !== window) return;
   if (window.__COWORK_COPILOTE_ACTIF__) return;
   window.__COWORK_COPILOTE_ACTIF__ = true;
   window.__COWORK_FILE_COMMANDES__ = window.__COWORK_FILE_COMMANDES__ || [];
@@ -366,11 +383,15 @@ SCRIPT_COPILOTE_COWORK_INJECTE = """
       window.__coworkAjouterMessage("Vous", propre);
       window.__COWORK_FILE_COMMANDES__.push(propre);
 
-      const urlServeur = window.__COWORK_URL_SERVEUR__ || "http://127.0.0.1:8000";
+      // URL du serveur injectée par le pilote (paramètre url_publique_plateforme) : jamais codée en dur.
+      // Sans URL, la consigne reste dans la file, relevée par le serveur (état temps réel).
+      const urlServeur = window.__COWORK_URL_SERVEUR__ || "";
       const jetonBridge = window.__COWORK_JETON_BRIDGE__ || "";
+      if (!urlServeur || !jetonBridge) return;
       try {
         const rep = await fetch(urlServeur + "/api/v1/portails/copilote-bridge", {
           method: "POST",
+          credentials: "omit",
           headers: {
             "Content-Type": "application/json",
             "X-Copilote-Bridge-Token": jetonBridge
@@ -517,6 +538,32 @@ class ResultatActionNavigateur:
     mode_controle_direct: bool = True
     capture_base64: str | None = None
     capture_png_octets: bytes | None = None
+    # Action « ajouter_voeux_panier » : un dict par vœu (voeu_id, intitule, etablissement, statut,
+    # motivation_enregistree, nb_caracteres) — jamais de texte de motivation.
+    resultats_voeux: list[dict[str, Any]] = field(default_factory=list)
+    # Action « cartographier_page » : chemin du fichier de calibration (structure du DOM, sans valeurs)
+    fichier_calibration: str | None = None
+
+
+_MESSAGE_REFUS_PORTAIL_NON_HOMOLOGUE = (
+    "Action « ajouter_voeux_panier » refusée sur le vrai portail Études en France : le portail n'est pas "
+    "homologué (statut « non testé », Règle 6). Les sélecteurs du vrai portail n'ont jamais été validés. "
+    "Lancez d'abord « cartographier_page » lors d'une session supervisée où vous êtes connecté, faites "
+    "recalibrer les sélecteurs, puis faites valider le portail par l'administrateur. "
+    "L'action reste disponible sur la page de démonstration (/demo/campus-france)."
+)
+ACTION_AJOUTER_VOEUX_PANIER = "ajouter_voeux_panier"
+ACTION_CARTOGRAPHIER_PAGE = "cartographier_page"
+# Actions qui ne doivent jamais déclencher la synchronisation « tâche / validation humaine »
+ACTIONS_PANIER_ET_CALIBRATION: frozenset[str] = frozenset(
+    {ACTION_AJOUTER_VOEUX_PANIER, ACTION_CARTOGRAPHIER_PAGE}
+)
+DOMAINES_OFFICIELS_CAMPUS_FRANCE_REEL: tuple[str, ...] = (
+    "etudesenfrance.diplomatie.gouv.fr",
+    "pastel.diplomatie.gouv.fr",
+    "www.algerie.campusfrance.org",
+    "paiement.if-algerie.com",
+)
 
 
 def _verifier_instruction_non_interdite_regle1(instruction: str) -> str | None:
@@ -558,6 +605,25 @@ def _detecter_captcha_ou_2fa_sur_page(page: Page) -> bool:
         except Exception:
             continue
     return False
+
+
+def _portail_reel_non_connecte(page: Page) -> bool:
+    """Indique si la page courante d'un portail réel est affichée SANS session opérateur
+    (page de connexion, ou lien « Se connecter » visible sans lien de déconnexion)."""
+    url = (page.url or "").lower()
+    if "/authentification/login" in url or "/login" in url.split("?")[0]:
+        return True
+    try:
+        lien_deconnexion = page.locator(
+            "a:has-text('Se déconnecter'), button:has-text('Se déconnecter'), "
+            "a:has-text('Déconnexion'), button:has-text('Déconnexion')"
+        )
+        if lien_deconnexion.count() > 0:
+            return False
+        lien_connexion = page.locator("a:has-text('Se connecter'), button:has-text('Se connecter')")
+        return lien_connexion.count() > 0 and lien_connexion.first.is_visible()
+    except Exception:
+        return False
 
 
 def _est_element_soumission_interdit_regle1(sel: str, texte_element: str, attr_officiel: str) -> bool:
@@ -1236,7 +1302,20 @@ class GestionnairePiloteNavigateur:
     de thread (`Cannot switch to a different thread`) entre deux requêtes HTTP FastAPI,
     et maintient le pont temps réel avec la barre latérale Co-Pilote injectée dans le navigateur."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        mode_serveur: bool = False,
+        politique_navigation: PolitiqueNavigation | None = None,
+        url_serveur: str = "",
+    ) -> None:
+        """`mode_serveur` : headless forcé, jamais de rattachement CDP 9222 ni de canal chrome/msedge,
+        toute navigation principale hors domaines officiels est bloquée. `politique_navigation` : Règle 6
+        (domaines HTTPS officiels des YAML) ; None = pas de contrôle (usage local historique / tests
+        directs). `url_serveur` : URL injectée dans le panneau du Co-Pilote (vide = pont désactivé)."""
+        self._mode_serveur = mode_serveur
+        self._politique_navigation = politique_navigation
+        self._url_serveur = (url_serveur or "").rstrip("/")
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="pilote_playwright"
         )
@@ -1258,7 +1337,7 @@ class GestionnairePiloteNavigateur:
 
     def _configurer_contexte_et_page(self, page: Page) -> None:
         script_config = f"""
-        window.__COWORK_URL_SERVEUR__ = "http://127.0.0.1:8000";
+        window.__COWORK_URL_SERVEUR__ = {json.dumps(self._url_serveur)};
         window.__COWORK_JETON_BRIDGE__ = {json.dumps(self._jeton_bridge_local)};
         """
         try:
@@ -1267,11 +1346,47 @@ class GestionnairePiloteNavigateur:
         except Exception:
             pass
 
+        if self._mode_serveur and self._politique_navigation is not None and self._contexte is not None:
+            # Défense en profondeur (Règle 6) : toute navigation du cadre principal (clic sur un lien,
+            # redirection, window.open) vers un domaine non officiel est bloquée côté navigateur.
+            politique = self._politique_navigation
+
+            def _garde_navigation(route: Route) -> None:
+                try:
+                    req = route.request
+                    if (
+                        req.is_navigation_request()
+                        and req.frame.parent_frame is None
+                        and politique.motif_refus(req.url) is not None
+                    ):
+                        route.abort("blockedbyclient")
+                        return
+                    route.fallback()
+                except Exception:
+                    try:
+                        route.abort("failed")
+                    except Exception:
+                        pass
+
+            try:
+                self._contexte.route("**/*", _garde_navigation)
+            except Exception:
+                pass
+
         def _servir_demo_local(route: Route) -> None:
             from urllib.parse import parse_qs, urlparse
             from app.demo.routeur_demo import page_demo_campus_france, page_demo_ircc
 
             u = urlparse(route.request.url)
+            if u.path.startswith("/demo/eef-reel"):
+                from app.demo.maquette_eef_reel import html_maquette_eef_reel
+
+                route.fulfill(
+                    status=200,
+                    headers={"Content-Type": "text/html; charset=utf-8"},
+                    body=html_maquette_eef_reel().encode("utf-8"),
+                )
+                return
             qs = parse_qs(u.query)
             sess = int(qs.get("session_ouverte", ["1"])[0])
             cap = int(qs.get("captcha", ["0"])[0])
@@ -1293,7 +1408,7 @@ class GestionnairePiloteNavigateur:
     def _injecter_overlay_page_courante(self, page: Page) -> None:
         try:
             page.evaluate(
-                f"window.__COWORK_URL_SERVEUR__ = 'http://127.0.0.1:8000'; "
+                f"window.__COWORK_URL_SERVEUR__ = {json.dumps(self._url_serveur)}; "
                 f"window.__COWORK_JETON_BRIDGE__ = {json.dumps(self._jeton_bridge_local)};"
             )
             page.evaluate(SCRIPT_COPILOTE_COWORK_INJECTE)
@@ -1301,6 +1416,10 @@ class GestionnairePiloteNavigateur:
             pass
 
     def _assurer_page(self, *, headless: bool, dossier_profil: Path) -> Page:
+        if self._mode_serveur:
+            # Mode serveur : headless forcé. Du coup, jamais de rattachement CDP 9222 (réservé au mode
+            # visible) ni de canal chrome/msedge local (Chromium de Playwright uniquement).
+            headless = True
         self._dernier_dossier_profil = dossier_profil
         if (
             self._page is not None
@@ -1327,15 +1446,18 @@ class GestionnairePiloteNavigateur:
             self._playwright = sync_playwright().start()
 
         dossier_profil.mkdir(parents=True, exist_ok=True)
-        args_navigateur = [
-            "--allow-running-insecure-content",
-            "--disable-features=BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessRespectPreflightResults",
-        ]
+        args_navigateur: list[str] = []
+        if not self._mode_serveur:
+            # Réglages de confort du poste local ; jamais en mode serveur (pas de contenu mixte toléré).
+            args_navigateur = [
+                "--allow-running-insecure-content",
+                "--disable-features=BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessRespectPreflightResults",
+            ]
         if not headless:
             args_navigateur.append("--start-maximized")
 
         # 1. En mode visible, tenter d'abord de se greffer au vrai navigateur Chrome/Edge ouvert en CDP (port 9222)
-        if not headless:
+        if not headless and not self._mode_serveur:
             try:
                 self._navigateur_cdp = self._playwright.chromium.connect_over_cdp(
                     "http://127.0.0.1:9222", timeout=900
@@ -1352,7 +1474,9 @@ class GestionnairePiloteNavigateur:
         # 2. Sinon, ouvrir le vrai Chrome ou Edge installé sur Windows (ou Chromium Playwright) en mode persistant
         if self._contexte is None:
             canaux_a_tester: list[str | None] = (
-                ["chrome", "msedge", None] if not headless else [None]
+                ["chrome", "msedge", None]
+                if not headless and not self._mode_serveur
+                else [None]
             )
             for canal in canaux_a_tester:
                 try:
@@ -1364,6 +1488,8 @@ class GestionnairePiloteNavigateur:
                     }
                     if canal is not None:
                         kwargs_lancement["channel"] = canal
+                    if self._mode_serveur:
+                        kwargs_lancement["accept_downloads"] = False
                     if headless:
                         kwargs_lancement["viewport"] = {"width": 1280, "height": 900}
                     else:
@@ -1427,6 +1553,90 @@ class GestionnairePiloteNavigateur:
             self._executor.submit(self._fermer_dans_thread).result(timeout=10)
         except Exception:
             pass
+
+    def arreter(self) -> None:
+        """Ferme le navigateur ET le thread dédié (instance non réutilisable ensuite)."""
+        self.fermer()
+        self._executor.shutdown(wait=False)
+
+    def _refus_navigation(self, url: str) -> str | None:
+        """Règle 6 : motif de refus si la politique de navigation interdit cette URL, sinon None."""
+        if self._politique_navigation is None:
+            return None
+        return self._politique_navigation.motif_refus(url)
+
+    # ---- Vue opérateur (capture, état, contrôle humain) : jamais utilisées par l'agent ----
+
+    def capturer_jpeg(self, qualite: int = 70) -> bytes | None:
+        """Capture JPEG de la page courante (viewport), ou None si aucune page n'est ouverte."""
+
+        def _capture() -> bytes | None:
+            page = self._page
+            if page is None or page.is_closed():
+                return None
+            try:
+                return page.screenshot(full_page=False, type="jpeg", quality=qualite)
+            except Exception:
+                return None
+
+        return self._executor.submit(_capture).result(timeout=15)
+
+    def etat_operateur(self) -> dict[str, Any]:
+        """État minimal pour la vue opérateur : URL sans paramètres, titre, contrôle de sécurité détecté."""
+
+        def _etat() -> dict[str, Any]:
+            page = self._page
+            if page is None or page.is_closed():
+                return {"navigateur_ouvert": False, "url_courante": "", "titre_page": "", "controle_securite_detecte": False}
+            analyse = urlparse(page.url or "")
+            url_sans_parametres = (
+                f"{analyse.scheme}://{analyse.netloc}{analyse.path}" if analyse.scheme else (page.url or "")
+            )
+            try:
+                titre = page.title() or ""
+            except Exception:
+                titre = ""
+            return {
+                "navigateur_ouvert": True,
+                "url_courante": url_sans_parametres,
+                "titre_page": titre[:200],
+                "controle_securite_detecte": _detecter_captcha_ou_2fa_sur_page(page),
+            }
+
+        return self._executor.submit(_etat).result(timeout=15)
+
+    def executer_controle_humain(
+        self,
+        *,
+        type_action: str,
+        x: int | None = None,
+        y: int | None = None,
+        texte: str | None = None,
+        touche: str | None = None,
+        delta_y: int | None = None,
+    ) -> bool:
+        """Action d'un HUMAIN (résolution d'un CAPTCHA / 2FA, Règle 2) : souris et clavier réels de la page.
+        Les paramètres sont déjà validés par la couche API. Retourne False si aucune page n'est ouverte."""
+
+        def _agir() -> bool:
+            page = self._page
+            if page is None or page.is_closed():
+                return False
+            if type_action == "clic":
+                page.mouse.click(x, y)
+            elif type_action == "texte":
+                page.keyboard.type(texte or "")
+            elif type_action == "touche":
+                page.keyboard.press(touche or "")
+            elif type_action == "defilement":
+                if x is not None and y is not None:
+                    page.mouse.move(x, y)
+                page.mouse.wheel(0, delta_y or 0)
+            else:
+                return False
+            return True
+
+        return self._executor.submit(_agir).result(timeout=15)
 
     def obtenir_etat_temps_reel(self) -> dict[str, Any]:
         """Retourne en moins de 25 ms l'état en direct du navigateur (sans capture d'écran)
@@ -1528,13 +1738,18 @@ class GestionnairePiloteNavigateur:
             url_nav = url_destination.strip()
             if not url_nav.startswith(("http://", "https://")):
                 url_nav = URLS_CIBLES_OFFICIELS.get(url_nav, "https://" + url_nav)
-            try:
-                page.goto(url_nav, wait_until="domcontentloaded", timeout=15000)
-                self._injecter_overlay_page_courante(page)
-                message = f"Navigation directe vers {page.url}"
-            except Exception as exc:
+            refus_r6 = self._refus_navigation(url_nav)
+            if refus_r6:
                 succes = False
-                message = f"Délai dépassé lors de l'ouverture de {url_nav} ({type(exc).__name__})."
+                message = refus_r6
+            else:
+                try:
+                    page.goto(url_nav, wait_until="domcontentloaded", timeout=15000)
+                    self._injecter_overlay_page_courante(page)
+                    message = f"Navigation directe vers {page.url}"
+                except Exception as exc:
+                    succes = False
+                    message = f"Délai dépassé lors de l'ouverture de {url_nav} ({type(exc).__name__})."
 
         elif op == "cliquer" and selecteur:
             if _est_element_soumission_interdit_regle1(selecteur, valeur or "", ""):
@@ -1598,7 +1813,16 @@ class GestionnairePiloteNavigateur:
         dossier_profil: Path,
         headless: bool = False,
         prendre_capture: bool = True,
+        voeux: list[dict[str, Any]] | None = None,
+        portail_homologue: bool = False,
+        profil_panier: ProfilSelecteursPanier | None = None,
     ) -> ResultatActionNavigateur:
+        """`voeux` : liste [{voeu_id, intitule, etablissement, niveau, motivation}] pour l'action
+        « ajouter_voeux_panier ». `portail_homologue` : True uniquement si l'administrateur a validé
+        le vrai portail (Règle 6) ; sinon l'ajout de vœux est refusé hors page de démonstration.
+        `profil_panier` : profil de sélecteurs explicite, pris en compte UNIQUEMENT sur une page de
+        démonstration (ex. le profil réel appliqué à la maquette `/demo/eef-reel/...`) ; sur le vrai
+        portail le profil réel est toujours imposé."""
         fut = self._executor.submit(
             self._executer_dans_thread_playwright,
             code_demarche=code_demarche,
@@ -1610,8 +1834,11 @@ class GestionnairePiloteNavigateur:
             dossier_profil=dossier_profil,
             headless=headless,
             prendre_capture=prendre_capture,
+            voeux=voeux,
+            portail_homologue=portail_homologue,
+            profil_panier=profil_panier,
         )
-        return fut.result(timeout=45)
+        return fut.result(timeout=120 if action == ACTION_AJOUTER_VOEUX_PANIER else 45)
 
     def _executer_dans_thread_playwright(
         self,
@@ -1625,6 +1852,9 @@ class GestionnairePiloteNavigateur:
         dossier_profil: Path,
         headless: bool,
         prendre_capture: bool = True,
+        voeux: list[dict[str, Any]] | None = None,
+        portail_homologue: bool = False,
+        profil_panier: ProfilSelecteursPanier | None = None,
     ) -> ResultatActionNavigateur:
         etapes_realisees: list[str] = []
         champs_remplis: list[str] = []
@@ -1673,6 +1903,22 @@ class GestionnairePiloteNavigateur:
                         else None
                     ),
                     capture_png_octets=octets_png,
+                )
+
+        # 1bis. Ajout de vœux : réservé à campus_france et refusé sur le vrai portail non homologué (Règle 6)
+        if action == ACTION_AJOUTER_VOEUX_PANIER:
+            msg_refus: str | None = None
+            if code_demarche != "campus_france":
+                msg_refus = "L'action « ajouter_voeux_panier » concerne uniquement la démarche Campus France."
+            elif not cible.startswith("demo_") and not portail_homologue:
+                msg_refus = _MESSAGE_REFUS_PORTAIL_NON_HOMOLOGUE
+            if msg_refus:
+                return self._resultat_refus_action(
+                    code_demarche=code_demarche,
+                    cible=cible,
+                    action=action,
+                    message=msg_refus,
+                    avertissements=avertissements,
                 )
 
         page = self._assurer_page(headless=headless, dossier_profil=dossier_profil)
@@ -1747,8 +1993,23 @@ class GestionnairePiloteNavigateur:
             or url_page_actuelle in {"about:blank", ""}
             or not meme_famille_active
         )
+        if action == ACTION_CARTOGRAPHIER_PAGE:
+            # Calibration : on cartographie la page COURANTE (celle où l'humain est connecté),
+            # sans jamais naviguer sauf si aucune page n'est ouverte.
+            doit_naviguer = url_page_actuelle in {"about:blank", ""}
 
         if doit_naviguer:
+            refus_r6 = self._refus_navigation(url_cible)
+            if refus_r6:
+                return self._resultat_refus_action(
+                    code_demarche=code_demarche,
+                    cible=cible,
+                    action=action,
+                    message=refus_r6,
+                    avertissements=avertissements,
+                    page=page,
+                    prendre_capture=prendre_capture,
+                )
             try:
                 page.goto(url_cible, wait_until="domcontentloaded", timeout=15000)
                 etapes_realisees.append(f"Ouverture directe dans le navigateur : {page.url}")
@@ -1782,6 +2043,69 @@ class GestionnairePiloteNavigateur:
                 blocage_captcha_ou_2fa=True,
                 capture_base64=base64.b64encode(octets_png).decode("ascii") if octets_png else None,
                 capture_png_octets=octets_png,
+            )
+
+        # 3bis. Actions dédiées : cartographie de calibration (lecture seule) et ajout de vœux au panier.
+        #       Elles court-circuitent la NLU générique : aucun clic ni saisie hors de leur périmètre.
+        if action == ACTION_CARTOGRAPHIER_PAGE:
+            return self._executer_cartographie_page(
+                page,
+                code_demarche=code_demarche,
+                cible=cible,
+                action=action,
+                dossier_calibration=dossier_profil.parent / "calibration",
+                etapes_realisees=etapes_realisees,
+                avertissements=avertissements,
+                prendre_capture=prendre_capture,
+            )
+        if action == ACTION_AJOUTER_VOEUX_PANIER:
+            est_demo = "/demo/" in (page.url or "")
+            if not est_demo:
+                if not portail_homologue:
+                    return self._resultat_refus_action(
+                        code_demarche=code_demarche,
+                        cible=cible,
+                        action=action,
+                        message=_MESSAGE_REFUS_PORTAIL_NON_HOMOLOGUE,
+                        avertissements=avertissements,
+                        page=page,
+                        prendre_capture=prendre_capture,
+                    )
+                analyse_url = urlparse(page.url or "")
+                if analyse_url.scheme != "https" or (analyse_url.hostname or "").lower() not in DOMAINES_OFFICIELS_CAMPUS_FRANCE_REEL:
+                    return self._resultat_refus_action(
+                        code_demarche=code_demarche,
+                        cible=cible,
+                        action=action,
+                        message=(
+                            "Action refusée (Règle 6) : la page courante n'est pas sur un domaine officiel "
+                            "HTTPS du portail Études en France."
+                        ),
+                        avertissements=avertissements,
+                        page=page,
+                        prendre_capture=prendre_capture,
+                    )
+            return self._executer_ajout_voeux_panier(
+                page,
+                code_demarche=code_demarche,
+                cible=cible,
+                action=action,
+                voeux=voeux or [],
+                profil=(
+                    (
+                        profil_panier
+                        or (
+                            profil_maquette_eef()
+                            if "/demo/eef-reel" in (page.url or "")
+                            else PROFIL_PANIER_DEMO
+                        )
+                    )
+                    if est_demo
+                    else PROFIL_PANIER_REEL
+                ),
+                etapes_realisees=etapes_realisees,
+                avertissements=avertissements,
+                prendre_capture=prendre_capture,
             )
 
         # 4. Compréhension du langage naturel (NLU) : défilement, clics génériques, valeurs personnalisées
@@ -1923,8 +2247,18 @@ class GestionnairePiloteNavigateur:
                 octets_png = None
                 b64_png = None
 
+        # Succès réel uniquement si quelque chose a effectivement été fait sur la page (Règle 4)
+        succes_reel = bool(
+            champs_remplis
+            or pieces_televersees
+            or action_specifique_nlu_executee
+            or navigation_explicite_demandee
+            or action == "ouvrir_portail"
+            or (attente_connexion_humaine and action in ("connexion_compte", "inscription_compte"))
+        )
+
         return ResultatActionNavigateur(
-            succes=True,
+            succes=succes_reel,
             code_demarche=code_demarche,
             cible=cible,
             action_executee=action,
@@ -1944,6 +2278,182 @@ class GestionnairePiloteNavigateur:
             mode_controle_direct=True,
             capture_base64=b64_png,
             capture_png_octets=octets_png,
+        )
+
+    @staticmethod
+    def _capturer_page(page: Page | None, prendre_capture: bool) -> bytes | None:
+        if page is None or not prendre_capture:
+            return None
+        try:
+            if page.is_closed():
+                return None
+            return page.screenshot(full_page=False, type="png")
+        except Exception:
+            return None
+
+    def _resultat_refus_action(
+        self,
+        *,
+        code_demarche: str,
+        cible: str,
+        action: str,
+        message: str,
+        avertissements: list[str],
+        page: Page | None = None,
+        prendre_capture: bool = False,
+    ) -> ResultatActionNavigateur:
+        """Refus d'une action dédiée (aucune interaction avec la page n'a eu lieu)."""
+        avertissements.append(message)
+        octets = self._capturer_page(page, prendre_capture)
+        url = URLS_CIBLES_OFFICIELS.get(cible, "")
+        titre = "Action refusée"
+        if page is not None:
+            try:
+                url = page.url
+                titre = page.title() or titre
+            except Exception:
+                pass
+        return ResultatActionNavigateur(
+            succes=False,
+            code_demarche=code_demarche,
+            cible=cible,
+            action_executee=action,
+            url_courante=url,
+            titre_page=titre,
+            resume_francais=message,
+            reponse_agent=message,
+            avertissements_securite=avertissements,
+            arret_regle1_avant_soumission=True,
+            capture_base64=base64.b64encode(octets).decode("ascii") if octets else None,
+            capture_png_octets=octets,
+        )
+
+    def _executer_cartographie_page(
+        self,
+        page: Page,
+        *,
+        code_demarche: str,
+        cible: str,
+        action: str,
+        dossier_calibration: Path,
+        etapes_realisees: list[str],
+        avertissements: list[str],
+        prendre_capture: bool,
+    ) -> ResultatActionNavigateur:
+        """Calibration : enregistre la structure des éléments interactifs (sans valeurs, sans clic)."""
+        try:
+            fichier, nb = cartographier_page(page, dossier_calibration=dossier_calibration)
+        except Exception as exc:
+            msg = f"Cartographie impossible ({type(exc).__name__})."
+            return self._resultat_refus_action(
+                code_demarche=code_demarche,
+                cible=cible,
+                action=action,
+                message=msg,
+                avertissements=avertissements,
+                page=page,
+                prendre_capture=False,
+            )
+        resume = (
+            f"Cartographie de calibration enregistrée : {nb} élément(s) interactif(s) "
+            "(structure uniquement : aucune valeur saisie lue, aucun clic effectué)."
+        )
+        etapes_realisees.append(resume)
+        avertissements.append(
+            "Calibration : les sélecteurs du vrai portail restent « non testés » tant qu'une session "
+            "supervisée n'a pas validé le résultat."
+        )
+        octets = self._capturer_page(page, prendre_capture)
+        self._historique_actions.append({"action": action, "message": resume, "url": page.url})
+        return ResultatActionNavigateur(
+            succes=True,
+            code_demarche=code_demarche,
+            cible=cible,
+            action_executee=action,
+            url_courante=page.url,
+            titre_page=page.title() or "Portail",
+            resume_francais=resume,
+            reponse_agent=resume,
+            etapes_realisees=etapes_realisees,
+            avertissements_securite=avertissements,
+            arret_regle1_avant_soumission=True,
+            capture_base64=base64.b64encode(octets).decode("ascii") if octets else None,
+            capture_png_octets=octets,
+            fichier_calibration=str(fichier),
+        )
+
+    def _executer_ajout_voeux_panier(
+        self,
+        page: Page,
+        *,
+        code_demarche: str,
+        cible: str,
+        action: str,
+        voeux: list[dict[str, Any]],
+        profil: ProfilSelecteursPanier,
+        etapes_realisees: list[str],
+        avertissements: list[str],
+        prendre_capture: bool,
+    ) -> ResultatActionNavigateur:
+        """Ajoute des formations au panier + motivation par formation (jamais de certification ni de
+        soumission : gardes Règle 1 et pause CAPTCHA/2FA Règle 2)."""
+        if not profil.teste:
+            avertissements.append(
+                "Sélecteurs du vrai portail « non testés » : résultat à vérifier par l'opérateur."
+            )
+        resultats, notes, blocage = ajouter_voeux_au_panier(
+            page,
+            voeux,
+            profil=profil,
+            est_interdit=_est_element_soumission_interdit_regle1,
+            detecteur_blocage=_detecter_captcha_ou_2fa_sur_page,
+        )
+        comptes: dict[str, int] = {}
+        for r in resultats:
+            comptes[r["statut"]] = comptes.get(r["statut"], 0) + 1
+        nb_motiv = sum(1 for r in resultats if r["motivation_enregistree"])
+        detail_statuts = ", ".join(f"{n} {s}" for s, n in sorted(comptes.items())) or "aucun vœu"
+        resume = (
+            f"Panier de vœux Campus France : {len(resultats)} vœu(x) traité(s) ({detail_statuts}) ; "
+            f"{nb_motiv} motivation(s) enregistrée(s). Arrêt avant certification et soumission (Règle 1)."
+        )
+        etapes_realisees.append(resume)
+        avertissements.extend(notes)
+        avertissements.append(
+            "Sécurité Règle 1 active : aucune case de certification cochée, bouton de soumission jamais cliqué."
+        )
+        if blocage:
+            resume = (
+                "Contrôle de sécurité (CAPTCHA ou double authentification 2FA) détecté (Règle 2) : "
+                "l'agent s'est mis en pause. " + resume
+            )
+        succes = (not blocage) and all(r["statut"] != STATUT_ERREUR_VOEU for r in resultats)
+        octets = self._capturer_page(page, prendre_capture)
+        try:
+            page.evaluate(
+                "(msg) => { if (window.__coworkAjouterMessage) window.__coworkAjouterMessage('Co-Pilote IA', msg); }",
+                resume,
+            )
+        except Exception:
+            pass
+        self._historique_actions.append({"action": action, "message": resume, "url": page.url})
+        return ResultatActionNavigateur(
+            succes=succes,
+            code_demarche=code_demarche,
+            cible=cible,
+            action_executee=action,
+            url_courante=page.url,
+            titre_page=page.title() or "Portail",
+            resume_francais=resume,
+            reponse_agent=resume,
+            etapes_realisees=etapes_realisees,
+            avertissements_securite=avertissements,
+            elements_interactifs_page=[],  # le contenu des zones de motivation ne doit pas fuiter (R5)
+            arret_regle1_avant_soumission=True,
+            blocage_captcha_ou_2fa=blocage,
+            capture_base64=base64.b64encode(octets).decode("ascii") if octets else None,
+            capture_png_octets=octets,
+            resultats_voeux=resultats,
         )
 
     def _executer_actions_campus_france(
@@ -1967,6 +2477,32 @@ class GestionnairePiloteNavigateur:
 
         if action == "ouvrir_portail":
             return False
+
+        def _etape_section(libelle_ok: str, nb_avant: int, nom_rubrique: str) -> None:
+            """N'annonce une rubrique « pré-remplie » que si au moins un champ a réellement été rempli
+            (Règle 4 : ne jamais affirmer un résultat inexistant)."""
+            if len(champs_remplis) > nb_avant:
+                etapes_realisees.append(libelle_ok)
+            else:
+                etapes_realisees.append(
+                    f"Rubrique « {nom_rubrique} » : aucun champ correspondant trouvé sur la page courante — rien n'a été rempli"
+                )
+
+        # Portail RÉEL non connecté : rien à remplir tant que l'opérateur ne s'est pas connecté lui-même (Règle 3)
+        if (
+            "/demo/" not in (page.url or "")
+            and action not in ("connexion_compte", "inscription_compte")
+            and not any(m in inst for m in ("connecter", "connexion", "login", "inscri", "creer un compte", "creer mon compte"))
+            and _portail_reel_non_connecte(page)
+        ):
+            etapes_realisees.append(
+                "Vous n'êtes pas connecté au portail Études en France : connectez-vous vous-même dans la fenêtre "
+                "du navigateur (Règle 3 : aucun mot de passe n'est saisi ni stocké par l'agent), puis relancez l'action."
+            )
+            avertissements.append(
+                "Règle 3 : connexion humaine requise sur le portail réel avant tout pré-remplissage."
+            )
+            return True
 
         # Déterminer quelles sous-sections exécuter selon `action` ou `instruction_libre`
         tout_remplir = action == "preremplissage_complet" or any(
@@ -2068,6 +2604,7 @@ class GestionnairePiloteNavigateur:
             or action == "preremplir_espace_etudiant"
             or any(m in inst for m in ("espace etudiant", "informations personnelles", "mon identite", "identite", "passeport", "coordonnees", "statut particulier"))
         ):
+            nb_avant_c = len(champs_remplis)
             _cliquer_si_present(
                 page,
                 [
@@ -2102,8 +2639,10 @@ class GestionnairePiloteNavigateur:
             _remplir_si_present(page, ["#champ-antenne-ecf"], antenne, type_champ="liste", libelle_visuel="Antenne ECF")
             if _remplir_si_present(page, ["#champ-adresse-postale"], candidat.get("adresse") or candidat.get("lieu_naissance"), libelle_visuel="Adresse postale"):
                 champs_remplis.append("Adresse postale / Wilaya (Coordonnées)")
-            etapes_realisees.append(
-                f"Rubrique « Mon espace étudiant — Informations personnelles, Passeport & Coordonnées (Antenne {antenne}) » pré-remplie"
+            _etape_section(
+                f"Rubrique « Mon espace étudiant — Informations personnelles, Passeport & Coordonnées (Antenne {antenne}) » pré-remplie",
+                nb_avant_c,
+                "Mon espace étudiant",
             )
 
         # D. Section 4 (Onglets 2 & 3) — Dossier de scolarité, CV, Parcours (min. 2 activités) & Compétences linguistiques
@@ -2112,6 +2651,8 @@ class GestionnairePiloteNavigateur:
             or action == "preremplir_scolarite_et_langues"
             or any(m in inst for m in ("scolarite", "cursus", "diplome", "activite", "parcours", "cv", "langue", "francais", "anglais", "tcf", "delf", "piece"))
         ):
+            nb_avant_d = len(champs_remplis)
+            nb_pieces_avant_d = len(pieces_televersees)
             _cliquer_si_present(
                 page,
                 [
@@ -2155,8 +2696,11 @@ class GestionnairePiloteNavigateur:
                 carte_selecteurs=selecteurs_fichiers_cf,
                 pieces_televersees=pieces_televersees,
             )
-            etapes_realisees.append(
-                "Rubriques « Mon dossier de scolarité (CV + 2 activités obligatoires) » et « Mes compétences linguistiques (Français > 1000h, Avancé) » complétées"
+            _etape_section(
+                "Rubriques « Mon dossier de scolarité (CV + 2 activités obligatoires) » et « Mes compétences linguistiques (Français > 1000h, Avancé) » complétées",
+                # une pièce téléversée compte aussi comme un résultat réel
+                nb_avant_d - (len(pieces_televersees) - nb_pieces_avant_d),
+                "Mon dossier de scolarité / Compétences linguistiques",
             )
 
         # E. Section 5 — Mon dossier de candidature (Panier de formations max 7 choix & Texte de motivation 4000 car.)
@@ -2165,6 +2709,7 @@ class GestionnairePiloteNavigateur:
             or action == "preremplir_panier_formations_et_motivations"
             or any(m in inst for m in ("panier", "formation", "catalogue", "motivation", "candidature", "voeu"))
         ):
+            nb_avant_e = len(champs_remplis)
             _cliquer_si_present(
                 page,
                 [
@@ -2194,8 +2739,10 @@ class GestionnairePiloteNavigateur:
             if _remplir_si_present(page, ["#champ-texte-motivation", "textarea[name*='motivation']"], motivation, libelle_visuel="Texte de motivation"):
                 champs_remplis.append("Texte de motivation personnalisé (conformité 4 000 caractères max)")
 
-            etapes_realisees.append(
-                "Rubrique « Mon panier de formations (max 7 choix) & Texte de motivation (max 4 000 caractères) » pré-remplie"
+            _etape_section(
+                "Rubrique « Mon panier de formations (max 7 choix) & Texte de motivation (max 4 000 caractères) » pré-remplie",
+                nb_avant_e,
+                "Mon panier de formations & Texte de motivation",
             )
 
         # F. Section 5 suite — Mes paiements (20 000 DZD / 10 000 DZD) & Mes rendez-vous (Antennes Algérie)
@@ -2205,12 +2752,15 @@ class GestionnairePiloteNavigateur:
             or any(m in inst for m in ("paiement", "payer", "quittance", "rendez-vous", "rdv", "entretien", "20 000", "20000"))
         ):
             _cliquer_si_present(page, ["#onglet-demo-paiements-rdv", "a:has-text('Mes paiements')"])
+            nb_avant_f = len(champs_remplis)
             nom_payeur = f"{candidat.get('nom') or ''} {candidat.get('prenom') or ''}".strip()
             if nom_payeur and _remplir_si_present(page, ["#champ-nom-payeur"], nom_payeur, libelle_visuel="Nom du payeur"):
                 champs_remplis.append("Nom du payeur (Déclaration de paiement Campus France Algérie)")
             _remplir_si_present(page, ["#champ-lieu-rdv-ecf"], f"Espace Campus France {antenne}", type_champ="liste")
-            etapes_realisees.append(
-                f"Rubriques « Mes paiements (20 000 DZD / 10 000 DZD) » et « Mes rendez-vous ({antenne}) » préparées sans soumission finale"
+            _etape_section(
+                f"Rubriques « Mes paiements (20 000 DZD / 10 000 DZD) » et « Mes rendez-vous ({antenne}) » préparées sans soumission finale",
+                nb_avant_f,
+                "Mes paiements / Mes rendez-vous",
             )
 
         # G. Section 6 — Mon dossier pré-consulaire (« Je suis accepté » — 4 étapes)
@@ -2493,4 +3043,6 @@ class GestionnairePiloteNavigateur:
                         continue
 
 
+# Alias de compatibilité (mode local / tests directs UNIQUEMENT). Plus aucune route de l'API ne l'utilise :
+# chaque bureau a sa propre session dans `app.agent_local.sessions_navigateur.RegistreSessionsNavigateur`.
 pilote_navigateur_global = GestionnairePiloteNavigateur()

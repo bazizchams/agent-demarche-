@@ -8,6 +8,7 @@
 7. Centre de validation humaine (Règle 1 — cartes interactives + aperçu de la capture de contrôle)
 8. Historique & Erreurs (Audit sans donnée personnelle — Règle 5)
 9. Paramètres & Sauvegardes (Agents locaux, sauvegardes chiffrées, abonnement et statut des portails)
+10. Procédures (démarches) : ajout et modification par le bureau, sans redéploiement
 """
 
 from __future__ import annotations
@@ -15,9 +16,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from app.interface.ecran_navigateur_serveur import assembler_navigateur_serveur
+from app.interface.ecrans_coffre_validation import assembler_interface
+
 routeur_interface = APIRouter(tags=["interface web en français"])
 
-HTML_INTERFACE_FR = """<!DOCTYPE html>
+_HTML_INTERFACE_BASE = """<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
@@ -104,6 +108,218 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
     .puce-cmd { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 999px; padding: 4px 10px; font-size: 0.79rem; font-weight: 600; cursor: pointer; display: inline-block; margin: 2px 3px 2px 0; }
     .puce-cmd:hover { background: #dbeafe; }
     .point-vert-pulsant { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 8px #22c55e; margin-right: 5px; }
+
+    /* ===================================================================
+       Couche design « Apple » (skill apple-design) :
+       réponse instantanée, matériaux translucides, typographie à pistage
+       adaptatif, mouvement amorti sans rebond, respect de reduced-motion,
+       reduced-transparency et prefers-contrast. Pas d'antislash ici.
+       =================================================================== */
+    :root {
+      color-scheme: light dark;
+      --fond: #f5f5f7;
+      --carte: #ffffff;
+      --surface-2: #f5f5f7;
+      --bordure: rgba(60, 60, 67, 0.18);
+      --texte: #1d1d1f;
+      --texte-secondaire: #6e6e73;
+      --bleu-primaire: #0071e3;
+      --bleu-clair: #eaf3fe;
+      --vert-succes: #248a3d;
+      --vert-clair: #e3f5e8;
+      --orange-clair: #fff4e0;
+      --rouge-danger: #d70015;
+      --rouge-clair: #ffe9eb;
+      --rayon: 14px;
+      --amorti: cubic-bezier(0.22, 1, 0.36, 1);
+      --ombre-carte: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05);
+      --matiere: rgba(255, 255, 255, 0.72);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fond: #000000;
+        --carte: #1c1c1e;
+        --surface-2: #2c2c2e;
+        --bordure: rgba(235, 235, 245, 0.18);
+        --texte: #f5f5f7;
+        --texte-secondaire: #a1a1a6;
+        --bleu-primaire: #0a84ff;
+        --bleu-clair: rgba(10, 132, 255, 0.16);
+        --vert-succes: #30d158;
+        --vert-clair: rgba(48, 209, 88, 0.16);
+        --orange-clair: rgba(255, 159, 10, 0.16);
+        --rouge-danger: #ff453a;
+        --rouge-clair: rgba(255, 69, 58, 0.16);
+        --ombre-carte: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+        --matiere: rgba(44, 44, 46, 0.72);
+      }
+    }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+      font-size: 100%;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      font-optical-sizing: auto;
+      -webkit-tap-highlight-color: transparent;
+    }
+    h2 { font-size: 1.85rem; line-height: 1.1; letter-spacing: -0.024em; font-weight: 700; margin: 4px 0 16px; }
+    h3 { font-size: 1.2rem; line-height: 1.2; letter-spacing: -0.014em; font-weight: 650; margin: 0 0 10px; }
+    h4 { font-size: 1rem; line-height: 1.3; letter-spacing: -0.006em; font-weight: 650; margin: 18px 0 8px; }
+    small, .libelle, th, label { letter-spacing: 0.004em; }
+
+    /* Navigation : matière sombre translucide, structure du site */
+    aside {
+      position: sticky; top: 0; align-self: flex-start; height: 100vh; overflow-y: auto;
+      width: 280px; padding: 22px 12px;
+      background: rgba(28, 28, 30, 0.86);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      backdrop-filter: blur(24px) saturate(180%);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    aside h1 { font-size: 1.05rem; letter-spacing: -0.012em; font-weight: 700; color: #f5f5f7; margin: 0 0 16px 10px; }
+    aside button.nav-btn {
+      color: rgba(245, 245, 247, 0.82); padding: 10px 12px; border-radius: 10px; font-size: 0.92rem; font-weight: 500;
+      letter-spacing: 0; line-height: 1.3;
+      transition: background-color 160ms var(--amorti), color 160ms var(--amorti), transform 90ms var(--amorti);
+    }
+    aside button.nav-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+    aside button.nav-btn.actif { background: rgba(255, 255, 255, 0.16); color: #fff; font-weight: 600; }
+    aside button.nav-btn:active { transform: scale(0.98); transition-duration: 40ms; }
+
+    main { overflow: visible; padding: 20px 40px 64px; max-width: 1360px; min-width: 0; }
+
+    /* Barre d'état flottante : le contenu défile dessous (pas de trait dur) */
+    #banniere-etat {
+      position: sticky; top: 12px; z-index: 20; margin: 0 0 18px;
+      background: var(--matiere);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid var(--bordure); border-top-color: rgba(255, 255, 255, 0.5);
+      border-radius: var(--rayon); box-shadow: var(--ombre-carte);
+      font-size: 0.86rem; color: var(--texte-secondaire);
+    }
+    #banniere-etat strong { color: var(--texte); }
+    .banniere-regle { background: var(--bleu-clair); border: 1px solid rgba(0, 113, 227, 0.2); border-left-width: 1px; border-radius: 12px; padding: 12px 16px; color: var(--texte); line-height: 1.5; }
+
+    /* Surfaces */
+    .carte, .stat, .panneau-copilote-chat {
+      background: var(--carte); border: 1px solid var(--bordure); border-radius: var(--rayon);
+      box-shadow: var(--ombre-carte);
+    }
+    .carte { padding: 20px 24px; margin-bottom: 20px; }
+    .stat { padding: 16px 18px; }
+    .stat .valeur { font-size: 2.1rem; line-height: 1.1; letter-spacing: -0.03em; font-weight: 700; color: var(--bleu-primaire); }
+    .stat .libelle { font-size: 0.84rem; color: var(--texte-secondaire); margin-top: 4px; line-height: 1.35; }
+    .panneau-texte, .fil-discussion, .fil-copilote, details.guide-bloc, .carte-dom-item {
+      background: var(--surface-2); border: 1px solid var(--bordure); border-radius: 12px; color: var(--texte);
+    }
+    details.guide-bloc summary { color: var(--bleu-primaire); letter-spacing: -0.006em; }
+
+    /* Formulaires : retour immédiat au focus */
+    input, select, textarea {
+      padding: 9px 12px; border: 1px solid var(--bordure); border-radius: 10px; font-size: 0.94rem;
+      background: var(--carte); color: var(--texte);
+      transition: border-color 140ms var(--amorti), box-shadow 140ms var(--amorti);
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--bleu-primaire); box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.22); }
+    input:disabled, select:disabled, textarea:disabled { opacity: 0.6; }
+    label { font-size: 0.84rem; font-weight: 600; color: var(--texte); gap: 6px; }
+
+    /* Boutons : la réponse commence à l'appui (pointerdown), pas au relâchement */
+    button.btn {
+      background: var(--bleu-primaire); color: #fff; border: 1px solid transparent; border-radius: 10px;
+      padding: 9px 16px; font-size: 0.9rem; font-weight: 600; letter-spacing: -0.003em;
+      touch-action: manipulation;
+      transition: transform 120ms var(--amorti), filter 140ms var(--amorti), background-color 140ms var(--amorti);
+    }
+    button.btn:hover { opacity: 1; filter: brightness(1.08); }
+    button.btn:active { transform: scale(0.97); filter: brightness(0.94); transition-duration: 50ms; }
+    button.btn-succes { background: var(--vert-succes); }
+    button.btn-danger { background: var(--rouge-danger); }
+    button.btn-secondaire { background: rgba(120, 120, 128, 0.16); color: var(--texte); }
+    button.btn-contour { background: transparent; color: var(--bleu-primaire); border: 1px solid var(--bordure); }
+    button:focus-visible, .nav-btn:focus-visible, .puce-cmd:focus-visible, summary:focus-visible {
+      outline: 3px solid rgba(0, 113, 227, 0.5); outline-offset: 2px;
+    }
+
+    /* Tableaux : hiérarchie par l'espacement et le contraste */
+    table { font-size: 0.92rem; }
+    th { background: transparent; color: var(--texte-secondaire); font-size: 0.74rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; }
+    th, td { border-bottom: 1px solid var(--bordure); padding: 11px 12px; }
+    tbody tr { transition: background-color 120ms var(--amorti); }
+    tbody tr:hover { background: var(--surface-2); }
+
+    .badge { background: rgba(120, 120, 128, 0.16); color: var(--texte); font-weight: 650; letter-spacing: 0.01em; }
+    .badge-ok { background: var(--vert-clair); color: var(--vert-succes); }
+    .badge-warn { background: var(--orange-clair); color: var(--orange-alerte); }
+    .badge-err { background: var(--rouge-clair); color: var(--rouge-danger); }
+
+    /* Notifications : matière flottante qui se matérialise (flou + échelle) */
+    .notif {
+      position: fixed; top: 20px; right: 24px; z-index: 60; margin: 0;
+      max-width: min(440px, calc(100vw - 48px)); padding: 12px 16px; border-radius: 14px;
+      background: var(--matiere);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+      font-weight: 600; line-height: 1.4; letter-spacing: 0.002em;
+      animation: materialiser 420ms var(--amorti) both;
+    }
+    .notif-ok { color: var(--vert-succes); border: 1px solid rgba(36, 138, 61, 0.35); }
+    .notif-err { color: var(--rouge-danger); border: 1px solid rgba(215, 0, 21, 0.35); }
+    @keyframes materialiser {
+      from { opacity: 0; transform: translateY(-10px) scale(0.96); filter: blur(8px); }
+      to { opacity: 1; transform: none; filter: none; }
+    }
+
+    /* Changement d'écran : l'écran arrive depuis le bas, sans rebond */
+    .vue-ecran:not(.cache) { animation: entree-ecran 380ms var(--amorti) both; }
+    @keyframes entree-ecran {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    .barre-progression { height: 10px; background: rgba(120, 120, 128, 0.18); }
+    .barre-progression-remplie { transition: width 450ms var(--amorti); }
+
+    /* Co-Pilote : conversation façon messagerie, cadres adoucis */
+    .cadre-navigateur-direct { border: 1px solid var(--bordure); border-radius: 16px; box-shadow: var(--ombre-carte); }
+    .panneau-copilote-chat { border-radius: 16px; }
+    .bulle-copilote-user { background: var(--bleu-primaire); color: #fff; border: none; border-radius: 18px 18px 6px 18px; padding: 9px 14px; line-height: 1.45; }
+    .bulle-copilote-ia { background: rgba(120, 120, 128, 0.14); color: var(--texte); border: none; border-radius: 18px 18px 18px 6px; padding: 10px 14px; }
+    .msg-op { background: var(--bleu-clair); border: 1px solid rgba(0, 113, 227, 0.2); border-radius: 14px; }
+    .msg-ia { background: var(--carte); border: 1px solid var(--bordure); border-radius: 14px; }
+    .puce-cmd { background: var(--bleu-clair); color: var(--bleu-primaire); border: 1px solid transparent; transition: transform 90ms var(--amorti), background-color 140ms var(--amorti); }
+    .puce-cmd:hover { background: rgba(0, 113, 227, 0.2); }
+    .puce-cmd:active { transform: scale(0.96); }
+
+    /* Étroit : la navigation devient une barre horizontale */
+    @media (max-width: 860px) {
+      body { flex-direction: column; }
+      aside { position: static; width: 100%; height: auto; flex-direction: row; overflow-x: auto; padding: 10px; gap: 4px; }
+      aside h1 { display: none; }
+      aside button.nav-btn { white-space: nowrap; }
+      main { padding: 14px 16px 48px; }
+    }
+
+    /* Accessibilité : mouvement réduit = fondu simple, sans glissement ni flou animé */
+    @media (prefers-reduced-motion: reduce) {
+      .vue-ecran:not(.cache) { animation: entree-reduite 200ms ease both; }
+      .notif { animation: entree-reduite 200ms ease both; }
+      button.btn:active, aside button.nav-btn:active, .puce-cmd:active { transform: none; }
+      * { scroll-behavior: auto !important; }
+    }
+    @keyframes entree-reduite { from { opacity: 0; } to { opacity: 1; } }
+    /* Transparence réduite : matières pleines, sans flou */
+    @media (prefers-reduced-transparency: reduce) {
+      aside { background: #1c1c1e; -webkit-backdrop-filter: none; backdrop-filter: none; }
+      #banniere-etat, .notif { background: var(--carte); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    }
+    /* Contraste renforcé : bordures nettes */
+    @media (prefers-contrast: more) {
+      :root { --bordure: rgba(0, 0, 0, 0.6); --texte-secondaire: #3a3a3c; }
+      .carte, .stat, input, select, textarea, button.btn-contour { border-color: var(--bordure); }
+    }
   </style>
 </head>
 <body>
@@ -118,6 +334,7 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
     <button class="nav-btn" data-vue="vue-validation-humaine">7. Centre de validation humaine</button>
     <button class="nav-btn" data-vue="vue-historique-erreurs">8. Historique &amp; Erreurs (Audit)</button>
     <button class="nav-btn" data-vue="vue-parametres">9. Paramètres &amp; Sauvegardes</button>
+    <button class="nav-btn" data-vue="vue-procedures">10. Procédures (démarches)</button>
   </aside>
 
   <main>
@@ -259,6 +476,28 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
     <!-- 4. Discussion & Score d'acceptation -->
     <section id="vue-conseiller" class="vue-ecran cache">
       <h2>Espace Discussion Conseiller &amp; Score d'acceptation (0 à 100 %)</h2>
+      <div id="ia-statut-discussion" class="ia-statut">Assistant IA : état en cours de vérification...</div>
+
+      <div id="carte-assistant-ia" class="carte">
+        <h3>Assistant IA du dossier (sans donnée personnelle)</h3>
+        <p style="font-size:0.86rem; color:var(--texte-secondaire); margin-top:0;">
+          L'assistant ne reçoit aucune donnée personnelle du candidat : il répond à partir de la démarche choisie. Ses réponses sont indicatives et doivent être vérifiées par un conseiller.
+        </p>
+        <div class="grille-form">
+          <label>Démarche concernée
+            <select id="ia-demarche-assistant">
+              <option value="campus_france">Campus France — Études en France (Guide Septembre 2026)</option>
+              <option value="ircc_permis_etudes">IRCC Canada — Demande de permis d'études</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; margin-top:10px;">
+          <input id="ia-question-assistant" type="text" style="flex:1;" maxlength="2000" placeholder="Votre question sur la démarche..." />
+          <button id="btn-demander-assistant-ia" class="btn btn-succes" type="button" style="margin:0;">Demander</button>
+        </div>
+        <div id="zone-reponse-assistant-ia" class="panneau-texte cache" style="margin-top:12px;"></div>
+      </div>
+
       <div class="carte">
         <h3>1. Évaluation détaillée des chances d'acceptation et de la solidité du dossier</h3>
         <div class="grille-form">
@@ -300,6 +539,79 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
     <!-- 5. Campus France (Études en France — Guide Septembre 2026 & Co-Pilote Navigateur Direct) -->
     <section id="vue-campus-france" class="vue-ecran cache">
       <h2>Démarche Campus France — Études en France (Co-Pilote Navigateur Direct — Guide Septembre 2026)</h2>
+
+      <!-- Vœux de formation et lettres de motivation -->
+      <div class="carte" id="carte-voeux">
+        <style>
+          .voeu { border: 1px solid var(--bordure); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; background: var(--surface-2); }
+          .voeu-entete { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+          .voeu textarea { width: 100%; min-height: 180px; line-height: 1.5; resize: vertical; }
+          .voeu-compteur { font-size: 0.8rem; color: var(--texte-secondaire); margin: 4px 0 8px; }
+          .voeu-compteur.depasse { color: var(--rouge-danger); font-weight: 650; }
+          .voeu-alertes { font-size: 0.86rem; margin: 6px 0 8px; padding-left: 18px; color: var(--orange-alerte); }
+        </style>
+        <h3>Vœux de formation et lettres de motivation (panier, 7 maximum)</h3>
+        <div style="font-size:0.86rem; color:var(--texte-secondaire); margin-bottom:12px; line-height:1.5;">
+          Candidat actif : <strong id="voeux-candidat-actif">Aucun</strong>. Chaque lettre est rédigée en brouillon, relue par vous, puis validée. Seuls les vœux validés peuvent être ajoutés au panier, et le Co-Pilote s'arrête toujours avant la certification et la soumission (Règle 1).
+        </div>
+
+        <details class="guide-bloc" open>
+          <summary>Faits du parcours utilisés pour rédiger les lettres (aucune identité n'est transmise à l'IA)</summary>
+          <div class="grille-form" style="margin-top:10px;">
+            <label>Parcours (une ligne par étape)
+              <textarea id="faits-parcours" rows="4" placeholder="Ex : 2023-2025 : Master Linguistique et didactique, Université de Béjaïa, moyenne 13,16/20"></textarea>
+            </label>
+            <label>Points forts vérifiables (une ligne chacun)
+              <textarea id="faits-points" rows="4" placeholder="Ex : Mémoire de master noté 16/20"></textarea>
+            </label>
+            <label>Langues et certificats (une ligne chacun)
+              <textarea id="faits-langues" rows="3" placeholder="Ex : Anglais 17/20 en M1 ; TCF B2 (si disponible)"></textarea>
+            </label>
+            <label>Projet professionnel ou de recherche
+              <textarea id="faits-projet" rows="3" placeholder="Ce que la candidate veut faire après la formation"></textarea>
+            </label>
+          </div>
+          <div style="font-size:0.82rem; color:var(--texte-secondaire); margin-top:6px;">
+            N'écrivez ici ni nom, ni date de naissance, ni numéro de passeport, ni e-mail, ni téléphone. Rien d'inventé : ce que vous ne renseignez pas apparaît comme « À COMPLÉTER » dans la lettre.
+          </div>
+        </details>
+
+        <h4>Ajouter un vœu</h4>
+        <div class="grille-form">
+          <label>Intitulé exact de la formation
+            <input id="voeu-intitule" type="text" placeholder="Ex : Master Traitement automatique des langues" />
+          </label>
+          <label>Établissement
+            <input id="voeu-etablissement" type="text" placeholder="Ex : Université de Lorraine" />
+          </label>
+          <label>Niveau
+            <select id="voeu-niveau">
+              <option>Master 1</option><option>Master 2</option><option>Licence 3</option><option>Licence 2</option>
+              <option>Licence 1</option><option>Ingénieur</option><option>Autre</option>
+            </select>
+          </label>
+          <label>Voie
+            <select id="voeu-voie">
+              <option value="hors_dap" selected>Hors DAP (L2, L3, Master, Ingénieur…)</option>
+              <option value="dap_blanche">DAP Blanche (Licence 1)</option>
+              <option value="dap_jaune">DAP Jaune (Architecture)</option>
+            </select>
+          </label>
+          <label>Pourquoi cette formation ? (facultatif, sert à personnaliser la lettre)
+            <input id="voeu-justification" type="text" placeholder="Ex : cours de TAL pour langues peu dotées" />
+          </label>
+        </div>
+        <p style="margin-top:10px;">
+          <button id="btn-ajouter-voeu" class="btn" type="button">+ Ajouter ce vœu</button>
+          <button id="btn-actualiser-voeux" class="btn btn-secondaire" type="button">Actualiser la liste</button>
+        </p>
+
+        <div id="liste-voeux"><div class="panneau-texte">Sélectionnez un candidat (onglet 2) pour gérer ses vœux.</div></div>
+
+        <p>
+          <button id="btn-panier-voeux" class="btn btn-succes" type="button" onclick="lancerActionNavigateur('campus_france', 'ajouter_voeux_panier')">Ajouter les vœux validés au panier (Co-Pilote)</button>
+        </p>
+      </div>
 
       <div class="carte">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
@@ -607,13 +919,123 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
         <div id="zone-sauvegardes-abo" class="panneau-texte">Cliquez sur l'un des boutons ci-dessus.</div>
       </div>
     </section>
+
+    <!-- 10. Procédures (démarches) : ajout et modification par le bureau -->
+    <section id="vue-procedures" class="vue-ecran cache">
+      <style>
+        .ligne-proc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #f8fafc; border: 1px solid var(--bordure); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+        .ligne-proc input[type="text"], .ligne-proc input[type="number"] { flex: 1 1 160px; min-width: 120px; }
+        .ligne-proc .large { flex: 3 1 260px; }
+        .liste-cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+        .liste-cases label, .ligne-proc label { font-weight: 400; display: flex; flex-direction: row; gap: 6px; align-items: center; }
+        .liste-cases input[type="checkbox"], .ligne-proc input[type="checkbox"] { width: auto; margin: 0; }
+        fieldset#fs-editeur { border: none; padding: 0; margin: 0; min-width: 0; }
+        .ia-statut { display: inline-block; font-size: 0.85rem; color: var(--texte-secondaire); background: var(--surface-2); border: 1px solid var(--bordure); border-radius: 999px; padding: 4px 12px; margin: 0 0 12px 0; }
+        .ia-texte-source { width: 100%; min-height: 200px; line-height: 1.5; resize: vertical; }
+        .ia-compteur { font-size: 0.8rem; color: var(--texte-secondaire); margin: 4px 0 8px; }
+        .ia-compteur.depasse { color: var(--rouge-danger); font-weight: 650; }
+        .ia-reponse { white-space: pre-wrap; line-height: 1.55; }
+        .ia-mention { font-size: 0.82rem; color: var(--texte-secondaire); margin-top: 8px; }
+      </style>
+      <h2>Procédures (démarches) de votre bureau</h2>
+      <div class="banniere-regle">
+        Les procédures de base (Campus France, IRCC…) sont communes à tous les bureaux. Vous pouvez en ajouter de nouvelles ou personnaliser une procédure de base : vos changements ne concernent que votre bureau et s'appliquent immédiatement, sans redéploiement. Réservé aux administrateurs du bureau pour la modification.
+      </div>
+
+      <div id="ia-statut-procedures" class="ia-statut">Assistant IA : état en cours de vérification...</div>
+
+      <div id="carte-generation-ia" class="carte cache">
+        <h3>Créer une procédure à partir d'un texte officiel (IA)</h3>
+        <p style="font-size:0.86rem; color:var(--texte-secondaire); margin-top:0;">
+          Collez le guide ou la page officielle de la démarche (80 à 30 000 caractères). L'assistant prépare un brouillon de procédure ; rien n'est enregistré tant que vous n'avez pas relu l'éditeur et cliqué sur « Enregistrer la procédure ».
+        </p>
+        <textarea id="ia-texte-source" class="ia-texte-source" placeholder="Collez ici le texte officiel de la démarche..."></textarea>
+        <div id="ia-compteur-texte" class="ia-compteur">0 / 30 000 caractères (minimum 80)</div>
+        <p>
+          <button id="btn-generer-procedure-ia" class="btn btn-succes" type="button">Générer un brouillon</button>
+        </p>
+        <div id="zone-retour-generation-ia" class="panneau-texte cache"></div>
+      </div>
+
+      <div class="carte">
+        <p>
+          <button id="btn-rafraichir-procedures"class="btn btn-secondaire" type="button">Actualiser la liste</button>
+          <button id="btn-nouvelle-procedure" class="btn btn-succes cache" type="button">+ Nouvelle procédure</button>
+        </p>
+        <table id="table-procedures">
+          <thead><tr><th>Code</th><th>Libellé</th><th>Origine</th><th>Version</th><th>Actions</th></tr></thead>
+          <tbody><tr><td colspan="5">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+
+      <div id="carte-editeur-procedure" class="carte cache">
+        <h3 id="titre-editeur-procedure">Éditeur de procédure</h3>
+        <div id="bloc-ia-editeur" class="panneau-texte cache">
+          <strong>Brouillon généré par IA : relisez chaque point avant d'enregistrer</strong>
+          <div id="titre-avertissements-ia" style="margin-top:8px;">Points signalés par l'assistant :</div>
+          <ul id="liste-avertissements-ia" class="liste-propre"></ul>
+        </div>
+        <div id="encart-champs-avances" class="panneau-texte cache">
+          <strong>Champs avancés présents dans cette procédure</strong>
+          <div style="font-size:0.85rem; color:var(--texte-secondaire); margin:4px 0;">
+            Lecture seule pour l'instant : l'éditeur ne sait pas encore les modifier, mais ils sont conservés tels quels à l'enregistrement.
+          </div>
+          <ul id="liste-champs-avances" class="liste-propre"></ul>
+        </div>
+        <fieldset id="fs-editeur">
+          <div class="grille-form">
+            <label>Code technique (minuscules, chiffres, underscores)
+              <input id="proc-code" type="text" placeholder="ex: visa_touristique" />
+            </label>
+            <label>Libellé affiché
+              <input id="proc-libelle" type="text" placeholder="ex: Visa touristique Schengen" />
+            </label>
+            <label>Seuil de fonds recommandé (EUR, facultatif)
+              <input id="proc-seuil" type="number" min="0" />
+            </label>
+          </div>
+          <label style="display:block; margin-top:10px;">Description (facultatif)
+            <input id="proc-description" type="text" style="width:100%;" />
+          </label>
+
+          <h4>Informations du candidat obligatoires avant tout pré-remplissage</h4>
+          <div id="proc-champs" class="liste-cases"></div>
+
+          <h4>Pièces requises</h4>
+          <datalist id="liste-types-pieces"></datalist>
+          <div id="proc-pieces"></div>
+          <p><button id="btn-ajouter-piece" class="btn btn-contour" type="button">+ Ajouter une pièce</button></p>
+
+          <h4>Étapes de la tâche (facultatif)</h4>
+          <div style="font-size:0.85rem; color:var(--texte-secondaire); margin-bottom:6px;">
+            Laissez vide pour garder les 4 étapes standard (vérification, session portail, pré-remplissage, arrêt avant validation humaine).
+          </div>
+          <div id="proc-etapes"></div>
+          <p><button id="btn-ajouter-etape" class="btn btn-contour" type="button">+ Ajouter une étape</button></p>
+
+          <h4>Veille réglementaire (points à connaître)</h4>
+          <div id="proc-veille"></div>
+          <p><button id="btn-ajouter-veille" class="btn btn-contour" type="button">+ Ajouter un point de veille</button></p>
+        </fieldset>
+        <p>
+          <button id="btn-enregistrer-procedure" class="btn btn-succes" type="button">Enregistrer la procédure</button>
+          <button id="btn-fermer-editeur-procedure" class="btn btn-secondaire" type="button">Fermer l'éditeur</button>
+        </p>
+        <div id="zone-retour-procedure" class="panneau-texte cache"></div>
+      </div>
+    </section>
   </main>
 
   <script>
+    let roleActif = "";
     let jetonCsrf = "";
     let candidatActifId = null;
     let candidatActifObj = null;
     let dictionnaireCandidats = {};
+    let listeDemarches = [
+      { code: "campus_france", libelle: "Campus France — Études en France (Guide Septembre 2026)" },
+      { code: "ircc_permis_etudes", libelle: "IRCC Canada — Demande de permis d'études" },
+    ];
 
     const LIBELLES_PIECES_FR = {
       passeport: "Passeport biométrique en cours de validité",
@@ -675,11 +1097,18 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
         .replace(/"/g, "&quot;");
     }
 
+    let minuteurNotification = null;
     function notifier(msg, ok = true) {
       const el = document.getElementById("zone-notification");
       el.textContent = msg;
       el.className = "notif " + (ok ? "notif-ok" : "notif-err");
-      el.classList.remove("cache");
+      // Relance l'animation d'apparition à chaque nouveau message
+      el.style.animation = "none";
+      void el.offsetWidth;
+      el.style.animation = "";
+      clearTimeout(minuteurNotification);
+      // Un succès se retire seul ; une erreur reste jusqu'au prochain message
+      if (ok) minuteurNotification = setTimeout(() => el.classList.add("cache"), 6000);
     }
 
     function allerVersVue(cible) {
@@ -689,6 +1118,8 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
       document.querySelectorAll(".vue-ecran").forEach((s) => {
         s.classList.toggle("cache", s.id !== cible);
       });
+      if (cible === "vue-conseiller" || cible === "vue-documents") chargerListeDemarches();
+      if (cible === "vue-conseiller" || cible === "vue-procedures") chargerStatutIA();
       if (cible === "vue-documents" && candidatActifId) {
         chargerDocumentsCandidat();
         verifierCompletudeDossier();
@@ -698,6 +1129,10 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
         rafraichirValidationsHumaines();
       } else if (cible === "vue-historique-erreurs") {
         rafraichirJournalAudit();
+      } else if (cible === "vue-procedures") {
+        chargerProcedures();
+      } else if (cible === "vue-campus-france") {
+        chargerVoeux();
       }
     }
 
@@ -726,6 +1161,7 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
       if (rep.ok) {
         const data = await rep.json();
         jetonCsrf = data.jeton_csrf;
+        roleActif = data.utilisateur.role;
         const roleFr = data.utilisateur.role === "administrateur" ? "Administrateur du bureau" : "Employé";
         document.getElementById("etat-utilisateur").textContent =
           data.utilisateur.nom_affiche + " (" + roleFr + ")";
@@ -978,14 +1414,17 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
 
     async function verifierCompletudeDossier() {
       if (!candidatActifId) return notifier("Sélectionnez d'abord un candidat dans l'onglet 2.", false);
-      const [rCf, rIrcc] = await Promise.all([
-        appelApi(`/api/v1/candidats/${candidatActifId}/completude/campus_france`),
-        appelApi(`/api/v1/candidats/${candidatActifId}/completude/ircc_permis_etudes`),
-      ]);
-      const cf = rCf.ok ? await rCf.json() : null;
-      const ircc = rIrcc.ok ? await rIrcc.json() : null;
+      await chargerListeDemarches();
+      const reponses = await Promise.all(
+        listeDemarches.map((d) => appelApi(`/api/v1/candidats/${candidatActifId}/completude/${encodeURIComponent(d.code)}`))
+      );
+      let cartes = "";
+      for (const r of reponses) {
+        const donnees = r.ok ? await r.json() : null;
+        cartes += formaterCarteCompletude(donnees);
+      }
       const zone = document.getElementById("zone-completude");
-      zone.innerHTML = `<div class="grille-2">${formaterCarteCompletude(cf)}${formaterCarteCompletude(ircc)}</div>`;
+      zone.innerHTML = `<div class="grille-2">${cartes}</div>`;
     }
 
     document.getElementById("btn-televerser-doc").addEventListener("click", async () => {
@@ -1524,6 +1963,7 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
               ${piecesTxt ? `<p style="margin:4px 0; color:var(--rouge-danger);"><strong>Pièces manquantes :</strong> ${echapperHtml(piecesTxt)}</p>` : ""}
               <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                 ${piecesTxt ? `<button class="btn btn-succes" type="button" onclick="completerPiecesEtRelancerDepuisValidation('${t.id}', '${t.candidat_id}', '${t.code_demarche}')">Déposer les pièces spécimens de démo &amp; Pré-remplir par l'Agent</button>` : ""}
+                ${t.motif_suspension === "action_utilisateur_portail" ? `<button class="btn btn-contour" type="button" onclick="allerVersVue('vue-navigateur-serveur')">Ouvrir le navigateur de l'agent (CAPTCHA / code de sécurité)</button>` : ""}
                 <button class="btn" type="button" onclick="reprendreTacheDossier('${t.id}')">Reprendre la tâche</button>
                 <button class="btn btn-danger" type="button" onclick="annulerTacheDossier('${t.id}')">Annuler la tâche</button>
               </div>
@@ -1710,6 +2150,653 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
       document.getElementById("zone-sauvegardes-abo").innerHTML = html;
     });
 
+    // ===== Procédures (démarches) du bureau : liste + éditeur =====
+    let procedureEditee = null; // code de la procédure modifiée, ou null en création
+    let definitionOriginaleProcedure = null; // définition complète telle que reçue (pour ne rien perdre à l'enregistrement)
+    const CLES_GEREES_PROCEDURE = ["code", "libelle", "description", "seuil_fonds_recommande_eur", "champs_candidat_requis", "pieces_requises", "etapes_tache", "veille_reglementaire"];
+
+    function clesAvanceesProcedure(def) {
+      return Object.keys(def || {}).filter((k) => !CLES_GEREES_PROCEDURE.includes(k));
+    }
+
+    function afficherChampsAvances(def) {
+      const cles = clesAvanceesProcedure(def);
+      const liste = document.getElementById("liste-champs-avances");
+      liste.innerHTML = "";
+      cles.forEach((k) => {
+        const li = document.createElement("li");
+        const fort = document.createElement("strong");
+        fort.textContent = k;
+        let apercu = "";
+        try { apercu = JSON.stringify(def[k]); } catch (e) { apercu = ""; }
+        if (apercu && apercu.length > 160) apercu = apercu.slice(0, 160) + "...";
+        li.appendChild(fort);
+        li.appendChild(document.createTextNode(apercu ? " : " + apercu : ""));
+        liste.appendChild(li);
+      });
+      document.getElementById("encart-champs-avances").classList.toggle("cache", cles.length === 0);
+    }
+
+    function masquerBlocIaEditeur() {
+      document.getElementById("bloc-ia-editeur").classList.add("cache");
+      document.getElementById("liste-avertissements-ia").innerHTML = "";
+    }
+
+    function estAdministrateur() {
+      return roleActif === "administrateur";
+    }
+
+    function messageErreurApi(err, defaut) {
+      if (!err) return defaut;
+      if (typeof err.detail === "string") return err.detail;
+      if (Array.isArray(err.detail)) {
+        return err.detail.map((e) => (e.loc ? e.loc.slice(1).join(" > ") + " : " : "") + e.msg).join(" ; ");
+      }
+      return err.message || defaut;
+    }
+
+    function retourProcedure(msg, ok) {
+      const z = document.getElementById("zone-retour-procedure");
+      z.textContent = msg;
+      z.style.borderColor = ok ? "#16a34a" : "#dc2626";
+      z.classList.remove("cache");
+    }
+
+    async function chargerProcedures() {
+      const tbody = document.querySelector("#table-procedures tbody");
+      document.getElementById("btn-nouvelle-procedure").classList.toggle("cache", !estAdministrateur());
+      document.getElementById("carte-generation-ia").classList.toggle("cache", !estAdministrateur());
+      const rep = await appelApi("/api/v1/demarches/gestion");
+      if (!rep.ok) {
+        tbody.innerHTML = `<tr><td colspan="5">Connectez-vous pour afficher les procédures.</td></tr>`;
+        return;
+      }
+      const liste = await rep.json();
+      tbody.innerHTML = "";
+      if (liste.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5">Aucune procédure disponible.</td></tr>`;
+        return;
+      }
+      liste.forEach((d) => {
+        const tr = document.createElement("tr");
+        const origine = d.source === "bureau"
+          ? `<span class="badge badge-ok">Votre bureau</span>`
+          : `<span class="badge">Base commune</span>`;
+        tr.innerHTML = `
+          <td><code>${echapperHtml(d.code)}</code></td>
+          <td>${echapperHtml(d.libelle)}</td>
+          <td>${origine}</td>
+          <td>${d.source === "bureau" ? d.version : "-"}</td>
+          <td></td>`;
+        const cellule = tr.lastElementChild;
+        const btnOuvrir = document.createElement("button");
+        btnOuvrir.type = "button";
+        btnOuvrir.className = "btn";
+        btnOuvrir.textContent = estAdministrateur() ? "Modifier" : "Consulter";
+        btnOuvrir.addEventListener("click", () => ouvrirEditeurProcedure(d.code));
+        cellule.appendChild(btnOuvrir);
+        if (estAdministrateur()) {
+          const btnMasquer = document.createElement("button");
+          btnMasquer.type = "button";
+          btnMasquer.className = "btn btn-danger";
+          btnMasquer.textContent = "Masquer";
+          btnMasquer.addEventListener("click", () => masquerProcedure(d.code, d.libelle));
+          cellule.appendChild(btnMasquer);
+        }
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function masquerProcedure(code, libelle) {
+      if (!window.confirm("Masquer la procédure « " + libelle + " » pour votre bureau ? Les autres bureaux ne sont pas concernés. Vous pourrez la réactiver en la modifiant.")) return;
+      const rep = await appelApi("/api/v1/demarches/" + encodeURIComponent(code), { method: "DELETE" });
+      if (rep.ok) {
+        notifier("Procédure masquée pour votre bureau.", true);
+        fermerEditeurProcedure();
+        await chargerProcedures();
+      } else {
+        const err = await rep.json().catch(() => null);
+        notifier(messageErreurApi(err, "Impossible de masquer la procédure."), false);
+      }
+    }
+
+    function creerLigne(contenuHtml) {
+      const div = document.createElement("div");
+      div.className = "ligne-proc";
+      div.innerHTML = contenuHtml + `<button type="button" class="btn btn-danger" style="margin:0;" data-retirer="1">Retirer</button>`;
+      div.querySelector("[data-retirer]").addEventListener("click", () => div.remove());
+      return div;
+    }
+
+    function ajouterLignePiece(p) {
+      const v = Object.assign({ type_piece: "", libelle: "", obligatoire: true, exige_date_expiration: false, validite_minimale_jours: 0 }, p || {});
+      const div = creerLigne(`
+        <input type="text" class="p-type" list="liste-types-pieces" placeholder="type (ex: passeport)" value="${echapperHtml(v.type_piece)}" />
+        <input type="text" class="p-libelle large" placeholder="Libellé affiché (ex: Passeport en cours de validité)" value="${echapperHtml(v.libelle)}" />
+        <label style="font-weight:400;"><input type="checkbox" class="p-oblig" ${v.obligatoire ? "checked" : ""} /> Obligatoire</label>
+        <label style="font-weight:400;"><input type="checkbox" class="p-exp" ${v.exige_date_expiration ? "checked" : ""} /> Date d'expiration exigée</label>
+        <input type="number" class="p-valid" min="0" style="max-width:150px;" title="Validité minimale restante (jours)" placeholder="Validité min. (jours)" value="${Number(v.validite_minimale_jours) || 0}" />`);
+      document.getElementById("proc-pieces").appendChild(div);
+    }
+
+    function ajouterLigneEtape(e) {
+      const v = Object.assign({ code: "", libelle: "" }, e || {});
+      const div = creerLigne(`
+        <input type="text" class="e-code" placeholder="code (ex: verification_prerequis)" value="${echapperHtml(v.code)}" />
+        <input type="text" class="e-libelle large" placeholder="Libellé de l'étape" value="${echapperHtml(v.libelle)}" />`);
+      document.getElementById("proc-etapes").appendChild(div);
+    }
+
+    function ajouterLigneVeille(p) {
+      const v = Object.assign({ titre: "", resume: "", reference: "" }, p || {});
+      const div = creerLigne(`
+        <input type="text" class="v-titre" placeholder="Titre" value="${echapperHtml(v.titre)}" />
+        <input type="text" class="v-resume large" placeholder="Résumé de la règle (1000 caractères max)" value="${echapperHtml(v.resume)}" />
+        <input type="text" class="v-ref" placeholder="Référence officielle" value="${echapperHtml(v.reference)}" />`);
+      document.getElementById("proc-veille").appendChild(div);
+    }
+
+    function construireCasesChamps(coches) {
+      const zone = document.getElementById("proc-champs");
+      zone.innerHTML = "";
+      const tous = Object.keys(LIBELLES_CHAMPS_FR);
+      coches.forEach((c) => { if (!tous.includes(c)) tous.push(c); });
+      tous.forEach((cle) => {
+        const lab = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = cle;
+        cb.checked = coches.includes(cle);
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(" " + (LIBELLES_CHAMPS_FR[cle] || cle)));
+        zone.appendChild(lab);
+      });
+    }
+
+    function remplirEditeurProcedure(def) {
+      definitionOriginaleProcedure = JSON.parse(JSON.stringify(def || {}));
+      afficherChampsAvances(definitionOriginaleProcedure);
+      document.getElementById("proc-code").value = def.code || "";
+      document.getElementById("proc-code").disabled = procedureEditee !== null;
+      document.getElementById("proc-libelle").value = def.libelle || "";
+      document.getElementById("proc-description").value = def.description || "";
+      document.getElementById("proc-seuil").value = def.seuil_fonds_recommande_eur === null || def.seuil_fonds_recommande_eur === undefined ? "" : def.seuil_fonds_recommande_eur;
+      construireCasesChamps(def.champs_candidat_requis || []);
+      const dl = document.getElementById("liste-types-pieces");
+      dl.innerHTML = Object.keys(LIBELLES_PIECES_FR).map((k) => `<option value="${echapperHtml(k)}">${echapperHtml(LIBELLES_PIECES_FR[k])}</option>`).join("");
+      document.getElementById("proc-pieces").innerHTML = "";
+      (def.pieces_requises || []).forEach(ajouterLignePiece);
+      document.getElementById("proc-etapes").innerHTML = "";
+      (def.etapes_tache || []).forEach(ajouterLigneEtape);
+      document.getElementById("proc-veille").innerHTML = "";
+      (def.veille_reglementaire || []).forEach(ajouterLigneVeille);
+    }
+
+    function configurerEditeurSelonRole() {
+      const admin = estAdministrateur();
+      document.getElementById("fs-editeur").disabled = !admin;
+      document.getElementById("btn-enregistrer-procedure").classList.toggle("cache", !admin);
+      ["btn-ajouter-piece", "btn-ajouter-etape", "btn-ajouter-veille"].forEach((id) => {
+        document.getElementById(id).classList.toggle("cache", !admin);
+      });
+    }
+
+    async function ouvrirEditeurProcedure(code) {
+      const rep = await appelApi("/api/v1/demarches/" + encodeURIComponent(code));
+      if (!rep.ok) {
+        const err = await rep.json().catch(() => null);
+        notifier(messageErreurApi(err, "Procédure introuvable."), false);
+        return;
+      }
+      const data = await rep.json();
+      procedureEditee = code;
+      masquerBlocIaEditeur();
+      remplirEditeurProcedure(data.definition);
+      configurerEditeurSelonRole();
+      document.getElementById("titre-editeur-procedure").textContent =
+        (estAdministrateur() ? "Modifier la procédure : " : "Consulter la procédure : ") + data.definition.libelle +
+        (data.source === "base" ? " (base commune : l'enregistrement créera la version de votre bureau)" : " (version " + data.version + ")");
+      document.getElementById("zone-retour-procedure").classList.add("cache");
+      document.getElementById("carte-editeur-procedure").classList.remove("cache");
+      document.getElementById("carte-editeur-procedure").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function nouvelleProcedure() {
+      procedureEditee = null;
+      masquerBlocIaEditeur();
+      remplirEditeurProcedure({ code: "", libelle: "", champs_candidat_requis: ["nom", "prenom", "numero_passeport"], pieces_requises: [{ type_piece: "passeport", libelle: "Passeport en cours de validité", obligatoire: true, exige_date_expiration: true, validite_minimale_jours: 180 }] });
+      configurerEditeurSelonRole();
+      document.getElementById("titre-editeur-procedure").textContent = "Nouvelle procédure";
+      document.getElementById("zone-retour-procedure").classList.add("cache");
+      document.getElementById("carte-editeur-procedure").classList.remove("cache");
+      document.getElementById("carte-editeur-procedure").scrollIntoView({ behavior: "smooth" });
+    }
+
+    function fermerEditeurProcedure() {
+      procedureEditee = null;
+      definitionOriginaleProcedure = null;
+      masquerBlocIaEditeur();
+      document.getElementById("carte-editeur-procedure").classList.add("cache");
+    }
+
+    function collecterDefinitionProcedure() {
+      const texte = (el, sel) => el.querySelector(sel).value.trim();
+      const def = {
+        code: document.getElementById("proc-code").value.trim().toLowerCase(),
+        libelle: document.getElementById("proc-libelle").value.trim(),
+        description: document.getElementById("proc-description").value.trim(),
+        champs_candidat_requis: Array.from(document.querySelectorAll("#proc-champs input:checked")).map((c) => c.value),
+        pieces_requises: Array.from(document.querySelectorAll("#proc-pieces .ligne-proc")).map((l) => ({
+          type_piece: texte(l, ".p-type").toLowerCase(),
+          libelle: texte(l, ".p-libelle"),
+          obligatoire: l.querySelector(".p-oblig").checked,
+          exige_date_expiration: l.querySelector(".p-exp").checked,
+          validite_minimale_jours: parseInt(l.querySelector(".p-valid").value || "0", 10) || 0,
+        })),
+        veille_reglementaire: Array.from(document.querySelectorAll("#proc-veille .ligne-proc")).map((l) => ({
+          titre: texte(l, ".v-titre"),
+          resume: texte(l, ".v-resume"),
+          reference: texte(l, ".v-ref"),
+        })),
+      };
+      const seuil = document.getElementById("proc-seuil").value.trim();
+      if (seuil !== "") def.seuil_fonds_recommande_eur = parseInt(seuil, 10);
+      const etapes = Array.from(document.querySelectorAll("#proc-etapes .ligne-proc")).map((l) => ({
+        code: texte(l, ".e-code").toLowerCase(),
+        libelle: texte(l, ".e-libelle"),
+      }));
+      if (etapes.length > 0) def.etapes_tache = etapes;
+      // Champs avancés non gérés par l'éditeur : conservés tels quels (jamais perdus à l'enregistrement)
+      clesAvanceesProcedure(definitionOriginaleProcedure).forEach((k) => {
+        if (!(k in def)) def[k] = JSON.parse(JSON.stringify(definitionOriginaleProcedure[k]));
+      });
+      return def;
+    }
+
+    async function enregistrerProcedure() {
+      const def = collecterDefinitionProcedure();
+      const enCreation = procedureEditee === null;
+      const rep = await appelApi(
+        enCreation ? "/api/v1/demarches" : "/api/v1/demarches/" + encodeURIComponent(procedureEditee),
+        { method: enCreation ? "POST" : "PUT", body: JSON.stringify(def) }
+      );
+      if (rep.ok) {
+        const data = await rep.json();
+        procedureEditee = data.definition.code;
+        definitionOriginaleProcedure = JSON.parse(JSON.stringify(data.definition));
+        afficherChampsAvances(definitionOriginaleProcedure);
+        masquerBlocIaEditeur();
+        document.getElementById("proc-code").disabled = true;
+        document.getElementById("titre-editeur-procedure").textContent =
+          "Modifier la procédure : " + data.definition.libelle + " (version " + data.version + ")";
+        retourProcedure("Procédure enregistrée (version " + data.version + "). Elle est utilisable immédiatement par votre bureau.", true);
+        notifier("Procédure « " + data.definition.libelle + " » enregistrée.", true);
+        await chargerProcedures();
+      } else {
+        const err = await rep.json().catch(() => null);
+        retourProcedure(messageErreurApi(err, "Enregistrement refusé."), false);
+      }
+    }
+
+    document.getElementById("btn-rafraichir-procedures").addEventListener("click", chargerProcedures);
+    document.getElementById("btn-nouvelle-procedure").addEventListener("click", nouvelleProcedure);
+    document.getElementById("btn-fermer-editeur-procedure").addEventListener("click", fermerEditeurProcedure);
+    document.getElementById("btn-enregistrer-procedure").addEventListener("click", enregistrerProcedure);
+    document.getElementById("btn-ajouter-piece").addEventListener("click", () => ajouterLignePiece());
+    document.getElementById("btn-ajouter-etape").addEventListener("click", () => ajouterLigneEtape());
+    document.getElementById("btn-ajouter-veille").addEventListener("click", () => ajouterLigneVeille());
+
+    // ===== Assistant IA : état, génération de procédure, assistant du dossier, liste des démarches =====
+    const TAILLE_MIN_TEXTE_IA = 80;
+    const TAILLE_MAX_TEXTE_IA = 30000;
+
+    function messageErreurIA(statut, err) {
+      if (statut === 503) return "L'assistant IA n'est pas activé sur cette plateforme.";
+      if (statut === 429) return "Le plafond mensuel de demandes à l'assistant IA est atteint pour votre bureau.";
+      return messageErreurApi(err, "La demande à l'assistant IA a échoué.");
+    }
+
+    async function chargerStatutIA() {
+      let texte = "Assistant IA : état indisponible";
+      try {
+        const rep = await appelApi("/api/v1/ia/statut");
+        if (rep.ok) {
+          const s = await rep.json();
+          texte = s.active
+            ? "Assistant IA : activé — " + s.appels_ce_mois + " / " + s.plafond_mensuel + " demandes ce mois"
+            : "Assistant IA : non activé";
+        }
+      } catch (e) { /* état laissé à « indisponible » */ }
+      ["ia-statut-procedures", "ia-statut-discussion"].forEach((id) => {
+        document.getElementById(id).textContent = texte;
+      });
+    }
+
+    function remplirSelectDemarches(idSelect) {
+      const sel = document.getElementById(idSelect);
+      const valeur = sel.value;
+      sel.innerHTML = "";
+      listeDemarches.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d.code;
+        opt.textContent = d.libelle;
+        sel.appendChild(opt);
+      });
+      if (listeDemarches.some((d) => d.code === valeur)) sel.value = valeur;
+    }
+
+    async function chargerListeDemarches() {
+      try {
+        const rep = await appelApi("/api/v1/demarches");
+        if (rep.ok) {
+          const liste = await rep.json();
+          if (Array.isArray(liste) && liste.length > 0) {
+            listeDemarches = liste.map((d) => ({ code: d.code, libelle: d.libelle || d.code }));
+          }
+        }
+      } catch (e) { /* on garde la liste par défaut (Campus France, IRCC) */ }
+      remplirSelectDemarches("eval-demarche");
+      remplirSelectDemarches("ia-demarche-assistant");
+    }
+
+    function majCompteurTexteIA() {
+      const n = document.getElementById("ia-texte-source").value.trim().length;
+      const c = document.getElementById("ia-compteur-texte");
+      c.textContent = n + " / 30 000 caractères (minimum 80)";
+      c.classList.toggle("depasse", n > 0 && (n < TAILLE_MIN_TEXTE_IA || n > TAILLE_MAX_TEXTE_IA));
+    }
+
+    function retourGenerationIA(msg, ok) {
+      const z = document.getElementById("zone-retour-generation-ia");
+      z.textContent = msg;
+      z.style.borderColor = ok ? "#16a34a" : "#dc2626";
+      z.classList.remove("cache");
+    }
+
+    async function genererProcedureIA() {
+      if (!estAdministrateur()) return notifier("Réservé aux administrateurs du bureau.", false);
+      const texte = document.getElementById("ia-texte-source").value.trim();
+      if (texte.length < TAILLE_MIN_TEXTE_IA || texte.length > TAILLE_MAX_TEXTE_IA) {
+        return retourGenerationIA("Le texte doit contenir entre 80 et 30 000 caractères (actuellement " + texte.length + ").", false);
+      }
+      const btn = document.getElementById("btn-generer-procedure-ia");
+      btn.disabled = true;
+      btn.textContent = "Génération en cours...";
+      try {
+        const rep = await appelApi("/api/v1/ia/procedures/generer", { method: "POST", body: JSON.stringify({ texte }) });
+        if (!rep.ok) {
+          const err = await rep.json().catch(() => null);
+          return retourGenerationIA(messageErreurIA(rep.status, err), false);
+        }
+        const data = await rep.json();
+        procedureEditee = null;
+        remplirEditeurProcedure(data.brouillon);
+        configurerEditeurSelonRole();
+        const liste = document.getElementById("liste-avertissements-ia");
+        liste.innerHTML = "";
+        (data.avertissements || []).forEach((a) => {
+          const li = document.createElement("li");
+          li.textContent = a;
+          liste.appendChild(li);
+        });
+        document.getElementById("titre-avertissements-ia").classList.toggle("cache", liste.children.length === 0);
+        document.getElementById("bloc-ia-editeur").classList.remove("cache");
+        document.getElementById("titre-editeur-procedure").textContent = "Nouvelle procédure (brouillon généré par IA, non enregistré)";
+        document.getElementById("zone-retour-procedure").classList.add("cache");
+        document.getElementById("carte-editeur-procedure").classList.remove("cache");
+        document.getElementById("carte-editeur-procedure").scrollIntoView({ behavior: "smooth" });
+        retourGenerationIA("Brouillon généré. Relisez-le dans l'éditeur ci-dessous : rien n'est enregistré avant votre clic sur « Enregistrer la procédure ».", true);
+        chargerStatutIA();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Générer un brouillon";
+      }
+    }
+
+    function retourAssistantIA(msg, ok) {
+      const z = document.getElementById("zone-reponse-assistant-ia");
+      z.innerHTML = "";
+      const p = document.createElement("div");
+      p.textContent = msg;
+      z.appendChild(p);
+      z.style.borderColor = ok ? "#16a34a" : "#dc2626";
+      z.classList.remove("cache");
+    }
+
+    async function demanderAssistantDossier() {
+      if (!candidatActifId) {
+        return retourAssistantIA("Aucun candidat n'est sélectionné. Choisissez d'abord un candidat dans l'onglet 2 : l'assistant répond dans le contexte de son dossier.", false);
+      }
+      const question = document.getElementById("ia-question-assistant").value.trim();
+      const code_demarche = document.getElementById("ia-demarche-assistant").value;
+      if (question.length < 1) return retourAssistantIA("Saisissez votre question.", false);
+      const btn = document.getElementById("btn-demander-assistant-ia");
+      btn.disabled = true;
+      btn.textContent = "Analyse en cours...";
+      try {
+        const rep = await appelApi("/api/v1/ia/dossiers/" + encodeURIComponent(candidatActifId) + "/assistant", {
+          method: "POST",
+          body: JSON.stringify({ code_demarche, question }),
+        });
+        if (!rep.ok) {
+          const err = await rep.json().catch(() => null);
+          return retourAssistantIA(messageErreurIA(rep.status, err), false);
+        }
+        const data = await rep.json();
+        const z = document.getElementById("zone-reponse-assistant-ia");
+        z.innerHTML = "";
+        const texte = document.createElement("div");
+        texte.className = "ia-reponse";
+        texte.textContent = data.reponse;
+        const mention = document.createElement("div");
+        mention.className = "ia-mention";
+        mention.textContent = data.mention || "";
+        z.appendChild(texte);
+        z.appendChild(mention);
+        z.style.borderColor = "#16a34a";
+        z.classList.remove("cache");
+        chargerStatutIA();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Demander";
+      }
+    }
+
+    document.getElementById("ia-texte-source").addEventListener("input", majCompteurTexteIA);
+    document.getElementById("btn-generer-procedure-ia").addEventListener("click", genererProcedureIA);
+    document.getElementById("btn-demander-assistant-ia").addEventListener("click", demanderAssistantDossier);
+
+    // ===== Vœux de formation et lettres de motivation =====
+    const NL = String.fromCharCode(10);
+    const MAX_MOTIVATION = 4000;
+    const LIBELLES_STATUT_VOEU = { brouillon: "Brouillon à relire", valide: "Validé", ajoute_au_panier: "Dans le panier" };
+    let alertesVoeux = {}; // points à vérifier renvoyés à la rédaction, par vœu
+
+    function lignesDepuis(id) {
+      return document.getElementById(id).value.split(NL).map((s) => s.trim()).filter((s) => s.length > 0);
+    }
+
+    function faitsDuParcours() {
+      const projet = document.getElementById("faits-projet").value.trim();
+      return {
+        parcours: lignesDepuis("faits-parcours"),
+        points_forts: lignesDepuis("faits-points"),
+        langues: lignesDepuis("faits-langues"),
+        projet: projet || null,
+      };
+    }
+
+    function baseVoeux() {
+      return "/api/v1/candidats/" + candidatActifId + "/voeux";
+    }
+
+    async function chargerVoeux() {
+      const zone = document.getElementById("liste-voeux");
+      document.getElementById("voeux-candidat-actif").textContent =
+        candidatActifObj ? candidatActifObj.nom + " " + candidatActifObj.prenom : "Aucun";
+      if (!candidatActifId) {
+        zone.innerHTML = `<div class="panneau-texte">Sélectionnez un candidat (onglet 2) pour gérer ses vœux.</div>`;
+        return;
+      }
+      const rep = await appelApi(baseVoeux());
+      if (!rep.ok) {
+        zone.innerHTML = `<div class="panneau-texte">Impossible de charger les vœux de ce candidat.</div>`;
+        return;
+      }
+      const liste = await rep.json();
+      document.getElementById("btn-ajouter-voeu").disabled = liste.length >= 7;
+      zone.innerHTML = "";
+      if (liste.length === 0) {
+        zone.innerHTML = `<div class="panneau-texte">Aucun vœu pour le moment. Ajoutez une formation ci-dessus.</div>`;
+        return;
+      }
+      liste.forEach((v) => zone.appendChild(construireCarteVoeu(v)));
+    }
+
+    function construireCarteVoeu(v) {
+      const div = document.createElement("div");
+      div.className = "voeu";
+      const base = baseVoeux() + "/" + v.id;
+      const enPanier = v.statut === "ajoute_au_panier";
+
+      const entete = document.createElement("div");
+      entete.className = "voeu-entete";
+      const titre = document.createElement("div");
+      const t = document.createElement("strong");
+      t.textContent = v.rang + ". " + v.intitule;
+      const sous = document.createElement("div");
+      sous.style.fontSize = "0.86rem";
+      sous.style.color = "var(--texte-secondaire)";
+      sous.textContent = v.etablissement + " · " + v.niveau + (v.justification ? " · " + v.justification : "");
+      titre.appendChild(t);
+      titre.appendChild(sous);
+      const badge = document.createElement("span");
+      badge.className = "badge " + (v.statut === "brouillon" ? "badge-warn" : "badge-ok");
+      badge.textContent = LIBELLES_STATUT_VOEU[v.statut] || v.statut;
+      entete.appendChild(titre);
+      entete.appendChild(badge);
+      div.appendChild(entete);
+
+      const alertes = alertesVoeux[v.id] || [];
+      if (alertes.length > 0) {
+        const ul = document.createElement("ul");
+        ul.className = "voeu-alertes";
+        alertes.forEach((a) => {
+          const li = document.createElement("li");
+          li.textContent = a;
+          ul.appendChild(li);
+        });
+        div.appendChild(ul);
+      }
+
+      const ta = document.createElement("textarea");
+      ta.value = v.motivation || "";
+      ta.placeholder = "Rédigez la lettre ici, ou cliquez sur « Rédiger la lettre ».";
+      ta.disabled = enPanier;
+      const compteur = document.createElement("div");
+      compteur.className = "voeu-compteur";
+      const majCompteur = () => {
+        const n = ta.value.length;
+        compteur.textContent = n + " / " + MAX_MOTIVATION + " caractères";
+        compteur.classList.toggle("depasse", n > MAX_MOTIVATION);
+      };
+      ta.addEventListener("input", majCompteur);
+      majCompteur();
+      div.appendChild(ta);
+      div.appendChild(compteur);
+
+      const ajouterBouton = (texte, classe, action) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn " + classe;
+        b.textContent = texte;
+        b.addEventListener("click", action);
+        div.appendChild(b);
+        return b;
+      };
+
+      if (!enPanier) {
+        ajouterBouton("Rédiger la lettre", "", async () => {
+          const rep = await appelApi(base + "/lettre/generer", { method: "POST", body: JSON.stringify(faitsDuParcours()) });
+          const data = await rep.json().catch(() => null);
+          if (!rep.ok) {
+            notifier(messageErreurApi(data, "Rédaction impossible."), false);
+            return;
+          }
+          alertesVoeux[v.id] = data.elements_a_verifier || [];
+          notifier(
+            data.origine === "ia"
+              ? "Lettre rédigée par l'IA : relisez-la avant de valider."
+              : "Lettre type générée (sans IA) : complétez les repères « À COMPLÉTER ».",
+            true
+          );
+          await chargerVoeux();
+        });
+        ajouterBouton("Enregistrer mon texte", "btn-contour", async () => {
+          const rep = await appelApi(base, { method: "PATCH", body: JSON.stringify({ motivation: ta.value }) });
+          const data = await rep.json().catch(() => null);
+          if (!rep.ok) {
+            notifier(messageErreurApi(data, "Enregistrement refusé."), false);
+            return;
+          }
+          notifier("Texte enregistré en brouillon.", true);
+          await chargerVoeux();
+        });
+        if (v.statut === "brouillon") {
+          ajouterBouton("Valider ce vœu", "btn-succes", async () => {
+            const rep = await appelApi(base + "/valider", { method: "POST" });
+            const data = await rep.json().catch(() => null);
+            if (!rep.ok) {
+              notifier(messageErreurApi(data, "Validation refusée."), false);
+              return;
+            }
+            delete alertesVoeux[v.id];
+            notifier("Vœu validé : il peut être ajouté au panier.", true);
+            await chargerVoeux();
+          });
+        }
+        ajouterBouton("Retirer", "btn-danger", async () => {
+          if (!window.confirm("Retirer ce vœu de la liste ?")) return;
+          const rep = await appelApi(base, { method: "DELETE" });
+          if (!rep.ok) {
+            const data = await rep.json().catch(() => null);
+            notifier(messageErreurApi(data, "Suppression impossible."), false);
+            return;
+          }
+          notifier("Vœu retiré.", true);
+          await chargerVoeux();
+        });
+      }
+      return div;
+    }
+
+    document.getElementById("btn-ajouter-voeu").addEventListener("click", async () => {
+      if (!candidatActifId) {
+        notifier("Sélectionnez d'abord un candidat dans l'onglet 2.", false);
+        return;
+      }
+      const justification = document.getElementById("voeu-justification").value.trim();
+      const corps = {
+        intitule: document.getElementById("voeu-intitule").value.trim(),
+        etablissement: document.getElementById("voeu-etablissement").value.trim(),
+        niveau: document.getElementById("voeu-niveau").value,
+        voie: document.getElementById("voeu-voie").value,
+      };
+      if (justification) corps.justification = justification;
+      const rep = await appelApi(baseVoeux(), { method: "POST", body: JSON.stringify(corps) });
+      const data = await rep.json().catch(() => null);
+      if (!rep.ok) {
+        notifier(messageErreurApi(data, "Ajout du vœu impossible."), false);
+        return;
+      }
+      ["voeu-intitule", "voeu-etablissement", "voeu-justification"].forEach((id) => {
+        document.getElementById(id).value = "";
+      });
+      notifier("Vœu ajouté. Rédigez maintenant sa lettre.", true);
+      await chargerVoeux();
+    });
+    document.getElementById("btn-actualiser-voeux").addEventListener("click", chargerVoeux);
+
     // Connexion automatique dès l'ouverture de l'interface pour une prise en main immédiate
     window.addEventListener("DOMContentLoaded", () => {
       connecterOperateur(true);
@@ -1717,6 +2804,9 @@ HTML_INTERFACE_FR = """<!DOCTYPE html>
   </script>
 </body>
 </html>"""
+
+# Ajoute le coffre d'identifiants (Règle 3) et les récapitulatifs à valider (Règle 1).
+HTML_INTERFACE_FR = assembler_navigateur_serveur(assembler_interface(_HTML_INTERFACE_BASE))
 
 
 @routeur_interface.get("/", response_class=HTMLResponse)

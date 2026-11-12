@@ -20,6 +20,7 @@ from app.core.journalisation import configurer_journalisation
 from app.db.session import creer_fabrique_sessions, creer_moteur
 from app.demo.routeur_demo import routeur_demo
 from app.interface.routeur_interface import routeur_interface
+from app.interface.routeur_public import routeur_public
 
 journal = logging.getLogger("app.http")
 
@@ -110,9 +111,18 @@ def creer_application(parametres: Parametres | None = None) -> FastAPI:
                         )
                         db_init.commit()
 
+        from app.agent_local.sessions_navigateur import RegistreSessionsNavigateur
+
+        if getattr(application.state, "registre_navigateur", None) is None:
+            application.state.registre_navigateur = RegistreSessionsNavigateur()
+
         try:
             yield
         finally:
+            # Arrêt propre : ferme tous les navigateurs Co-Pilote (un par bureau) et leurs threads.
+            registre_nav = getattr(application.state, "registre_navigateur", None)
+            if registre_nav is not None:
+                registre_nav.fermer_tout()
             if propre_moteur:
                 application.state.moteur.dispose()
 
@@ -193,6 +203,7 @@ def creer_application(parametres: Parametres | None = None) -> FastAPI:
 
     application.include_router(routeur_v1)
     application.include_router(routeur_interface)
+    application.include_router(routeur_public)
     if cfg.environnement is not Environnement.PRODUCTION:
         application.include_router(routeur_demo)
     return application

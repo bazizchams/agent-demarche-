@@ -12,10 +12,42 @@ Ces pages permettent à la fois :
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
 routeur_demo = APIRouter(prefix="/demo", tags=["pages de démonstration"])
+
+
+@routeur_demo.get("/eef-reel", response_class=HTMLResponse)
+@routeur_demo.get("/eef-reel/{chemin:path}", response_class=HTMLResponse)
+def page_maquette_eef_reel(chemin: str = "") -> HTMLResponse:
+    """Maquette fidèle du vrai portail Études en France (catalogue / fiche / panier) : tests uniquement."""
+    from app.demo.maquette_eef_reel import html_maquette_eef_reel
+
+    return HTMLResponse(content=html_maquette_eef_reel(), headers={"X-Frame-Options": "SAMEORIGIN"})
+
+# Catalogue FICTIF de formations pour la page de démonstration (recherche + panier de vœux).
+# Deux entrées « Licence 3 Informatique — Université de Lorraine » sont volontairement identiques
+# (campus différents) pour tester la détection de correspondance ambiguë du Co-Pilote.
+CATALOGUE_FORMATIONS_DEMO: list[dict[str, str]] = [
+    {"id": "f-001", "intitule": "Master 1 Intelligence Artificielle", "etablissement": "Sorbonne Université", "niveau": "Master 1"},
+    {"id": "f-002", "intitule": "Master 1 Informatique", "etablissement": "Université Paris-Saclay", "niveau": "Master 1"},
+    {"id": "f-003", "intitule": "Master 2 Data Science", "etablissement": "Université de Lyon", "niveau": "Master 2"},
+    {"id": "f-004", "intitule": "Licence 3 Informatique", "etablissement": "Université de Lorraine", "niveau": "Licence 3", "campus": "Nancy"},
+    {"id": "f-005", "intitule": "Licence 3 Informatique", "etablissement": "Université de Lorraine", "niveau": "Licence 3", "campus": "Metz"},
+    {"id": "f-006", "intitule": "Master 1 Informatique", "etablissement": "Université de Lorraine", "niveau": "Master 1"},
+    {"id": "f-007", "intitule": "Master 2 Cybersécurité", "etablissement": "Université de Rennes", "niveau": "Master 2"},
+    {"id": "f-008", "intitule": "Diplôme d'ingénieur Génie Logiciel", "etablissement": "INSA Lyon", "niveau": "Ingénieur"},
+    {"id": "f-009", "intitule": "Master 1 Intelligence Artificielle", "etablissement": "Université Côte d'Azur", "niveau": "Master 1"},
+    {"id": "f-010", "intitule": "Master 1 Mathématiques Appliquées", "etablissement": "Université de Bordeaux", "niveau": "Master 1"},
+    {"id": "f-011", "intitule": "Master 1 Réseaux et Télécommunications", "etablissement": "Université de Limoges", "niveau": "Master 1"},
+    {"id": "f-012", "intitule": "Master 1 Génie Électrique", "etablissement": "Université de Toulouse III", "niveau": "Master 1"},
+    {"id": "f-013", "intitule": "Master 1 Management International", "etablissement": "Université de Strasbourg", "niveau": "Master 1"},
+    {"id": "f-014", "intitule": "Master 1 Biologie Moléculaire", "etablissement": "Université de Montpellier", "niveau": "Master 1"},
+    {"id": "f-015", "intitule": "Master 1 Droit des Affaires", "etablissement": "Université de Lille", "niveau": "Master 1"},
+]
 
 
 @routeur_demo.get("/campus-france", response_class=HTMLResponse)
@@ -40,6 +72,8 @@ def page_demo_campus_france(
         if captcha == 1
         else ""
     )
+
+    catalogue_json = json.dumps(CATALOGUE_FORMATIONS_DEMO, ensure_ascii=False).replace("</", "<\\/")
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -72,6 +106,17 @@ def page_demo_campus_france(
     .cases-certification {{ background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 16px; margin-top: 14px; }}
     .cases-certification label {{ flex-direction: row; align-items: center; gap: 8px; font-weight: 500; margin-bottom: 6px; }}
     .cache {{ display: none; }}
+    .bloc-catalogue, .bloc-panier {{ margin-top: 16px; border-top: 1px dashed #cbd5e1; padding-top: 12px; }}
+    .barre-recherche {{ display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }}
+    .barre-recherche label {{ flex: 1 1 320px; }}
+    #catalogue-resultats, #panier-liste {{ list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }}
+    .catalogue-item, .panier-item {{ border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #f8fafc; }}
+    .catalogue-item {{ display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }}
+    .btn-secondaire {{ background: #0f766e; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; }}
+    .btn-retirer-formation {{ background: #e2e8f0; color: #1e293b; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }}
+    .panier-item-entete {{ display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }}
+    .compteur-motivation {{ font-size: 0.78rem; color: #64748b; margin: 4px 0 8px; }}
+    #panier-message {{ min-height: 1.2em; font-size: 0.86rem; color: #92400e; margin-top: 6px; }}
     footer {{ font-size: 0.8rem; color: #64748b; text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid #cbd5e1; }}
   </style>
 </head>
@@ -333,6 +378,25 @@ def page_demo_campus_france(
         <textarea id="champ-texte-motivation" name="texte_motivation" maxlength="4000" placeholder="Rédigez ou laissez l'agent pré-remplir votre projet d'études personnalisé (max 4 000 caractères)..."></textarea>
       </label>
     </div>
+
+    <!-- Catalogue de formations (recherche) -->
+    <div class="bloc-catalogue" id="bloc-catalogue">
+      <h3 style="margin:0 0 8px; font-size:0.98rem;">Catalogue des formations</h3>
+      <div class="barre-recherche">
+        <label>Rechercher une formation (intitulé ou établissement)
+          <input id="catalogue-recherche" type="search" placeholder="Ex. Master 1 Informatique" autocomplete="off" />
+        </label>
+        <button id="btn-catalogue-rechercher" type="button" class="btn-brouillon">Rechercher</button>
+      </div>
+      <ul id="catalogue-resultats" aria-live="polite"></ul>
+    </div>
+
+    <!-- Panier de formations (max 7) avec un texte de motivation par formation -->
+    <div class="bloc-panier" id="panier-formations">
+      <h3 style="margin:0 0 8px; font-size:0.98rem;">Mon panier de formations — <span id="panier-compteur">0 / 7</span></h3>
+      <div id="panier-message" role="status"></div>
+      <ul id="panier-liste"></ul>
+    </div>
   </section>
 
   <!-- Section 5 (suite) & 6 : Mes paiements (Algérie), Mes rendez-vous & Mon dossier pré-consulaire -->
@@ -425,6 +489,146 @@ def page_demo_campus_france(
   <script>
     window.__SOUMISSION_FINALE_CLIQUEE__ = false;
     window.__BROUILLON_ENREGISTRE__ = false;
+    window.__MOTIVATIONS_ENREGISTREES__ = 0;
+
+    // ---- Catalogue de formations & panier de vœux (max 7) avec motivation par formation ----
+    var CATALOGUE_FORMATIONS = {catalogue_json};
+    var LIMITE_PANIER = 7;
+    var LIMITE_MOTIVATION = 4000;
+
+    function normaliserRecherche(t) {{
+      return String(t || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    }}
+    function messagePanier(texte) {{
+      document.getElementById("panier-message").textContent = texte || "";
+    }}
+    function nbPanier() {{
+      return document.querySelectorAll("#panier-liste .panier-item").length;
+    }}
+    function majCompteurPanier() {{
+      document.getElementById("panier-compteur").textContent = nbPanier() + " / " + LIMITE_PANIER;
+    }}
+    function formationDansPanier(id) {{
+      return Array.prototype.some.call(document.querySelectorAll("#panier-liste .panier-item"), function (li) {{
+        return li.getAttribute("data-formation-id") === id;
+      }});
+    }}
+
+    function lancerRechercheCatalogue() {{
+      var q = normaliserRecherche(document.getElementById("catalogue-recherche").value);
+      var liste = document.getElementById("catalogue-resultats");
+      liste.innerHTML = "";
+      CATALOGUE_FORMATIONS.forEach(function (f) {{
+        var meule = normaliserRecherche(f.intitule + " " + f.etablissement + " " + f.niveau);
+        if (q && meule.indexOf(q) === -1) return;
+        var li = document.createElement("li");
+        li.className = "catalogue-item";
+        li.setAttribute("data-formation-id", f.id);
+        li.setAttribute("data-intitule", f.intitule);
+        li.setAttribute("data-etablissement", f.etablissement);
+        li.setAttribute("data-niveau", f.niveau);
+        if (f.campus) li.setAttribute("data-campus", f.campus);
+        var info = document.createElement("span");
+        info.className = "catalogue-info";
+        info.textContent = f.intitule + " — " + f.etablissement + " — " + f.niveau + (f.campus ? " (campus " + f.campus + ")" : "");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-ajouter-formation btn-secondaire";
+        btn.textContent = "+ Ajouter une formation";
+        btn.addEventListener("click", function () {{ ajouterAuPanier(f); }});
+        li.appendChild(info);
+        li.appendChild(btn);
+        liste.appendChild(li);
+      }});
+      if (!liste.children.length) {{
+        var vide = document.createElement("li");
+        vide.className = "catalogue-vide";
+        vide.textContent = "Aucune formation ne correspond à votre recherche.";
+        liste.appendChild(vide);
+      }}
+    }}
+
+    function ajouterAuPanier(f) {{
+      if (formationDansPanier(f.id)) {{ messagePanier("Cette formation est déjà dans votre panier."); return; }}
+      if (nbPanier() >= LIMITE_PANIER) {{ messagePanier("Votre panier est plein : 7 formations maximum."); return; }}
+      messagePanier("");
+      var li = document.createElement("li");
+      li.className = "panier-item";
+      li.setAttribute("data-formation-id", f.id);
+      li.setAttribute("data-intitule", f.intitule);
+      li.setAttribute("data-etablissement", f.etablissement);
+      li.setAttribute("data-niveau", f.niveau);
+      li.setAttribute("data-statut", "motivation_a_rediger");
+
+      var entete = document.createElement("div");
+      entete.className = "panier-item-entete";
+      var titre = document.createElement("strong");
+      titre.textContent = f.intitule + " — " + f.etablissement + " (" + f.niveau + ")";
+      var statut = document.createElement("span");
+      statut.className = "panier-statut badge-statut badge-a-completer";
+      statut.textContent = "Motivation à rédiger";
+      entete.appendChild(titre);
+      entete.appendChild(statut);
+
+      var lbl = document.createElement("label");
+      lbl.appendChild(document.createTextNode("Texte de motivation (limite officielle : 4 000 caractères)"));
+      var zone = document.createElement("textarea");
+      zone.className = "panier-motivation";
+      zone.setAttribute("maxlength", String(LIMITE_MOTIVATION));
+      zone.setAttribute("placeholder", "Motivation pour cette formation (max 4 000 caractères)...");
+      lbl.appendChild(zone);
+
+      var compteur = document.createElement("div");
+      compteur.className = "compteur-motivation";
+      compteur.textContent = "0 / 4 000 caractères";
+      zone.addEventListener("input", function () {{
+        compteur.textContent = zone.value.length + " / 4 000 caractères";
+        if (li.getAttribute("data-statut") === "motivation_enregistree") {{
+          li.setAttribute("data-statut", "motivation_a_rediger");
+          statut.textContent = "Motivation modifiée — à enregistrer";
+          statut.className = "panier-statut badge-statut badge-a-completer";
+        }}
+      }});
+
+      var btnEnreg = document.createElement("button");
+      btnEnreg.type = "button";
+      btnEnreg.className = "btn-enregistrer-motivation btn-brouillon";
+      btnEnreg.textContent = "Enregistrer";
+      btnEnreg.addEventListener("click", function () {{
+        var v = zone.value;
+        if (!v.trim()) {{ messagePanier("La motivation est vide : rien à enregistrer."); return; }}
+        if (v.length > LIMITE_MOTIVATION) {{ messagePanier("La motivation dépasse 4 000 caractères."); return; }}
+        messagePanier("");
+        li.setAttribute("data-statut", "motivation_enregistree");
+        statut.textContent = "Motivation enregistrée";
+        statut.className = "panier-statut badge-statut badge-complete";
+        window.__MOTIVATIONS_ENREGISTREES__ += 1;
+      }});
+
+      var btnRetirer = document.createElement("button");
+      btnRetirer.type = "button";
+      btnRetirer.className = "btn-retirer-formation";
+      btnRetirer.setAttribute("data-action", "retirer-formation");
+      btnRetirer.textContent = "Retirer du panier";
+      btnRetirer.addEventListener("click", function () {{
+        li.remove();
+        majCompteurPanier();
+      }});
+
+      li.appendChild(entete);
+      li.appendChild(lbl);
+      li.appendChild(compteur);
+      li.appendChild(btnEnreg);
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(btnRetirer);
+      document.getElementById("panier-liste").appendChild(li);
+      majCompteurPanier();
+    }}
+
+    document.getElementById("btn-catalogue-rechercher").addEventListener("click", lancerRechercheCatalogue);
+    document.getElementById("catalogue-recherche").addEventListener("keydown", function (ev) {{
+      if (ev.key === "Enter") {{ ev.preventDefault(); lancerRechercheCatalogue(); }}
+    }});
 
     function marquerRubriquesCompletes() {{
       ["badge-statut-identite", "badge-statut-scolarite", "badge-statut-panier"].forEach(function(id) {{

@@ -5,6 +5,32 @@ mode_portail: reel
 # Règle 6 : statut initial 'non testé' tant que l'opérateur humain n'a pas validé sur le portail réel
 statut_test_initial: "non testé"
 
+# ATTENTION — SÉLECTEURS NON TESTÉS : les sélecteurs « #eef-... » et « #onglet-panier-formations-eef » ci-dessous
+# ont été écrits d'après la page de démonstration et n'ont JAMAIS été validés sur le vrai portail Études en France.
+# Le vrai portail est une application React dont les identifiants sont générés (ex. « input-:rc5: ») : ne JAMAIS
+# s'appuyer sur des id ni des classes CSS. Le statut reste « non testé » tant que l'administrateur n'a pas attesté la
+# validation sur portail réel (Règle 6).
+#
+# PANIER DE VŒUX (action « ajouter_voeux_panier ») : elle n'utilise PAS les sélecteurs ci-dessous mais le profil
+# `PROFIL_PANIER_REEL` (serveur/app/agent_local/portails/panier_voeux.py), écrit d'après la structure OBSERVÉE le
+# 2026-11-11 (docs/portail_etudes_en_france_reel.md) avec des locators par rôle, libellé et texte :
+#   - fenêtre fixée à 1280x900 (sous ~900 px le site passe en affichage mobile et cache les filtres) ;
+#   - /catalogue-formations : champ « Libellé de la formation », bouton « Rechercher », résultats = liens
+#     /catalogue-formations/formation/{id}/site/{idSite}, filtrés côté client (intitulé ET établissement exacts) ;
+#   - fiche formation : un bloc par niveau d'entrée (« Bac +4 », « Bac +5 »…) avec son bouton « Ajouter au panier » ;
+#     le champ `niveau` du vœu choisit le bloc (absent ou sans correspondance avec plusieurs blocs => « ambigu ») ;
+#   - GET de lecture /parcours-api/espace-etudiant/catalogue/formations/{id}/site/{idSite} (ferme, ajouteAuPanier) ;
+#     le POST de recherche (corps inconnu) n'est JAMAIS appelé ;
+#   - /mon-dossier-candidature/panier-formations : un `article` par formation, dépliage « Texte de motivation »
+#     (bouton sans nom accessible), éditeur riche (iframe, contenteditable ou textarea, essayés dans cet ordre),
+#     compteur « n/5000 caractères maximum » (limite côté Co-Pilote : 4 000), « Enregistrer » de l'article seul.
+# JAMAIS cliqués (Règle 1) : « Supprimer », « Soumettre mon dossier de candidature », les deux cases de certification
+# et tout bouton dont le nom contient « certifie ».
+# Tant que le portail n'est pas homologué, l'action est REFUSÉE sur ce portail (elle ne fonctionne que sur
+# /demo/campus-france et sur la maquette fidèle /demo/eef-reel, réservée aux tests). Pour recalibrer, lancer l'action
+# « cartographier_page » pendant une session supervisée où l'humain est connecté : elle écrit la structure de la page
+# (sans valeurs ni clic) dans serveur/donnees/stockage/calibration/<horodatage>.json.
+
 # Règle 7 : URL officielle et domaines autorisés en configuration YAML (jamais en dur dans le code)
 url_officielle: "https://pastel.diplomatie.gouv.fr/etudesenfrance"
 domaines_autorises:
@@ -110,6 +136,8 @@ etapes_automatisation:
         selecteur: "#eef-upload-cv"
         obligatoire: true
 
+  # Étape héritée de la démo (sélecteurs « #eef-... » non testés). Le panier réel passe par l'action dédiée
+  # « ajouter_voeux_panier » (profil PROFIL_PANIER_REEL, locators par rôle/texte) et non par cette étape.
   - code_etape: selection_formations_et_motivations
     type_action: remplir_champs
     selecteur_navigation_onglet: "#onglet-panier-formations-eef"

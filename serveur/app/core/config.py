@@ -57,8 +57,42 @@ class Parametres(BaseSettings):
     dossier_sauvegardes: Path = RACINE_SERVEUR / "donnees" / "sauvegardes"
     stripe_cle_secrete: str | None = None
     stripe_secret_webhook: str = "whsec_dev_local_secret_change_me"
+    # Identifiants de prix Stripe (price_...) de chaque forfait et base des URL de retour
+    # (ex. https://app.exemple.com). Sans clé secrète Stripe, le paiement est simulé hors production.
+    stripe_prix_starter: str | None = None
+    stripe_prix_professionnel: str | None = None
+    stripe_prix_entreprise: str | None = None
+    url_publique_plateforme: str | None = None
     version_cgu_courante: str = "CGU-2026.10"
     version_consentement_loi_18_07: str = "L18-07-2026.1"
+
+    # Assistant IA (Claude). Clé unique de la plateforme, jamais écrite dans le code :
+    # variable d'environnement BE_CLE_API_ANTHROPIC ou fichier serveur/.env.
+    # Sans clé, les fonctions IA sont désactivées (réponse 503), le reste fonctionne.
+    cle_api_anthropic: str | None = None
+    modele_llm: str = "claude-sonnet-5-5"
+    url_api_anthropic: str = "https://api.anthropic.com/v1/messages"
+    delai_llm_secondes: int = Field(default=90, ge=5, le=300)
+
+    # Inscription en libre-service des agences
+    inscriptions_ouvertes: bool = True
+    inscription_max_par_heure_par_ip: int = Field(default=5, ge=1, le=1000)
+    inscription_limite_active_en_test: bool = False
+
+    # Contrôle de l'abonnement : un bureau dont l'essai est terminé ou l'abonnement suspendu
+    # passe en LECTURE SEULE (consultation, export et droits des candidats restent possibles).
+    # None => contrôle actif uniquement en production (même principe que docs_api_actives).
+    blocage_abonnement_expire: bool | None = None
+    duree_essai_jours: int = Field(default=30, ge=1, le=365)
+    jours_grace_impaye: int = Field(default=7, ge=0, le=60)
+
+    # Co-Pilote navigateur côté serveur (multi-bureaux). None => mode serveur actif en production :
+    # navigateur headless forcé, jamais de rattachement CDP 9222 ni de canal chrome/msedge local.
+    navigateur_serveur: bool | None = None
+    navigateur_max_sessions: int = Field(default=3, ge=1, le=50)
+    navigateur_inactivite_minutes: int = Field(default=15, ge=1, le=240)
+    # URL du serveur utilisée par le pont du Co-Pilote hors production quand `url_publique_plateforme` est vide.
+    url_serveur_local: str = "http://127.0.0.1:8000"
 
     # Divers
     niveau_journal: str = "INFO"
@@ -76,6 +110,28 @@ class Parametres(BaseSettings):
         if self.docs_api_actives is not None:
             return self.docs_api_actives
         return self.environnement is not Environnement.PRODUCTION
+
+    @property
+    def blocage_abonnement_actif(self) -> bool:
+        if self.blocage_abonnement_expire is not None:
+            return self.blocage_abonnement_expire
+        return self.environnement is Environnement.PRODUCTION
+
+    @property
+    def navigateur_serveur_actif(self) -> bool:
+        if self.navigateur_serveur is not None:
+            return self.navigateur_serveur
+        return self.environnement is Environnement.PRODUCTION
+
+    @property
+    def url_serveur_copilote(self) -> str:
+        """URL injectée dans la page du Co-Pilote pour joindre le pont. Vide (pont désactivé)
+        en production tant que `url_publique_plateforme` n'est pas renseignée."""
+        if self.url_publique_plateforme:
+            return self.url_publique_plateforme.strip().rstrip("/")
+        if self.environnement is Environnement.PRODUCTION:
+            return ""
+        return self.url_serveur_local.strip().rstrip("/")
 
     @property
     def est_sqlite(self) -> bool:

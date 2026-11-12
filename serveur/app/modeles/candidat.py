@@ -82,6 +82,8 @@ class Candidat(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
     pays_residence: Mapped[str | None] = mapped_column(String(100), nullable=True)
     date_expiration_passeport: Mapped[date | None] = mapped_column(Date, nullable=True)
     niveau_actuel: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    niveau_francais: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    niveau_anglais: Mapped[str | None] = mapped_column(String(2), nullable=True)
     programme_vise: Mapped[str | None] = mapped_column(String(200), nullable=True)
     etablissement_vise: Mapped[str | None] = mapped_column(String(200), nullable=True)
     fonds_disponibles_eur: Mapped[int | None] = mapped_column(Integer, nullable=True)

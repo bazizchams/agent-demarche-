@@ -92,6 +92,22 @@ def main(argv: list[str] | None = None) -> int:
     p_lister = sous.add_parser("lister-bureaux", help="Liste les bureaux enregistrés.")
     p_lister.set_defaults(func=_cmd_lister_bureaux)
 
+    p_offrir = sous.add_parser(
+        "offrir-abonnement",
+        help="Accorde à un bureau un accès complet hors paiement (ex. votre propre agence).",
+    )
+    p_offrir.add_argument("--slug", required=True, help="Identifiant court du bureau")
+    p_offrir.add_argument(
+        "--forfait",
+        default="entreprise",
+        choices=["starter", "professionnel", "entreprise"],
+        help="Forfait accordé (quotas de dossiers et d'appels IA)",
+    )
+    p_offrir.add_argument(
+        "--jours", type=int, default=None, help="Durée en jours (sans cette option : sans date de fin)"
+    )
+    p_offrir.set_defaults(func=_cmd_offrir_abonnement)
+
     p_secours = sous.add_parser(
         "exporter-cle-secours",
         help="Génère (si besoin) la clé maîtresse DPAPI et affiche la clé de secours à imprimer.",
@@ -100,6 +116,31 @@ def main(argv: list[str] | None = None) -> int:
 
     args = analyseur.parse_args(argv)
     return args.func(args)
+
+
+def _cmd_offrir_abonnement(args: argparse.Namespace) -> int:
+    from app.modeles.abonnement import ForfaitAbonnement
+    from app.services.acces_abonnement import offrir_abonnement
+
+    if args.jours is not None and args.jours < 1:
+        print("Erreur : --jours doit être un entier positif.", file=sys.stderr)
+        return 2
+    parametres = obtenir_parametres()
+    moteur = creer_moteur(parametres.url_base_donnees)
+    Fabrique = creer_fabrique_sessions(moteur)
+    try:
+        with Fabrique() as db:
+            abo = offrir_abonnement(
+                db, slug=args.slug, forfait=ForfaitAbonnement(args.forfait), jours=args.jours
+            )
+            fin = abo.periode_courante_fin.date().isoformat() if abo.periode_courante_fin else "sans date de fin"
+            print(f"Abonnement offert : bureau={args.slug} forfait={abo.forfait.value} fin={fin}")
+        return 0
+    except ErreurMetier as exc:
+        print(f"Erreur ({exc.code}) : {exc.message}", file=sys.stderr)
+        return 1
+    finally:
+        moteur.dispose()
 
 
 def _cmd_exporter_cle_secours(_args: argparse.Namespace) -> int:

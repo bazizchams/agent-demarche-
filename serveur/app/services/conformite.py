@@ -30,7 +30,7 @@ from app.schemas.abonnement_conformite import (
     PreuveConsentementSortie,
     ResultatPurgeConservationSortie,
 )
-from app.services import audit
+from app.services import audit, coffre_identifiants
 from app.services.documents import _resoudre_chemin_stockage
 
 TEXTE_CONSENTEMENT_LOI_18_07 = """FORMULAIRE DE CONSENTEMENT EXPLICITE DU CANDIDAT (LOI ALGÉRIENNE N° 18-07)
@@ -235,6 +235,9 @@ def supprimer_definitivement_dossier_candidat(
     nb_fichiers = _detruire_fichiers_chiffres_candidat(
         db, candidat=candidat, parametres=parametres
     )
+    coffre_identifiants.supprimer_tout_candidat(
+        db, candidat_id=cid, acteur_id=acteur_id, valider=False
+    )
     db.delete(candidat)
     db.flush()
 
@@ -281,6 +284,9 @@ def purger_dossiers_archives_expires(
     for c in expirables:
         nb_fichiers += _detruire_fichiers_chiffres_candidat(
             db, candidat=c, parametres=parametres
+        )
+        coffre_identifiants.supprimer_tout_candidat(
+            db, candidat_id=c.id, acteur_id=acteur_id, valider=False
         )
         db.delete(c)
         nb_dossiers += 1

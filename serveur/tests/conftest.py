@@ -66,12 +66,19 @@ def application(
     parametres_test: Parametres,
     moteur_db: Engine,
     fabrique_sessions: sessionmaker[Session],
-) -> FastAPI:
+) -> Iterator[FastAPI]:
     app = creer_application(parametres_test)
     app.state.cle_maitresse = charger_ou_creer_cle_maitresse(parametres_test)
     app.state.moteur = moteur_db
     app.state.fabrique_sessions = fabrique_sessions
-    return app
+    try:
+        yield app
+    finally:
+        # Les TestClient sans `with` n'exécutent pas l'arrêt de l'application : on ferme ici les
+        # navigateurs Co-Pilote (un par bureau) éventuellement ouverts par le test.
+        registre = getattr(app.state, "registre_navigateur", None)
+        if registre is not None:
+            registre.fermer_tout()
 
 
 @dataclass

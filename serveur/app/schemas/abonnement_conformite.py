@@ -51,6 +51,7 @@ class SessionCheckoutStripeSortie(SchemaSortie):
     url_checkout: str
     forfait: ForfaitAbonnement
     prix_mensuel_eur: int
+    simulation: bool = False
 
 
 class TexteCGUSortie(SchemaSortie):

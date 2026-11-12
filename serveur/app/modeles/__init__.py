@@ -8,6 +8,9 @@ from app.modeles.abonnement import (
 from app.modeles.agent_local import AgentLocal
 from app.modeles.bureau import Bureau
 from app.modeles.candidat import Candidat, SexeCandidat, StatutCandidat
+from app.modeles.coffre_identifiants import IdentifiantPortail
+from app.modeles.validation_recapitulatif import ValidationRecapitulatif
+from app.modeles.demarche_bureau import DemarcheBureau
 from app.modeles.discussion_dossier import (
     AuteurMessageDossier,
     MessageDiscussionDossier,
@@ -26,6 +29,7 @@ from app.modeles.tache import (
     VerrouDossier,
 )
 from app.modeles.utilisateur import Role, Utilisateur
+from app.modeles.voeu_formation import StatutVoeu, VoeuFormation, VoieVoeu
 
 __all__ = [
     "AbonnementBureau",
@@ -34,9 +38,12 @@ __all__ = [
     "Bureau",
     "Candidat",
     "DecisionValidationHumaine",
+    "DemarcheBureau",
     "DocumentCandidat",
     "EntreeAudit",
     "EtapeTache",
+    "IdentifiantPortail",
+    "ValidationRecapitulatif",
     "ForfaitAbonnement",
     "MessageDiscussionDossier",
     "MotifSuspensionTache",
@@ -52,4 +59,7 @@ __all__ = [
     "TypeDecisionValidation",
     "Utilisateur",
     "VerrouDossier",
+    "StatutVoeu",
+    "VoeuFormation",
+    "VoieVoeu",
 ]

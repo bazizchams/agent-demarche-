@@ -1,0 +1,76 @@
+code: visa_touristique_schengen
+libelle: "Visa touristique Schengen court séjour (France) depuis l'Algérie"
+description: "Préparation d'un dossier de visa de court séjour (tourisme, 90 jours maximum) pour la France, déposé via France-Visas puis au point de dépôt désigné."
+
+# Sources officielles consultées le 2026-11-11 : service-public.gouv.fr (F2230), justice.fr.
+# Montants des droits de visa et prestataire de dépôt : non vérifiés sur source officielle (voir docs/sources_demarches.md).
+veille_reglementaire:
+  - titre: "Durée de séjour autorisée"
+    resume: "Le visa de court séjour permet de séjourner 90 jours maximum, en séjour continu ou en plusieurs séjours sur une période de 180 jours. Il est réservé à l'étranger qui ne dispose ni d'un titre de séjour ni d'un visa de long séjour dans l'espace Schengen."
+    reference: "Service-Public.gouv.fr (fiche F2230)"
+  - titre: "Délai de dépôt de la demande"
+    resume: "La demande se remplit en ligne sur France-Visas, au plus tôt 3 mois avant le départ prévu, puis un rendez-vous est pris au consulat ou au point de dépôt du pays de résidence. Une absence de réponse au bout de 2 mois vaut refus implicite."
+    reference: "Service-Public.gouv.fr (fiche F2230)"
+  - titre: "Validité et état du passeport"
+    resume: "Le passeport doit être valide au moins 3 mois après la date de fin du visa, avoir été délivré depuis moins de 10 ans et comporter au moins 2 pages vierges."
+    reference: "Service-Public.gouv.fr / Justice.fr (visa court séjour)"
+  - titre: "Assurance médicale de voyage"
+    resume: "Une assurance couvrant les dépenses médicales et hospitalières, avec une couverture minimale de 30 000 EUR, fait partie des justificatifs demandés."
+    reference: "Justice.fr (visa court séjour Schengen)"
+  - titre: "Justificatifs de séjour, de ressources et de retour"
+    resume: "Selon la situation : justificatifs de moyens d'existence, garanties de rapatriement (billet retour), assurance médicale, justificatif d'hébergement ou documents sur l'objet et les conditions du séjour pour un voyage touristique. La liste exacte dépend du profil : se référer à l'assistant France-Visas."
+    reference: "Justice.fr / France-Visas"
+  - titre: "Droits de visa non remboursables"
+    resume: "Les droits de visa sont payés au dépôt de la demande et ne sont pas remboursés en cas de refus de visa ou d'annulation du séjour. Le tarif applicable se consulte dans la rubrique Tarifs de France-Visas."
+    reference: "Service-Public.gouv.fr (fiche F2230)"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - adresse
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport valide au moins 3 mois après la fin du visa (délivré depuis moins de 10 ans, 2 pages vierges)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 90
+
+  - type_piece: assurance_medicale_voyage
+    libelle: "Assurance médicale de voyage (couverture minimale 30 000 EUR)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: justificatif_moyens_existence
+    libelle: "Justificatifs de moyens d'existence pour la durée du séjour"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: justificatif_garanties_retour
+    libelle: "Justificatif de garanties de rapatriement (billet retour ou équivalent)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: justificatif_objet_sejour
+    libelle: "Documents sur l'objet et les conditions du séjour touristique (programme, réservations)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: justificatif_hebergement
+    libelle: "Justificatif d'hébergement (réservation hôtelière ou attestation d'accueil)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0

@@ -39,3 +39,20 @@ captures/
 # Profils navigateur de l'agent local
 agent_local/profil_navigateur/
 **/profil_navigateur*/
+**/profil_navigateur_agent/
+
+# Dossiers de calibration des portails (structure DOM enregistrée par l'agent)
+**/stockage/calibration/
+calibration/
+
+# Environnement de production : le modèle est versionné, les valeurs réelles jamais
+!deploiement/.env.production.exemple
+deploiement/.env.production
+deploiement/.env
+
+# Clés et certificats
+*.pem
+*.p12
+*.pfx
+*.dpapi
+*.be.enc

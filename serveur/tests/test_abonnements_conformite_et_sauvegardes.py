@@ -223,9 +223,10 @@ def test_abonnement_cgu_webhook_stripe_et_quota_mensuel(
     assert r_wh_impaye.status_code == 200
     assert r_wh_impaye.json()["statut"] == "suspendu"
 
-    # Toute requête authentifiée du bureau suspendu est immédiatement bloquée (403)
-    r_bloque = client.get("/api/v1/candidats")
-    assert r_bloque.status_code == 403
+    # Le webhook ne verrouille plus le bureau (bureau.actif reste un interrupteur manuel) :
+    # seul le statut d'abonnement passe en impayé, la connexion et la consultation restent possibles.
+    assert client.get("/api/v1/abonnement").json()["statut_stripe"] == "past_due"
+    assert client.get("/api/v1/candidats").status_code == 200
 
 
 def test_consentement_loi_18_07_et_revocation_suspend_taches_actives(

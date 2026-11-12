@@ -1,0 +1,76 @@
+code: ecoles_privees_france
+libelle: "École privée en France — Admission directe puis visa long séjour étudiant"
+description: "Admission directe dans une école privée en France (hors plateforme universitaire), puis procédure Campus France « Je suis accepté » (dossier pré-consulaire) et visa long séjour étudiant."
+
+# Sources officielles consultées le 2026-11-11 : justice.fr (visa long séjour étudiant), Campus France (guides pré-consulaires).
+# Calendrier, frais Campus France et pièces exactes pour l'Algérie : voir docs/sources_demarches.md (À vérifier).
+veille_reglementaire:
+  - titre: "Ressources minimales pour le visa étudiant"
+    resume: "Le candidat doit pouvoir justifier de ressources au moins égales à 615 EUR par mois, appréciées selon sa situation particulière (condition non applicable en cas de réussite au concours d'entrée d'un établissement ayant signé une convention avec l'État)."
+    reference: "Justice.fr — Étudiant étranger : visa long séjour"
+  - titre: "Inscription ou préinscription exigée"
+    resume: "Le visa long séjour étudiant est destiné à l'étranger venant suivre des études supérieures en France, inscrit ou préinscrit dans un établissement d'enseignement supérieur ou un organisme de formation professionnelle supérieure."
+    reference: "Justice.fr — Étudiant étranger : visa long séjour"
+  - titre: "Dossier pré-consulaire pour admission hors plateforme"
+    resume: "Dans les guides pré-consulaires de Campus France (Bénin, Maroc), la procédure « Je suis accepté » concerne aussi les admissions obtenues sans passer par la plateforme Études en France (acceptation papier). Campus France Algérie propose la même distinction « Je suis candidat » / « Je suis accepté » : vérifier auprès de l'Espace Campus France de rattachement."
+    reference: "Campus France — Guides procédure pré-consulaire"
+  - titre: "Validation du VLS-TS après l'arrivée"
+    resume: "Le visa long séjour valant titre de séjour (VLS-TS) étudiant doit être validé en ligne dans les 3 mois suivant l'arrivée en France, avec paiement de la taxe de 150 EUR lors de la validation. Validité du titre : de 4 mois à 1 an."
+    reference: "Justice.fr — Étudiant étranger : visa long séjour"
+  - titre: "Décision finale du consulat"
+    resume: "L'admission d'une école et la validation du dossier pré-consulaire ne garantissent pas l'obtention du visa : seul le consulat décide."
+    reference: "Campus France — Guides procédure pré-consulaire"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - niveau_actuel
+  - programme_vise
+  - etablissement_vise
+  - fonds_disponibles_eur
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport biométrique en cours de validité"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: lettre_admission_ecole
+    libelle: "Lettre d'admission (acceptation papier) de l'école privée"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: diplomes_et_releves
+    libelle: "Diplômes (baccalauréat, études supérieures) et relevés de notes"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: justificatif_ressources
+    libelle: "Justificatifs de ressources (au moins 615 EUR par mois)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: attestation_langue_francaise
+    libelle: "Attestation de niveau de français (TCF / DELF / DALF) si requise par l'école"
+    obligatoire: false
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: cv
+    libelle: "Curriculum Vitae (CV)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0

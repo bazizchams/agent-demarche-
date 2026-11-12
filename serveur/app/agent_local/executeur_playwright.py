@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from playwright.sync_api import Page
+from sqlalchemy.orm import Session
 
 from app.agent_local.config_portail import (
     ConfigEtapeAutomatisation,
@@ -30,14 +32,38 @@ from app.agent_local.config_portail import (
     TypeActionEtapePortail,
     TypeChampPortail,
 )
+from app.agent_local.connexion_portail import connecter_si_necessaire
 from app.agent_local.garde_fous import (
     SuspensionRequiseParGardeFou,
     cliquer_securise,
     verifier_selecteur_non_interdit,
     verifier_session_et_absence_captcha,
 )
+from app.agent_local.soumission_validee import soumettre_apres_validation
+from app.core.erreurs import ErreurMetier
 
 journal = logging.getLogger("app.agent_local")
+
+
+@dataclass
+class ParametresConnexionCoffre:
+    """Optionnel : active la connexion automatique via le coffre (Règle 3)."""
+
+    db: Session
+    tenant: uuid.UUID
+    candidat_id: uuid.UUID
+    portail: str  # code coffre : "etudes_en_france" ou "ircc"
+    cle_maitresse: bytes = field(repr=False)
+
+
+@dataclass
+class ParametresSoumissionValidee:
+    """Optionnel : autorise le clic final UNIQUEMENT si la validation humaine couvre ce contenu."""
+
+    db: Session
+    validation_id: uuid.UUID | None
+    contenu_actuel: dict[str, Any]
+    selecteur_final: str
 
 
 class ClientHttpAgentProtocol(Protocol):
@@ -252,6 +278,8 @@ def executer_tache_sur_page_playwright(
     parametres_url: str = "",
     naviguer_au_demarrage: bool = True,
     dossier_captures_locales: Path | None = None,
+    connexion: ParametresConnexionCoffre | None = None,
+    soumission: ParametresSoumissionValidee | None = None,
 ) -> ResultatExecutionAgentLocal:
     """Exécute ou reprend une tâche sur une page Playwright en respectant les 7 règles non négociables."""
     # 1. Récupère l'état actuel de la tâche
@@ -319,7 +347,27 @@ def executer_tache_sur_page_playwright(
     champs_saisis_recap: dict[str, str] = {}
     pieces_televersees_recap: list[str] = []
 
+    soumission_effectuee = False
+    soumission_refusee: str | None = None
+
     try:
+        etapes_a_jouer = [
+            e.code_etape
+            for e in config_portail.etapes_automatisation
+            if etapes_serveur.get(e.code_etape) != "terminee"
+        ]
+        if connexion is not None and etapes_a_jouer:
+            connecter_si_necessaire(
+                page,
+                connexion.db,
+                connexion.tenant,
+                connexion.candidat_id,
+                connexion.portail,
+                config_portail,
+                etapes_a_jouer[0],
+                cle_maitresse=connexion.cle_maitresse,
+            )
+
         for etape_cfg in config_portail.etapes_automatisation:
             code = etape_cfg.code_etape
 
@@ -457,6 +505,22 @@ def executer_tache_sur_page_playwright(
                 )
             etapes_executees.append(code)
 
+        # 3 bis. Soumission finale : uniquement si une validation humaine valable est fournie.
+        # Sans paramètre `soumission` : comportement historique (arrêt avant le bouton final).
+        if soumission is not None:
+            try:
+                soumettre_apres_validation(
+                    page,
+                    soumission.db,
+                    soumission.validation_id,
+                    soumission.contenu_actuel,
+                    soumission.selecteur_final,
+                    config_portail,
+                )
+                soumission_effectuee = True
+            except ErreurMetier as refus:
+                soumission_refusee = refus.code  # arrêt avant le bouton, sans clic
+
         # 4. Toutes les étapes sont terminées : soumission au Centre de validation humaine (état `a_valider`)
         rep_soum = client_api.post(
             f"/api/v1/taches/{tache_id}/soumettre-validation",
@@ -471,10 +535,13 @@ def executer_tache_sur_page_playwright(
                     "etapes_executees": etapes_executees,
                     "etapes_sautees_idempotence": etapes_sautees,
                     "captures_etapes": captures_prises,
-                    "bouton_soumission_finale_clique": False,
+                    "bouton_soumission_finale_clique": soumission_effectuee,
+                    **({"soumission_refusee": soumission_refusee} if soumission_refusee else {}),
                 },
                 "message_alerte": (
-                    "Pré-remplissage terminé et arrêté avant le bouton d'envoi final (Règle 1). "
+                    "Envoi final effectué après validation humaine du récapitulatif (Règle 1)."
+                    if soumission_effectuee
+                    else "Pré-remplissage terminé et arrêté avant le bouton d'envoi final (Règle 1). "
                     "Veuillez vérifier la capture et valider humainement."
                 ),
             },
