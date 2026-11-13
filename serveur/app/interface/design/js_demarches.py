@@ -1,99 +1,156 @@
 """JavaScript de l'interface : Pilotage du navigateur (Campus France, IRCC), centre de validation, audit, paramètres.
 
-Extrait tel quel de l'ancien `routeur_interface.py` : chaîne Python non brute, les doubles
-antislash y sont voulus (échappements Python) et leur nombre est verrouillé par les tests.
+Chaîne Python non brute : aucun antislash (leur nombre dans la page est verrouillé par les tests).
+La partie Campus France / IRCC construit l'affichage par nœuds DOM et textContent ; ses aides
+`dem*` (nœud, illustration, état vide, squelette) sont réutilisées par les vœux et les procédures.
+La partie validation, audit et paramètres est restée telle qu'extraite de `routeur_interface.py`.
 """
 
 from __future__ import annotations
 
 JS_DEMARCHES = """
     // -----------------------------------------------------------------------
-    // Onglets 5 & 6 : Campus France & IRCC — Pilotage Navigateur & Tâches
+    // Campus France et IRCC : pilotage du navigateur et suivi des tâches.
+    // Affichage par nœuds DOM et textContent (aucune donnée interprétée en HTML).
+    // Les aides dem* servent aussi aux vœux et aux procédures.
     // -----------------------------------------------------------------------
 
+    function demNoeud(balise, classe, texte) {
+      const n = document.createElement(balise);
+      if (classe) n.className = classe;
+      if (texte !== undefined && texte !== null) n.textContent = texte;
+      return n;
+    }
+
+    function demSvg(nom, attributs) {
+      const n = document.createElementNS("http://www.w3.org/2000/svg", nom);
+      Object.keys(attributs).forEach((cle) => n.setAttribute(cle, attributs[cle]));
+      return n;
+    }
+
+    // Illustration d'état vide : « dossier » (feuille + coche) ou « alerte » (feuille + point d'exclamation).
+    function demIllustration(sorte) {
+      const svg = demSvg("svg", { viewBox: "0 0 96 72", class: "etat-vide-illu", "aria-hidden": "true", focusable: "false" });
+      svg.appendChild(demSvg("rect", { x: "6", y: "18", width: "72", height: "48", rx: "9", class: "illu-fond" }));
+      svg.appendChild(demSvg("rect", { x: "18", y: "6", width: "48", height: "40", rx: "6", class: "illu-papier" }));
+      svg.appendChild(demSvg("path", { d: "M27 17h24M27 25h30M27 33h16", class: "illu-trait" }));
+      svg.appendChild(demSvg("circle", { cx: "72", cy: "50", r: "14", class: "illu-accent" }));
+      svg.appendChild(demSvg("path", { d: sorte === "alerte" ? "M72 43v8M72 56v1" : "M65.5 50.5l4.5 4.5 8-9", class: "illu-coche" }));
+      return svg;
+    }
+
+    function demEtatVide(titre, texte, sorte, balise) {
+      const bloc = demNoeud(balise || "div", "etat-vide");
+      bloc.appendChild(demIllustration(sorte || "dossier"));
+      bloc.appendChild(demNoeud("strong", "", titre));
+      if (texte) bloc.appendChild(demNoeud("span", "", texte));
+      return bloc;
+    }
+
+    // Lignes de squelette (remplacent « Chargement… ») ; le conteneur porte aria-busy.
+    function demSquelette(nbLignes) {
+      const frag = document.createDocumentFragment();
+      frag.appendChild(demNoeud("span", "sr-only", "Chargement en cours"));
+      for (let i = 0; i < nbLignes; i += 1) {
+        const ligne = demNoeud("div", "ligne-squelette");
+        ligne.setAttribute("aria-hidden", "true");
+        ligne.appendChild(demNoeud("span", "squelette squelette-pastille"));
+        const pile = demNoeud("span", "squelette-pile");
+        pile.appendChild(demNoeud("span", "squelette squelette-texte"));
+        pile.appendChild(demNoeud("span", "squelette squelette-texte court"));
+        ligne.appendChild(pile);
+        frag.appendChild(ligne);
+      }
+      return frag;
+    }
+
+    function demBlocListe(titre, elements, ton, coche) {
+      const bloc = demNoeud("div", "retour-bloc");
+      bloc.appendChild(demNoeud("p", "retour-titre" + (ton ? " " + ton : ""), titre));
+      const ul = demNoeud("ul", "liste-propre");
+      elements.forEach((e) => ul.appendChild(demNoeud("li", coche ? "ok" : "", e)));
+      bloc.appendChild(ul);
+      return bloc;
+    }
+
+    function demBoutonSpecimens(codeDemarche, libelle) {
+      const b = demNoeud("button", "btn btn-secondaire btn-sm", libelle);
+      b.type = "button";
+      b.addEventListener("click", () => completerPiecesSpecimensEtRelancer(codeDemarche));
+      return b;
+    }
+
+    function demNomDemarche(codeDemarche) {
+      return codeDemarche === "campus_france" ? "Campus France — Études en France" : "IRCC Canada — Permis d'études";
+    }
+
+    // Compte rendu d'une action du co-pilote : renvoie un fragment DOM.
     function formaterCompteRenduPilotageHtml(res) {
-      let html = `
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-          <div>
-            <strong style="font-size:1.05rem;">${echapperHtml(res.titre_page || "Navigateur de l'Agent")}</strong>
-            <div style="font-size:0.84rem; color:var(--texte-secondaire);">Adresse ouverte : ${echapperHtml(res.url_courante)}</div>
-          </div>
-          <span class="badge ${res.succes ? 'badge-ok' : 'badge-warn'}">
-            ${res.succes ? "Action exécutée par l'Agent" : "Intervention humaine requise"}
-          </span>
-        </div>
-        <div class="notif ${res.succes ? 'notif-ok' : 'notif-err'}" style="margin-bottom:10px;">
-          ${echapperHtml(res.resume_francais)}
-        </div>
-      `;
+      const frag = document.createDocumentFragment();
+      const entete = demNoeud("div", "retour-entete");
+      const titres = demNoeud("div");
+      titres.appendChild(demNoeud("strong", "", res.titre_page || "Navigateur de l'agent"));
+      titres.appendChild(demNoeud("span", "note", "Adresse ouverte : " + (res.url_courante || "—")));
+      entete.appendChild(titres);
+      entete.appendChild(demNoeud("span", "badge " + (res.succes ? "badge-ok" : "badge-warn"),
+        res.succes ? "Action exécutée par l'agent" : "Intervention humaine requise"));
+      frag.appendChild(entete);
+      frag.appendChild(demNoeud("div", "notif " + (res.succes ? "notif-ok" : "notif-err"), res.resume_francais || ""));
 
       if (res.statut_tache) {
-        const libStatut = LIBELLES_STATUT_TACHE_FR[res.statut_tache] || res.statut_tache;
-        const classeBadgeStatut = classeBadgeStatutTache(res.statut_tache);
-        html += `<p style="margin:6px 0;"><strong>Statut du dossier :</strong> <span class="badge ${classeBadgeStatut}">${echapperHtml(libStatut)}</span></p>`;
+        const statut = demNoeud("p", "retour-statut");
+        statut.appendChild(demNoeud("strong", "", "Statut du dossier : "));
+        statut.appendChild(demNoeud("span", "badge " + classeBadgeStatutTache(res.statut_tache),
+          LIBELLES_STATUT_TACHE_FR[res.statut_tache] || res.statut_tache));
+        frag.appendChild(statut);
       }
 
-      if (res.pieces_manquantes_tache && res.pieces_manquantes_tache.length > 0) {
-        html += `<div class="banniere-regle" style="margin:8px 0;">
-          <strong>Dossier en pause (pièces justificatives à téléverser avant passage au Centre de validation humaine) :</strong>
-          <ul class="liste-propre" style="margin:6px 0;">
-            ${res.pieces_manquantes_tache.map((tp) => `<li>${echapperHtml(LIBELLES_PIECES_FR[tp] || tp)}</li>`).join("")}
-          </ul>
-          <button class="btn btn-succes" type="button" onclick="completerPiecesSpecimensEtRelancer('${echapperHtml(res.code_demarche)}')">
-            Déposer automatiquement les pièces spécimens de démo et lancer le pré-remplissage complet
-          </button>
-        </div>`;
+      const manquantes = res.pieces_manquantes_tache || [];
+      if (manquantes.length > 0) {
+        const banniere = demNoeud("div", "banniere-regle banniere-alerte retour-bloc");
+        const contenu = demNoeud("div");
+        contenu.appendChild(demNoeud("strong", "", "Dossier en pause : pièces à téléverser avant le passage au Centre de validation."));
+        const ul = demNoeud("ul", "liste-propre");
+        manquantes.forEach((tp) => ul.appendChild(demNoeud("li", "", LIBELLES_PIECES_FR[tp] || tp)));
+        contenu.appendChild(ul);
+        contenu.appendChild(demBoutonSpecimens(res.code_demarche,
+          "Déposer les pièces spécimens de démo et lancer le pré-remplissage complet"));
+        banniere.appendChild(contenu);
+        frag.appendChild(banniere);
       }
 
-      if (res.etapes_realisees && res.etapes_realisees.length > 0) {
-        html += `<p style="margin:8px 0 4px 0; font-weight:700;">Actions réalisées dans le navigateur :</p><ul class="liste-propre">`;
-        res.etapes_realisees.forEach((et) => {
-          html += `<li class="ok">${echapperHtml(et)}</li>`;
-        });
-        html += `</ul>`;
-      }
-
-      if (res.champs_remplis_libelles && res.champs_remplis_libelles.length > 0) {
-        html += `<p style="margin:8px 0 4px 0; font-weight:700; color:var(--vert-succes);">Champs pré-remplis automatiquement (${res.champs_remplis_libelles.length}) :</p><ul class="liste-propre">`;
-        res.champs_remplis_libelles.forEach((ch) => {
-          html += `<li class="ok">${echapperHtml(ch)}</li>`;
-        });
-        html += `</ul>`;
-      }
-
-      if (res.pieces_televersees_libelles && res.pieces_televersees_libelles.length > 0) {
-        html += `<p style="margin:8px 0 4px 0; font-weight:700; color:var(--vert-succes);">Pièces justificatives téléversées sur la page (${res.pieces_televersees_libelles.length}) :</p><ul class="liste-propre">`;
-        res.pieces_televersees_libelles.forEach((p) => {
-          html += `<li class="ok">${echapperHtml(p)}</li>`;
-        });
-        html += `</ul>`;
-      }
-
-      if (res.champs_manquants_libelles && res.champs_manquants_libelles.length > 0) {
-        html += `<p style="margin:8px 0 4px 0; font-weight:700; color:var(--orange-alerte);">Informations non renseignées dans la fiche candidat (Règle 4 : aucune valeur inventée) :</p><ul class="liste-propre">`;
-        res.champs_manquants_libelles.forEach((m) => {
-          html += `<li>${echapperHtml(m)}</li>`;
-        });
-        html += `</ul>`;
-      }
-
-      if (res.avertissements_securite && res.avertissements_securite.length > 0) {
-        html += `<p style="margin:8px 0 4px 0; font-weight:700;">Garde-fous de sécurité actifs :</p><ul class="liste-propre">`;
-        res.avertissements_securite.forEach((av) => {
-          html += `<li>${echapperHtml(av)}</li>`;
-        });
-        html += `</ul>`;
-      }
+      const blocs = [
+        [res.etapes_realisees, "Actions réalisées dans le navigateur", "", true],
+        [res.champs_remplis_libelles, "Champs pré-remplis automatiquement", "ok", true],
+        [res.pieces_televersees_libelles, "Pièces justificatives téléversées sur la page", "ok", true],
+        [res.champs_manquants_libelles, "Informations absentes de la fiche candidat (règle 4 : aucune valeur inventée)", "alerte", false],
+        [res.avertissements_securite, "Garde-fous de sécurité actifs", "", false],
+      ];
+      blocs.forEach(([liste, titre, ton, coche]) => {
+        if (liste && liste.length > 0) {
+          const compte = ton === "ok" ? " (" + liste.length + ")" : "";
+          frag.appendChild(demBlocListe(titre + compte, liste, ton, coche));
+        }
+      });
 
       if (res.capture_base64) {
-        html += `
-          <div style="margin-top:12px;">
-            <strong>Capture d'écran en direct du navigateur piloté par l'agent :</strong><br/>
-            <img class="capture-apercu" src="data:image/png;base64,${res.capture_base64}" alt="Capture d'écran du navigateur" />
-          </div>
-        `;
+        const bloc = demNoeud("div", "retour-bloc");
+        bloc.appendChild(demNoeud("p", "retour-titre", "Capture d'écran du navigateur piloté par l'agent"));
+        const img = demNoeud("img", "capture-apercu");
+        img.alt = "Capture d'écran du navigateur";
+        img.src = "data:image/png;base64," + res.capture_base64;
+        bloc.appendChild(img);
+        frag.appendChild(bloc);
       }
-      return html;
+      return frag;
+    }
+
+    function demAfficherChargementPilotage(zone) {
+      zone.setAttribute("aria-busy", "true");
+      zone.replaceChildren(
+        demNoeud("p", "retour-titre", "Le co-pilote exécute votre demande dans le navigateur. Cela prend quelques secondes."),
+        demSquelette(3)
+      );
     }
 
     async function lancerActionNavigateur(codeDemarche, action, instructionLibre = null) {
@@ -107,7 +164,7 @@ JS_DEMARCHES = """
       const zoneId = estCf ? "zone-retour-cf" : "zone-retour-ircc";
       const zone = document.getElementById(zoneId);
 
-      zone.innerHTML = `<div style="font-weight:600; color:var(--bleu-primaire);">L'Agent Navigateur exécute votre demande dans Chromium... Veuillez patienter quelques secondes.</div>`;
+      demAfficherChargementPilotage(zone);
 
       const rep = await appelApi("/api/v1/portails/piloter-navigateur", {
         method: "POST",
@@ -122,15 +179,17 @@ JS_DEMARCHES = """
         }),
       });
 
+      zone.setAttribute("aria-busy", "false");
       if (rep.ok) {
         const res = await rep.json();
-        zone.innerHTML = formaterCompteRenduPilotageHtml(res);
+        zone.replaceChildren(formaterCompteRenduPilotageHtml(res));
         await rafraichirTableauDeBord();
         notifier(res.resume_francais, res.succes);
       } else {
-        const err = await rep.json();
-        zone.innerHTML = `<div class="notif notif-err">${echapperHtml(err.detail || "Erreur lors du pilotage du navigateur.")}</div>`;
-        notifier(err.detail || "Erreur lors du pilotage du navigateur", false);
+        const err = await rep.json().catch(() => ({}));
+        const message = err.detail || "Erreur lors du pilotage du navigateur.";
+        zone.replaceChildren(demNoeud("div", "notif notif-err", message));
+        notifier(message, false);
       }
     }
 
@@ -144,51 +203,63 @@ JS_DEMARCHES = """
       lancerActionNavigateur("ircc_permis_etudes", "instruction_libre", inst);
     });
 
+    // Statut d'une étape de tâche -> composant « étapes » du guide.
+    const ETAPE_TACHE_AFFICHAGE = {
+      terminee: { classe: "etape-faite", texte: "Terminée" },
+      en_cours: { classe: "etape-courante", texte: "En cours" },
+      suspendue: { classe: "etape-bloquee", texte: "En attente de complétion" },
+      en_erreur: { classe: "etape-bloquee", texte: "En erreur" },
+    };
+
+    function demConstruireEtapes(etapes) {
+      const ol = demNoeud("ol", "etapes");
+      ol.setAttribute("aria-label", "Progression des étapes de la démarche");
+      etapes.forEach((e) => {
+        const aff = ETAPE_TACHE_AFFICHAGE[e.statut] || { classe: "", texte: "À faire" };
+        const li = demNoeud("li", "etape " + aff.classe);
+        if (e.statut === "en_cours") li.setAttribute("aria-current", "step");
+        li.appendChild(demNoeud("span", "etape-titre", e.libelle));
+        li.appendChild(document.createTextNode(aff.texte));
+        ol.appendChild(li);
+      });
+      return ol;
+    }
+
+    // Suivi d'une tâche : renvoie un fragment DOM (en-tête, alertes, étapes).
     function formaterTacheEnTexteHtml(tache, codeDemarche) {
-      const libStatut = LIBELLES_STATUT_TACHE_FR[tache.statut] || tache.statut;
-      const estSuspendue = tache.statut === "suspendue";
-      const estAValider = tache.statut === "a_valider";
-
-      let html = `
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-          <div>
-            <strong>Suivi de la tâche ${codeDemarche === "campus_france" ? "Campus France — Études en France" : "IRCC Canada — Permis d'études"}</strong>
-          </div>
-          <span class="badge ${classeBadgeStatutTache(tache.statut)}">${echapperHtml(libStatut)}</span>
-        </div>
-      `;
-
-      if (tache.message_alerte) {
-        html += `<div class="banniere-regle">${echapperHtml(tache.message_alerte)}</div>`;
-      }
-
-      if (tache.pieces_manquantes && tache.pieces_manquantes.length > 0) {
-        html += `<p style="margin:6px 0; color:var(--rouge-danger); font-weight:700;">Pièces justificatives obligatoires à fournir avant l'envoi officiel :</p><ul class="liste-propre">`;
-        tache.pieces_manquantes.forEach((tp) => {
-          html += `<li>${echapperHtml(LIBELLES_PIECES_FR[tp] || tp)}</li>`;
-        });
-        html += `</ul>`;
-        html += `<p><button class="btn btn-succes" type="button" onclick="completerPiecesSpecimensEtRelancer('${codeDemarche}')">Déposer automatiquement les pièces spécimens de démo et lancer le pré-remplissage par l'Agent</button></p>`;
-      }
-
-      if (tache.champs_manquants && tache.champs_manquants.length > 0) {
-        html += `<p style="margin:6px 0; color:var(--orange-alerte); font-weight:700;">Informations à compléter dans la fiche candidat :</p><ul class="liste-propre">`;
-        tache.champs_manquants.forEach((ch) => {
-          html += `<li>${echapperHtml(LIBELLES_CHAMPS_FR[ch] || ch)}</li>`;
-        });
-        html += `</ul>`;
-      }
+      const frag = document.createDocumentFragment();
+      const entete = demNoeud("div", "retour-entete");
+      const titres = demNoeud("div");
+      titres.appendChild(demNoeud("span", "surtitre", "Suivi de la démarche"));
+      titres.appendChild(demNoeud("strong", "", "Suivi de la tâche " + demNomDemarche(codeDemarche)));
+      entete.appendChild(titres);
+      entete.appendChild(demNoeud("span", "badge " + classeBadgeStatutTache(tache.statut),
+        LIBELLES_STATUT_TACHE_FR[tache.statut] || tache.statut));
+      frag.appendChild(entete);
 
       if (tache.etapes && tache.etapes.length > 0) {
-        html += `<p style="margin:10px 0 4px 0; font-weight:700;">Progression des étapes de la démarche :</p><ol class="liste-propre">`;
-        tache.etapes.forEach((e) => {
-          const stTxt = e.statut === "terminee" ? "Terminée" : e.statut === "en_cours" ? "En cours" : e.statut === "suspendue" ? "En attente de complétion" : "À faire";
-          html += `<li class="etape etape-${echapperHtml(e.statut)}"><strong>${echapperHtml(e.libelle)}</strong> — <em>${stTxt}</em></li>`;
-        });
-        html += `</ol>`;
+        frag.appendChild(demConstruireEtapes(tache.etapes));
       }
 
-      return html;
+      if (tache.message_alerte) {
+        frag.appendChild(demNoeud("div", "banniere-regle", tache.message_alerte));
+      }
+
+      const pieces = tache.pieces_manquantes || [];
+      if (pieces.length > 0) {
+        const bloc = demBlocListe("Pièces obligatoires à fournir avant l'envoi officiel",
+          pieces.map((tp) => LIBELLES_PIECES_FR[tp] || tp), "critique", false);
+        bloc.appendChild(demBoutonSpecimens(codeDemarche,
+          "Déposer les pièces spécimens de démo et lancer le pré-remplissage par l'agent"));
+        frag.appendChild(bloc);
+      }
+
+      const champs = tache.champs_manquants || [];
+      if (champs.length > 0) {
+        frag.appendChild(demBlocListe("Informations à compléter dans la fiche candidat",
+          champs.map((ch) => LIBELLES_CHAMPS_FR[ch] || ch), "alerte", false));
+      }
+      return frag;
     }
 
     async function completerPiecesSpecimensEtRelancer(codeDemarche) {
@@ -202,13 +273,14 @@ JS_DEMARCHES = """
     async function creerOuAfficherTacheDemarche(codeDemarche) {
       if (!candidatActifId) return notifier("Choisissez d'abord un dossier dans « Étudiants et fiches ».", false);
       const zoneId = codeDemarche === "campus_france" ? "zone-retour-cf" : "zone-retour-ircc";
+      const zone = document.getElementById(zoneId);
       const rep = await appelApi("/api/v1/taches", {
         method: "POST",
         body: JSON.stringify({ candidat_id: candidatActifId, code_demarche: codeDemarche }),
       });
       if (rep.ok) {
         const tache = await rep.json();
-        document.getElementById(zoneId).innerHTML = formaterTacheEnTexteHtml(tache, codeDemarche);
+        zone.replaceChildren(formaterTacheEnTexteHtml(tache, codeDemarche));
         await rafraichirTableauDeBord();
         const libStatut = LIBELLES_STATUT_TACHE_FR[tache.statut] || tache.statut;
         notifier(`Tâche créée : ${libStatut}`, true);
@@ -219,12 +291,12 @@ JS_DEMARCHES = """
           const pageTaches = await rListe.json();
           if (pageTaches.elements && pageTaches.elements.length > 0) {
             const tacheExistante = pageTaches.elements[0];
-            document.getElementById(zoneId).innerHTML = formaterTacheEnTexteHtml(tacheExistante, codeDemarche);
+            zone.replaceChildren(formaterTacheEnTexteHtml(tacheExistante, codeDemarche));
             notifier("Affichage de la tâche en cours pour ce candidat.", true);
             return;
           }
         }
-        const err = await rep.json();
+        const err = await rep.json().catch(() => ({}));
         notifier(err.detail || "Impossible de créer la tâche", false);
       }
     }

@@ -1,7 +1,7 @@
 """JavaScript de l'interface : Procédures du bureau, assistant IA et liste des démarches.
 
-Extrait tel quel de l'ancien `routeur_interface.py` : chaîne Python non brute, les doubles
-antislash y sont voulus (échappements Python) et leur nombre est verrouillé par les tests.
+Chaîne Python non brute : aucun antislash (leur nombre dans la page est verrouillé par les tests).
+Tableau et éditeur construits par nœuds DOM et textContent, avec les aides `dem*` de `js_demarches`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ JS_PROCEDURES = """
     function afficherChampsAvances(def) {
       const cles = clesAvanceesProcedure(def);
       const liste = document.getElementById("liste-champs-avances");
-      liste.innerHTML = "";
+      liste.replaceChildren();
       cles.forEach((k) => {
         const li = document.createElement("li");
         const fort = document.createElement("strong");
@@ -36,7 +36,7 @@ JS_PROCEDURES = """
 
     function masquerBlocIaEditeur() {
       document.getElementById("bloc-ia-editeur").classList.add("cache");
-      document.getElementById("liste-avertissements-ia").innerHTML = "";
+      document.getElementById("liste-avertissements-ia").replaceChildren();
     }
 
     function estAdministrateur() {
@@ -59,49 +59,79 @@ JS_PROCEDURES = """
       z.classList.remove("cache");
     }
 
+    const NB_COLONNES_PROCEDURES = 4;
+
+    function ligneEtatProcedures(titre, texte, sorte) {
+      const tr = document.createElement("tr");
+      const td = demNoeud("td", "etat-vide");
+      td.colSpan = NB_COLONNES_PROCEDURES;
+      td.appendChild(demIllustration(sorte));
+      td.appendChild(demNoeud("strong", "", titre));
+      td.appendChild(demNoeud("span", "", texte));
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function ligneSqueletteProcedure() {
+      const tr = document.createElement("tr");
+      tr.setAttribute("aria-hidden", "true");
+      ["squelette squelette-texte", "squelette squelette-pastille", "squelette squelette-valeur", "squelette squelette-texte court"].forEach((classe) => {
+        const td = document.createElement("td");
+        td.appendChild(demNoeud("span", classe));
+        tr.appendChild(td);
+      });
+      return tr;
+    }
+
+    function ligneProcedure(d) {
+      const tr = document.createElement("tr");
+      const nom = demNoeud("td");
+      const pile = demNoeud("div", "proc-nom");
+      pile.appendChild(demNoeud("strong", "", d.libelle));
+      pile.appendChild(demNoeud("code", "", d.code));
+      nom.appendChild(pile);
+      tr.appendChild(nom);
+      const origine = demNoeud("td");
+      origine.appendChild(d.source === "bureau"
+        ? demNoeud("span", "badge badge-ok", "Votre bureau")
+        : demNoeud("span", "badge badge-nu", "Base commune"));
+      tr.appendChild(origine);
+      tr.appendChild(demNoeud("td", "num", d.source === "bureau" ? String(d.version) : "—"));
+      const cellule = demNoeud("td");
+      const actions = demNoeud("div", "proc-actions");
+      const btnOuvrir = demNoeud("button", "btn btn-secondaire btn-sm", estAdministrateur() ? "Modifier" : "Consulter");
+      btnOuvrir.type = "button";
+      btnOuvrir.addEventListener("click", () => ouvrirEditeurProcedure(d.code));
+      actions.appendChild(btnOuvrir);
+      if (estAdministrateur()) {
+        const btnMasquer = demNoeud("button", "btn btn-fantome btn-sm", "Masquer");
+        btnMasquer.type = "button";
+        btnMasquer.addEventListener("click", () => masquerProcedure(d.code, d.libelle));
+        actions.appendChild(btnMasquer);
+      }
+      cellule.appendChild(actions);
+      tr.appendChild(cellule);
+      return tr;
+    }
+
     async function chargerProcedures() {
       const tbody = document.querySelector("#table-procedures tbody");
       document.getElementById("btn-nouvelle-procedure").classList.toggle("cache", !estAdministrateur());
       document.getElementById("carte-generation-ia").classList.toggle("cache", !estAdministrateur());
+      tbody.setAttribute("aria-busy", "true");
+      tbody.replaceChildren(ligneSqueletteProcedure(), ligneSqueletteProcedure(), ligneSqueletteProcedure());
       const rep = await appelApi("/api/v1/demarches/gestion");
+      tbody.setAttribute("aria-busy", "false");
       if (!rep.ok) {
-        tbody.innerHTML = `<tr><td colspan="5" class="etat-vide">Connectez-vous (menu de gauche) pour afficher les procédures.</td></tr>`;
+        tbody.replaceChildren(ligneEtatProcedures("Procédures indisponibles.", "Connectez-vous (menu de gauche) pour afficher les procédures de votre bureau.", "alerte"));
         return;
       }
       const liste = await rep.json();
-      tbody.innerHTML = "";
       if (liste.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="etat-vide">Aucune procédure disponible pour votre bureau.</td></tr>`;
+        tbody.replaceChildren(ligneEtatProcedures("Aucune procédure disponible.", "Votre bureau n'a encore aucune procédure. Un administrateur peut en créer une avec « Nouvelle procédure ».", "dossier"));
         return;
       }
-      liste.forEach((d) => {
-        const tr = document.createElement("tr");
-        const origine = d.source === "bureau"
-          ? `<span class="badge badge-ok">Votre bureau</span>`
-          : `<span class="badge">Base commune</span>`;
-        tr.innerHTML = `
-          <td><code>${echapperHtml(d.code)}</code></td>
-          <td>${echapperHtml(d.libelle)}</td>
-          <td>${origine}</td>
-          <td>${d.source === "bureau" ? d.version : "-"}</td>
-          <td></td>`;
-        const cellule = tr.lastElementChild;
-        const btnOuvrir = document.createElement("button");
-        btnOuvrir.type = "button";
-        btnOuvrir.className = "btn btn-secondaire btn-sm";
-        btnOuvrir.textContent = estAdministrateur() ? "Modifier" : "Consulter";
-        btnOuvrir.addEventListener("click", () => ouvrirEditeurProcedure(d.code));
-        cellule.appendChild(btnOuvrir);
-        if (estAdministrateur()) {
-          const btnMasquer = document.createElement("button");
-          btnMasquer.type = "button";
-          btnMasquer.className = "btn btn-danger btn-sm";
-          btnMasquer.textContent = "Masquer";
-          btnMasquer.addEventListener("click", () => masquerProcedure(d.code, d.libelle));
-          cellule.appendChild(btnMasquer);
-        }
-        tbody.appendChild(tr);
-      });
+      tbody.replaceChildren(...liste.map(ligneProcedure));
     }
 
     async function masquerProcedure(code, libelle) {
@@ -117,45 +147,77 @@ JS_PROCEDURES = """
       }
     }
 
-    function creerLigne(contenuHtml) {
-      const div = document.createElement("div");
-      div.className = "ligne-proc";
-      div.innerHTML = contenuHtml + `<button type="button" class="btn btn-danger btn-sm" style="margin:0;" data-retirer="1">Retirer</button>`;
-      div.querySelector("[data-retirer]").addEventListener("click", () => div.remove());
+    // Ligne éditable (pièce, étape, point de veille) : champs libellés + bouton « Retirer ».
+    function creerLigne(enfants) {
+      const div = demNoeud("div", "ligne-proc");
+      enfants.forEach((e) => div.appendChild(e));
+      const retirer = demNoeud("button", "btn btn-fantome btn-sm", "Retirer");
+      retirer.type = "button";
+      retirer.setAttribute("data-retirer", "1");
+      retirer.addEventListener("click", () => div.remove());
+      div.appendChild(retirer);
       return div;
+    }
+
+    function champLigne(libelle, classeInput, valeur, options) {
+      const opts = options || {};
+      const label = demNoeud("label", "champ" + (opts.large ? " large" : ""), libelle);
+      const input = document.createElement("input");
+      input.type = opts.type || "text";
+      input.className = classeInput;
+      input.value = valeur;
+      if (opts.placeholder) input.placeholder = opts.placeholder;
+      if (opts.liste) input.setAttribute("list", opts.liste);
+      if (opts.min !== undefined) input.min = String(opts.min);
+      label.appendChild(input);
+      return label;
+    }
+
+    function caseLigne(libelle, classeInput, coche) {
+      const label = demNoeud("label", "case");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = classeInput;
+      cb.checked = coche;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(" " + libelle));
+      return label;
     }
 
     function ajouterLignePiece(p) {
       const v = Object.assign({ type_piece: "", libelle: "", obligatoire: true, exige_date_expiration: false, validite_minimale_jours: 0 }, p || {});
-      const div = creerLigne(`
-        <input type="text" class="p-type" list="liste-types-pieces" placeholder="type (ex: passeport)" value="${echapperHtml(v.type_piece)}" />
-        <input type="text" class="p-libelle large" placeholder="Libellé affiché (ex: Passeport en cours de validité)" value="${echapperHtml(v.libelle)}" />
-        <label style="font-weight:400;"><input type="checkbox" class="p-oblig" ${v.obligatoire ? "checked" : ""} /> Obligatoire</label>
-        <label style="font-weight:400;"><input type="checkbox" class="p-exp" ${v.exige_date_expiration ? "checked" : ""} /> Date d'expiration exigée</label>
-        <input type="number" class="p-valid" min="0" style="max-width:150px;" title="Validité minimale restante (jours)" placeholder="Validité min. (jours)" value="${Number(v.validite_minimale_jours) || 0}" />`);
+      const div = creerLigne([
+        champLigne("Type", "p-type", v.type_piece, { placeholder: "ex : passeport", liste: "liste-types-pieces" }),
+        champLigne("Libellé affiché", "p-libelle", v.libelle, { large: true, placeholder: "ex : Passeport en cours de validité" }),
+        champLigne("Validité min. (jours)", "p-valid", String(Number(v.validite_minimale_jours) || 0), { type: "number", min: 0 }),
+        caseLigne("Obligatoire", "p-oblig", !!v.obligatoire),
+        caseLigne("Date d'expiration exigée", "p-exp", !!v.exige_date_expiration),
+      ]);
       document.getElementById("proc-pieces").appendChild(div);
     }
 
     function ajouterLigneEtape(e) {
       const v = Object.assign({ code: "", libelle: "" }, e || {});
-      const div = creerLigne(`
-        <input type="text" class="e-code" placeholder="code (ex: verification_prerequis)" value="${echapperHtml(v.code)}" />
-        <input type="text" class="e-libelle large" placeholder="Libellé de l'étape" value="${echapperHtml(v.libelle)}" />`);
+      const div = creerLigne([
+        champLigne("Code", "e-code", v.code, { placeholder: "ex : verification_prerequis" }),
+        champLigne("Libellé de l'étape", "e-libelle", v.libelle, { large: true }),
+      ]);
       document.getElementById("proc-etapes").appendChild(div);
     }
 
     function ajouterLigneVeille(p) {
       const v = Object.assign({ titre: "", resume: "", reference: "" }, p || {});
-      const div = creerLigne(`
-        <input type="text" class="v-titre" placeholder="Titre" value="${echapperHtml(v.titre)}" />
-        <input type="text" class="v-resume large" placeholder="Résumé de la règle (1000 caractères max)" value="${echapperHtml(v.resume)}" />
-        <input type="text" class="v-ref" placeholder="Référence officielle" value="${echapperHtml(v.reference)}" />`);
+      const div = creerLigne([
+        champLigne("Titre", "v-titre", v.titre),
+        champLigne("Résumé de la règle", "v-resume", v.resume, { large: true, placeholder: "1000 caractères maximum" }),
+        champLigne("Référence officielle", "v-ref", v.reference),
+      ]);
       document.getElementById("proc-veille").appendChild(div);
     }
 
     function construireCasesChamps(coches) {
       const zone = document.getElementById("proc-champs");
-      zone.innerHTML = "";
+      zone.replaceChildren();
       const tous = Object.keys(LIBELLES_CHAMPS_FR);
       coches.forEach((c) => { if (!tous.includes(c)) tous.push(c); });
       tous.forEach((cle) => {
@@ -180,13 +242,18 @@ JS_PROCEDURES = """
       document.getElementById("proc-seuil").value = def.seuil_fonds_recommande_eur === null || def.seuil_fonds_recommande_eur === undefined ? "" : def.seuil_fonds_recommande_eur;
       construireCasesChamps(def.champs_candidat_requis || []);
       const dl = document.getElementById("liste-types-pieces");
-      dl.innerHTML = Object.keys(LIBELLES_PIECES_FR).map((k) => `<option value="${echapperHtml(k)}">${echapperHtml(LIBELLES_PIECES_FR[k])}</option>`).join("");
-      document.getElementById("proc-pieces").innerHTML = "";
-      (def.pieces_requises || []).forEach(ajouterLignePiece);
-      document.getElementById("proc-etapes").innerHTML = "";
-      (def.etapes_tache || []).forEach(ajouterLigneEtape);
-      document.getElementById("proc-veille").innerHTML = "";
-      (def.veille_reglementaire || []).forEach(ajouterLigneVeille);
+      dl.replaceChildren(...Object.keys(LIBELLES_PIECES_FR).map((k) => {
+        const opt = document.createElement("option");
+        opt.value = k;
+        opt.textContent = LIBELLES_PIECES_FR[k];
+        return opt;
+      }));
+      document.getElementById("proc-pieces").replaceChildren();
+      (def.pieces_requises || []).forEach((p) => ajouterLignePiece(p));
+      document.getElementById("proc-etapes").replaceChildren();
+      (def.etapes_tache || []).forEach((e) => ajouterLigneEtape(e));
+      document.getElementById("proc-veille").replaceChildren();
+      (def.veille_reglementaire || []).forEach((p) => ajouterLigneVeille(p));
     }
 
     function configurerEditeurSelonRole() {
@@ -378,6 +445,7 @@ JS_PROCEDURES = """
       }
       const btn = document.getElementById("btn-generer-procedure-ia");
       btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
       btn.textContent = "Génération en cours...";
       try {
         const rep = await appelApi("/api/v1/ia/procedures/generer", { method: "POST", body: JSON.stringify({ texte }) });
@@ -390,7 +458,7 @@ JS_PROCEDURES = """
         remplirEditeurProcedure(data.brouillon);
         configurerEditeurSelonRole();
         const liste = document.getElementById("liste-avertissements-ia");
-        liste.innerHTML = "";
+        liste.replaceChildren();
         (data.avertissements || []).forEach((a) => {
           const li = document.createElement("li");
           li.textContent = a;
@@ -406,6 +474,7 @@ JS_PROCEDURES = """
         chargerStatutIA();
       } finally {
         btn.disabled = false;
+        btn.removeAttribute("aria-busy");
         btn.textContent = "Générer un brouillon";
       }
     }

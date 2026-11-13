@@ -11,7 +11,9 @@ Contrat consommé (réservé aux humains ADMINISTRATEUR / EMPLOYE) :
 
 Règles respectées par tout le code ci-dessous :
 
-- aucune dépendance front : uniquement les classes du système de design (`design/styles.py`) ;
+- aucune dépendance front : classes du système de design (`design/styles.py`) et un bloc
+  <style> local (`STYLE_NAVIGATEUR`) qui n'utilise que les tokens `var(--…)` ;
+- le bandeau d'alerte s'affiche quand l'état signale `controle_securite_detecte` ;
 - tout affichage passe par `textContent` (jamais `innerHTML`, `eval`, `alert`) ;
 - le texte tapé par l'opérateur (CAPTCHA, code de sécurité) n'est jamais écrit dans le DOM,
   ni relu, ni stocké (pas de localStorage/sessionStorage), ni journalisé (pas de console) ;
@@ -23,7 +25,7 @@ Règles respectées par tout le code ci-dessous :
 
 from __future__ import annotations
 
-from app.interface.design.shell import bouton_nav
+from app.interface.design.shell import bouton_nav, rendre_icones
 
 ID_VUE = "vue-navigateur-serveur"
 LARGEUR_VIEWPORT = 1280
@@ -35,9 +37,52 @@ _MARQUEUR_JS = "    // Connexion automatique dès l'ouverture de l'interface"
 
 HTML_NAV = "\n      " + bouton_nav("vue-navigateur-serveur", "Vue en direct", "moniteur")
 
-HTML_VUE_NAVIGATEUR = """
+# Composants propres à cet écran (cadre de navigateur, panneau de pilotage, alerte de
+# vérification) : uniquement des tokens var(--…), préfixés par l'identifiant de l'écran.
+STYLE_NAVIGATEUR = """
+      <style>
+        #vue-navigateur-serveur .ns-espace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: var(--e4); align-items: start; }
+        #vue-navigateur-serveur .ns-cadre { min-width: 0; background: var(--surface); border: 1px solid var(--bord-fort); border-radius: var(--r-l); box-shadow: var(--ombre-2); overflow: hidden; transition: border-color var(--d2) var(--courbe), box-shadow var(--d2) var(--courbe); }
+        #vue-navigateur-serveur .ns-cadre.ns-en-main { border-color: var(--accent); box-shadow: var(--anneau), var(--ombre-2); }
+        #vue-navigateur-serveur .ns-barre { display: flex; flex-direction: column; gap: var(--e2); padding: var(--e2) var(--e3) var(--e3); background: var(--surface-2); border-bottom: 1px solid var(--bord); }
+        #vue-navigateur-serveur .ns-barre-haut { display: flex; align-items: center; gap: var(--e3); min-width: 0; }
+        #vue-navigateur-serveur .ns-pastilles { display: flex; gap: 6px; flex: none; }
+        #vue-navigateur-serveur .ns-pastilles span { width: 10px; height: 10px; border-radius: 50%; background: var(--bord-fort); }
+        #vue-navigateur-serveur .ns-onglet { flex: 1 1 auto; min-width: 0; padding: 4px var(--e3); background: var(--surface); border: 1px solid var(--bord); border-radius: var(--r-m) var(--r-m) var(--r-s) var(--r-s); font-size: var(--t-sm); font-weight: 600; color: var(--texte); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #vue-navigateur-serveur .ns-barre-haut .badge { flex: none; }
+        #vue-navigateur-serveur .ns-adresse { display: flex; align-items: center; gap: var(--e2); min-width: 0; min-height: var(--h-ctrl-sm); padding: 4px var(--e3); background: var(--surface); border: 1px solid var(--bord); border-radius: var(--r-pilule); font-family: var(--police-code); font-size: var(--t-sm); color: var(--texte-doux); }
+        #vue-navigateur-serveur .ns-adresse .ico { color: var(--bon); }
+        #vue-navigateur-serveur #ns-url { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #vue-navigateur-serveur .ns-ecran { position: relative; aspect-ratio: 1280 / 900; max-width: 100%; background: var(--fond-creux); }
+        #vue-navigateur-serveur .ns-capture { display: block; width: 100%; height: auto; margin: 0; user-select: none; }
+        #vue-navigateur-serveur .ns-vide { position: absolute; inset: 0; display: flex; justify-content: center; }
+        #vue-navigateur-serveur .ns-vide .etat-vide { justify-content: center; }
+        #vue-navigateur-serveur .ns-capture:not(.cache) ~ .ns-vide { display: none; }
+        #vue-navigateur-serveur .ns-pied { display: flex; align-items: center; gap: var(--e2); padding: var(--e2) var(--e3); border-top: 1px solid var(--bord); background: var(--surface-2); }
+        #vue-navigateur-serveur .ns-pied .note { margin: 0; }
+        #vue-navigateur-serveur .ns-panneau { display: flex; flex-direction: column; gap: var(--e4); min-width: 0; }
+        #vue-navigateur-serveur .ns-panneau .carte { margin: 0; }
+        #vue-navigateur-serveur .ns-panneau .carte-entete { margin-bottom: var(--e2); }
+        #vue-navigateur-serveur .ns-panneau p { margin: 0 0 var(--e3); }
+        #vue-navigateur-serveur .ns-boutons { display: flex; flex-direction: column; gap: var(--e2); }
+        #vue-navigateur-serveur .ns-boutons .btn, #vue-navigateur-serveur .ns-touches .btn, #vue-navigateur-serveur .ns-alerte .btn { margin: 0; }
+        #vue-navigateur-serveur .ns-saisie { display: flex; flex-direction: column; gap: var(--e3); }
+        #vue-navigateur-serveur .ns-touches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e2); }
+        #vue-navigateur-serveur .ns-alerte { margin-bottom: var(--e4); }
+        #vue-navigateur-serveur .ns-alerte > .ico { width: 22px; height: 22px; }
+        #vue-navigateur-serveur .ns-alerte-texte { display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0; }
+        #vue-navigateur-serveur .ns-zone-sensible { border-style: dashed; box-shadow: none; }
+        @media (max-width: 1100px) {
+          #vue-navigateur-serveur .ns-espace { grid-template-columns: minmax(0, 1fr); }
+        }
+      </style>"""
+
+HTML_VUE_NAVIGATEUR = rendre_icones(
+    """
     <!-- Navigateur de l'agent (vue et prise en main de l'opérateur) -->
-    <section id="vue-navigateur-serveur" class="vue-ecran cache">
+    <section id="vue-navigateur-serveur" class="vue-ecran cache">"""
+    + STYLE_NAVIGATEUR
+    + """
       <header class="page-entete">
         <div>
           <h2>Navigateur de l'agent</h2>
@@ -52,44 +97,83 @@ HTML_VUE_NAVIGATEUR = """
         Compte en lecture seule : la vue et la prise en main du navigateur sont réservées aux
         administrateurs et aux employés.
       </div>
-      <div id="ns-bandeau" class="panneau-texte" style="margin-bottom:16px;">
-        <div><strong>État :</strong> <span id="ns-etat">Chargement...</span></div>
-        <div><strong>Adresse :</strong> <span id="ns-url">—</span></div>
-        <div><strong>Titre de la page :</strong> <span id="ns-titre">—</span></div>
-      </div>
-      <div class="pile-actions" style="margin:0 0 16px;">
-        <button id="ns-prendre-main" class="btn btn-primaire" type="button">Prendre la main</button>
-        <button id="ns-rendre-main" class="btn btn-secondaire cache" type="button">Rendre la main à l'agent</button>
-        <button id="ns-fermer" class="btn btn-danger" type="button">Fermer le navigateur</button>
-      </div>
-      <div id="ns-controles" class="carte carte-action cache">
-        <h3>Vous avez la main</h3>
-        <p class="aide">
-          Cliquez directement sur l'image pour cliquer dans la page ; la molette fait défiler.
-        </p>
-        <div class="grille-form">
-          <label>Texte à saisir dans la page
-            <input id="ns-texte" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" />
-          </label>
-          <label class="case" style="align-self:end;">
-            <input id="ns-afficher" type="checkbox" /> <span>Afficher la saisie</span>
-          </label>
+      <div id="ns-alerte-securite" class="banniere-regle banniere-alerte ns-alerte cache" role="alert">
+        [[i:alerte]]
+        <div class="ns-alerte-texte">
+          <strong>Le portail demande une vérification</strong>
+          <span>Un CAPTCHA ou un code de sécurité est affiché. L'agent attend : prenez la main pour le compléter.</span>
         </div>
-        <div class="pile-actions">
-          <button id="ns-envoyer-texte" class="btn btn-primaire" type="button">Envoyer le texte</button>
-          <button class="btn btn-contour ns-touche" type="button" data-touche="Enter">Entrée</button>
-          <button class="btn btn-contour ns-touche" type="button" data-touche="Tab">Tab</button>
-          <button class="btn btn-contour ns-touche" type="button" data-touche="Backspace">Retour</button>
-          <button class="btn btn-contour ns-touche" type="button" data-touche="Escape">Échap</button>
-        </div>
+        <button id="ns-alerte-prendre-main" class="btn btn-primaire btn-sm" type="button">Prendre la main</button>
       </div>
-      <p id="ns-message" class="note">Aucune capture pour le moment.</p>
-      <div style="max-width:1280px;">
-        <img id="ns-capture" class="capture-apercu cache" alt="Capture du navigateur de l'agent"
-             draggable="false" style="width:100%; height:auto; display:block; margin:0;" />
+      <div class="ns-espace">
+        <div id="ns-cadre" class="ns-cadre">
+          <div id="ns-bandeau" class="ns-barre">
+            <div class="ns-barre-haut">
+              <span class="ns-pastilles" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span class="ns-onglet"><span class="sr-only">Titre de la page : </span><span id="ns-titre">—</span></span>
+              <span class="sr-only">État : </span>
+              <span id="ns-etat" class="badge"><span class="sr-only">Chargement</span><span class="squelette squelette-pastille" aria-hidden="true"></span></span>
+            </div>
+            <div class="ns-adresse">[[i:cadenas]]<span class="sr-only">Adresse : </span><span id="ns-url">—</span></div>
+          </div>
+          <div class="ns-ecran">
+            <img id="ns-capture" class="ns-capture cache" alt="Capture du navigateur de l'agent" draggable="false" />
+            <div class="ns-vide">
+              <div class="etat-vide">
+                <svg class="etat-vide-illu" viewBox="0 0 96 72" aria-hidden="true" focusable="false">
+                  <rect class="illu-papier" x="10" y="8" width="76" height="54" rx="6" />
+                  <path class="illu-trait" d="M10 20 H86" />
+                  <path class="illu-trait" d="M22 32 H60" />
+                  <path class="illu-trait" d="M22 42 H48" />
+                  <circle class="illu-accent" cx="70" cy="48" r="12" />
+                  <path class="illu-coche" d="M66 44 L75 48 L66 52 Z" />
+                </svg>
+                <strong>Pas encore d'image</strong>
+                <span>La capture apparaît ici dès que l'agent ouvre un portail.</span>
+              </div>
+            </div>
+          </div>
+          <div class="ns-pied"><p id="ns-message" class="note" aria-live="polite">Aucune capture pour le moment.</p></div>
+        </div>
+        <div class="ns-panneau">
+          <section class="carte">
+            <div class="carte-entete"><h3>Pilotage</h3></div>
+            <p class="aide">L'agent travaille seul. Prenez la main pour cliquer, faire défiler ou saisir un code dans la page.</p>
+            <div class="ns-boutons">
+              <button id="ns-prendre-main" class="btn btn-primaire btn-bloc" type="button">[[i:utilisateur]]Prendre la main</button>
+              <button id="ns-rendre-main" class="btn btn-secondaire btn-bloc cache" type="button">Rendre la main à l'agent</button>
+            </div>
+          </section>
+          <section id="ns-controles" class="carte carte-action cache">
+            <div class="carte-entete"><h3>Vous avez la main</h3><span class="badge badge-info">En direct</span></div>
+            <p class="aide">Cliquez directement sur l'image pour cliquer dans la page ; la molette fait défiler.</p>
+            <div class="ns-saisie">
+              <label class="champ">Texte à saisir dans la page
+                <input id="ns-texte" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" />
+                <span class="champ-aide">Vidé dès l'envoi, jamais enregistré.</span>
+              </label>
+              <label class="case">
+                <input id="ns-afficher" type="checkbox" /> <span>Afficher la saisie</span>
+              </label>
+              <button id="ns-envoyer-texte" class="btn btn-primaire btn-bloc" type="button">[[i:envoi]]Envoyer le texte</button>
+              <div class="ns-touches" role="group" aria-label="Touches du clavier">
+                <button class="btn btn-contour btn-sm ns-touche" type="button" data-touche="Enter">Entrée</button>
+                <button class="btn btn-contour btn-sm ns-touche" type="button" data-touche="Tab">Tab</button>
+                <button class="btn btn-contour btn-sm ns-touche" type="button" data-touche="Backspace">Retour</button>
+                <button class="btn btn-contour btn-sm ns-touche" type="button" data-touche="Escape">Échap</button>
+              </div>
+            </div>
+          </section>
+          <section class="carte ns-zone-sensible">
+            <div class="carte-entete"><h3>Session du navigateur</h3></div>
+            <p class="aide">Fermer arrête la session en cours sur le portail ; l'agent devra se reconnecter.</p>
+            <button id="ns-fermer" class="btn btn-danger btn-bloc" type="button">Fermer le navigateur</button>
+          </section>
+        </div>
       </div>
     </section>
 """
+)
 
 JS_NAVIGATEUR = """
     // =======================================================================
@@ -109,6 +193,7 @@ JS_NAVIGATEUR = """
     let nsCompteur = 0;
     let nsMain = false;
     let nsDeltaEnAttente = 0;
+    let nsSecurite = false;
 
     function nsHumain() {
       return roleActif === "administrateur" || roleActif === "employe";
@@ -160,9 +245,25 @@ JS_NAVIGATEUR = """
       img.classList.add("cache");
     }
 
+    // Statut affiché dans la barre du cadre (forme et couleur du badge).
+    function nsEtat(texte, classe) {
+      const el = document.getElementById("ns-etat");
+      el.className = "badge" + (classe ? " " + classe : "");
+      el.textContent = texte;
+    }
+
+    // Bandeau d'alerte : vérification demandée par le portail et personne n'a encore la main.
+    function nsAppliquerAlerte() {
+      const visible = nsSecurite && !nsMain && nsHumain();
+      document.getElementById("ns-alerte-securite").classList.toggle("cache", !visible);
+    }
+
     function nsAppliquerMain() {
       const humain = nsHumain();
       document.getElementById("ns-lecture-seule").classList.toggle("cache", humain);
+      document.getElementById("ns-cadre").classList.toggle("ns-en-main", nsMain && humain);
+      document.getElementById("ns-alerte-prendre-main").disabled = !humain;
+      nsAppliquerAlerte();
       document.getElementById("ns-prendre-main").classList.toggle("cache", nsMain);
       document.getElementById("ns-rendre-main").classList.toggle("cache", !nsMain);
       document.getElementById("ns-controles").classList.toggle("cache", !(nsMain && humain));
@@ -183,7 +284,10 @@ JS_NAVIGATEUR = """
 
     function nsAfficherEtat(etat) {
       const ouvert = !!(etat && etat.navigateur_ouvert);
-      nsTexte("ns-etat", ouvert ? "Navigateur ouvert" : "Aucun navigateur ouvert");
+      nsSecurite = ouvert && !!etat.controle_securite_detecte;
+      if (nsSecurite) nsEtat("Vérification demandée", "badge-warn");
+      else nsEtat(ouvert ? "Navigateur ouvert" : "Aucun navigateur ouvert", ouvert ? "badge-ok" : "badge-brouillon");
+      nsAppliquerAlerte();
       nsTexte("ns-url", ouvert ? nsUrlSansParametres(etat.url_courante) : "—");
       nsTexte("ns-titre", ouvert && etat.titre_page ? String(etat.titre_page) : "—");
       return ouvert;
@@ -210,7 +314,9 @@ JS_NAVIGATEUR = """
       const rep = await appelApi(NS_ROUTE + "etat");
       if (!rep.ok) {
         if (rep.status === 401 || rep.status === 403) nsBloque = true;
-        nsTexte("ns-etat", rep.status === 403 ? "Accès refusé" : "État indisponible");
+        nsSecurite = false;
+        nsAppliquerAlerte();
+        nsEtat(rep.status === 403 ? "Accès refusé" : "État indisponible", "badge-err");
         nsEffacerCapture();
         nsMessage(rep.status === 403
           ? "Droits insuffisants pour voir le navigateur de l'agent."
@@ -322,6 +428,9 @@ JS_NAVIGATEUR = """
         nsAppliquerMain();
       });
       document.getElementById("ns-rendre-main").addEventListener("click", nsRendreLaMain);
+      document.getElementById("ns-alerte-prendre-main").addEventListener("click", () => {
+        document.getElementById("ns-prendre-main").click();
+      });
       document.getElementById("ns-fermer").addEventListener("click", nsFermerNavigateur);
       document.getElementById("ns-envoyer-texte").addEventListener("click", nsEnvoyerTexte);
       document.getElementById("ns-texte").addEventListener("keydown", (e) => {

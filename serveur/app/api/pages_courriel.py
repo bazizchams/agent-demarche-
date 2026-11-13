@@ -14,6 +14,8 @@ from collections.abc import Callable
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from app.interface.design.shell import icone
+
 PageBuilder = Callable[..., HTMLResponse]
 
 _JS_COMMUN = """
@@ -76,40 +78,60 @@ afficher(z,x.s===429?'Trop de tentatives. Réessayez plus tard.':
 })();
 </script>"""
 
-_CORPS_OUBLI = """
-<h1>Mot de passe oublié</h1>
-<p class="intro">Indiquez l'adresse e-mail de votre compte : si elle existe, vous recevrez un lien
-valable une heure.</p>
+def _carte(nom_icone: str, titre: str, intro: str, contenu: str, pied: str) -> str:
+    """Carte centrée commune : pastille, titre, phrase d'aide, zone de retour, contenu, pied."""
+    texte_intro = f"<p>{intro}</p>" if intro else ""
+    return f"""
+<div class="pub-centre"><section class="pub-carte" aria-labelledby="titre-carte">
+<span class="pub-pastille">{icone(nom_icone)}</span>
+<div class="pub-carte-entete"><h1 id="titre-carte">{titre}</h1>{texte_intro}</div>
 <div id="retour" role="alert" tabindex="-1" hidden></div>
-<form id="formulaire" novalidate>
+{contenu}
+<p class="pub-carte-pied">{pied}</p>
+</section></div>
+"""
+
+
+_PIED_CONNEXION = '<a href="/">Retour à la connexion</a>'
+
+_CORPS_OUBLI = _carte(
+    "cadenas",
+    "Mot de passe oublié",
+    "Indiquez l'adresse e-mail de votre compte : si elle existe, vous recevrez un lien valable "
+    "une heure.",
+    """<form id="formulaire" class="pub-champs" novalidate>
 <label>Adresse e-mail
 <input name="email" type="email" required autocomplete="email"></label>
-<button class="bouton" id="envoyer" type="submit">Envoyer le lien</button>
-</form>
-<p class="note"><a href="/">Retour à la connexion</a></p>
-"""
+<button class="btn btn-primaire btn-lg btn-bloc" id="envoyer" type="submit">Envoyer le lien</button>
+</form>""",
+    _PIED_CONNEXION + '<a href="/inscription">Créer mon bureau</a>',
+)
 
-_CORPS_NOUVEAU = """
-<h1>Définir un nouveau mot de passe</h1>
-<div id="retour" role="alert" tabindex="-1" hidden></div>
-<form id="formulaire" novalidate>
+_CORPS_NOUVEAU = _carte(
+    "cadenas",
+    "Définir un nouveau mot de passe",
+    "Choisissez un mot de passe que vous n'utilisez sur aucun autre site.",
+    """<form id="formulaire" class="pub-champs" novalidate>
 <label>Nouveau mot de passe
 <input name="nouveau" type="password" required minlength="12" autocomplete="new-password"
-aria-describedby="aide-mdp"></label>
+aria-describedby="aide-mdp">
+<span id="aide-mdp" class="champ-aide">12 caractères minimum, avec au moins 3 types parmi :
+minuscules, majuscules, chiffres, symboles. Toutes vos sessions ouvertes seront fermées.</span></label>
 <label>Confirmer le mot de passe
 <input name="confirmation" type="password" required autocomplete="new-password"></label>
-<p id="aide-mdp" class="note">12 caractères minimum, avec au moins 3 types parmi :
-minuscules, majuscules, chiffres, symboles. Toutes vos sessions ouvertes seront fermées.</p>
-<button class="bouton" id="envoyer" type="submit">Enregistrer</button>
-</form>
-"""
+<button class="btn btn-primaire btn-lg btn-bloc" id="envoyer" type="submit">Enregistrer</button>
+</form>""",
+    _PIED_CONNEXION + '<a href="/mot-de-passe-oublie">Demander un nouveau lien</a>',
+)
 
-_CORPS_VERIFICATION = """
-<h1>Confirmer mon adresse e-mail</h1>
-<p class="intro">Cliquez sur le bouton pour confirmer que cette adresse est bien la vôtre.</p>
-<div id="retour" role="alert" tabindex="-1" hidden></div>
-<p><button class="bouton" id="envoyer" type="button">Confirmer mon adresse</button></p>
-"""
+_CORPS_VERIFICATION = _carte(
+    "coche",
+    "Confirmer mon adresse e-mail",
+    "Cliquez sur le bouton pour confirmer que cette adresse est bien la vôtre.",
+    '<button class="btn btn-primaire btn-lg btn-bloc" id="envoyer" type="button">'
+    "Confirmer mon adresse</button>",
+    _PIED_CONNEXION,
+)
 
 
 def enregistrer_pages_courriel(routeur: APIRouter, page: PageBuilder) -> None:

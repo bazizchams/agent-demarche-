@@ -1,8 +1,14 @@
-"""Coquille de la page : en-tête HTML, navigation groupée par tâche, barre de contexte, thème.
+"""Coquille de la page : en-tête HTML, navigation groupée par tâche, barre de contexte, thème,
+écran de connexion.
 
 Les écrans (`vues_*.py`) se placent entre `html_debut()` et `HTML_FIN`. Les modules coffre /
 récapitulatifs et navigateur de l'agent insèrent leur entrée de navigation aux marqueurs
 `<!-- nav:validation -->` et `<!-- nav:navigateur -->`.
+
+Écran de connexion : tant que `body` porte la classe `hors-session`, il remplace l'accueil (les
+autres écrans restent accessibles par la navigation). La classe suit l'état du bouton
+`#btn-se-deconnecter` (masqué = pas de session), piloté par `connecterOperateur` (js_dossiers).
+Aucun identifiant n'est prérempli.
 """
 
 from __future__ import annotations
@@ -42,6 +48,9 @@ _ICONES: dict[str, str] = {
     "dossier": '<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     "calendrier": '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
     "coche": '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+    "alerte": '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
+    "pause": '<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+    "sortie": '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 8l-4 4 4 4M6 12h10"/>',
 }
 
 _MOTIF_ICONE = re.compile(r"\[\[i:([a-z]+)\]\]")
@@ -131,24 +140,70 @@ _SCRIPT_THEME_INITIAL = """  <script>
     })();
   </script>"""
 
+# Écran de connexion : formulaire à gauche, panneau de marque indigo à droite (empilés sur mobile).
+# Les identifiants #login-email, #login-mdp, #btn-se-connecter et la classe .session-form sont lus
+# par connecterOperateur() : ne pas les renommer.
+_ECRAN_CONNEXION = """
+    <section id="ecran-connexion" class="connexion" aria-labelledby="titre-connexion">
+      <div class="connexion-form">
+        <div class="connexion-entete">
+          <span class="surtitre">Espace du bureau</span>
+          <h2 id="titre-connexion">Connexion à votre bureau</h2>
+          <p>Utilisez l'adresse e-mail et le mot de passe de votre compte employé ou administrateur.</p>
+        </div>
+        <form id="form-connexion" class="session-form connexion-champs" novalidate>
+          <label for="login-email">Adresse e-mail professionnelle
+            <input id="login-email" type="email" placeholder="prenom.nom@votre-bureau.dz" autocomplete="username" autocapitalize="off" spellcheck="false" /></label>
+          <label for="login-mdp">Mot de passe
+            <input id="login-mdp" type="password" autocomplete="current-password" /></label>
+          <button id="btn-se-connecter" class="btn btn-primaire btn-lg" type="submit">Se connecter</button>
+        </form>
+        <div class="connexion-ligne">
+          <a href="/mot-de-passe-oublie">Mot de passe oublié ?</a>
+          <a href="/inscription">Inscrire un nouveau bureau</a>
+        </div>
+        <p class="connexion-pied">[[i:cadenas]]<span>Les dossiers de chaque bureau sont isolés et chiffrés. Rien n'est transmis à un portail officiel sans la validation d'un membre de votre équipe.</span></p>
+      </div>
+      <div class="connexion-marque">
+        <div class="marque">
+          <span class="marque-logo">[[i:dossier]]</span>
+          <span class="marque-nom">Agent Bureau d'Études<span class="marque-sous">Campus France · IRCC Canada · Algérie</span></span>
+        </div>
+        <p class="connexion-accroche">Les dossiers de vos étudiants, préparés par l'agent et validés par votre équipe.</p>
+        <ul class="connexion-arguments">
+          <li><span class="argument-icone">[[i:validation]]</span><div><strong>Validation humaine avant tout envoi</strong><span>L'agent pré-remplit Études en France et IRCC, produit un récapitulatif et s'arrête avant le bouton final.</span></div></li>
+          <li><span class="argument-icone">[[i:cadenas]]</span><div><strong>Identifiants portail dans un coffre chiffré</strong><span>Mots de passe des candidats jamais affichés ni journalisés, avec consentement écrit tracé.</span></div></li>
+          <li><span class="argument-icone">[[i:pause]]</span><div><strong>Pause sur CAPTCHA ou double authentification</strong><span>L'agent ne contourne jamais une vérification : il vous alerte et vous prenez la main.</span></div></li>
+        </ul>
+        <div class="connexion-exemple" aria-hidden="true">
+          <span class="surtitre">Exemple de dossier</span>
+          <div class="connexion-exemple-ligne"><strong>Études en France · Licence 3 Informatique</strong><span class="puce-marque">Prêt à valider</span></div>
+          <div class="barre-progression"><div class="barre-progression-remplie" style="width:100%"></div></div>
+          <div class="connexion-exemple-ligne"><span>Pièces reçues 11 sur 11</span><span>Empreinte vérifiée avant l'envoi</span></div>
+        </div>
+      </div>
+    </section>
+"""
+
 
 def html_debut() -> str:
-    """De <!DOCTYPE> jusqu'à l'ouverture de <main> (barre de contexte et notification incluses)."""
+    """De <!DOCTYPE> jusqu'à l'ouverture de <main> (barre de contexte, notification, connexion)."""
     return rendre_icones(f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <title>Agent Bureau d'Études — Dossiers Campus France et IRCC</title>
   {LIEN_POLICES}
 {_SCRIPT_THEME_INITIAL}
   <style>{CSS_DESIGN}  </style>
 </head>
-<body>
+<body class="hors-session">
   <header class="barre-haute">
     <button id="btn-menu" class="btn btn-contour btn-icone" type="button" aria-controls="navigation-principale" aria-expanded="false" aria-label="Ouvrir le menu">[[i:menu]]</button>
     <div class="marque"><span class="marque-logo">[[i:dossier]]</span><span class="marque-nom">Agent Bureau d'Études</span></div>
+    <button class="btn btn-fantome btn-icone bouton-theme-mobile" type="button" data-bascule-theme aria-label="Passer en thème sombre"><span class="icone-lune">[[i:lune]]</span><span class="icone-soleil">[[i:soleil]]</span></button>
   </header>
   <button id="scrim-menu" class="scrim" type="button" aria-label="Fermer le menu" tabindex="-1"></button>
   <aside id="navigation-principale" aria-label="Navigation principale">
@@ -160,25 +215,15 @@ def html_debut() -> str:
 {_navigation()}    </nav>
     <div class="nav-pied">
       <section id="bloc-connexion" aria-label="Session de l'opérateur">
-        <div class="session-etat">[[i:utilisateur]]<span id="etat-utilisateur">Connexion en cours...</span></div>
-        <details class="session-form">
-          <summary>Se connecter ou changer de compte</summary>
-          <div class="grille-form">
-            <label><span class="sr-only">Adresse e-mail de connexion</span>
-              <input id="login-email" type="email" placeholder="employe@bureau.dz" autocomplete="username" /></label>
-            <label><span class="sr-only">Mot de passe</span>
-              <input id="login-mdp" type="password" autocomplete="current-password" /></label>
-          </div>
-          <div class="session-actions" style="margin-top:8px;">
-            <button id="btn-se-connecter" class="btn btn-primaire btn-sm" type="button">Se connecter</button>
-            <a class="btn-lien" href="/mot-de-passe-oublie">Mot de passe oublié ?</a>
-          </div>
-        </details>
-        <div class="session-actions" style="margin-top:8px;">
-          <button id="btn-se-deconnecter" class="btn btn-contour btn-sm cache" type="button">Se déconnecter</button>
+        <div class="session-carte">
+          <span class="avatar">[[i:utilisateur]]</span>
+          <div class="session-etat"><span id="etat-utilisateur">Connexion en cours...</span><span class="session-sous">Session opérateur</span></div>
+        </div>
+        <div class="session-actions">
+          <button id="btn-se-deconnecter" class="btn btn-fantome btn-sm cache" type="button">[[i:sortie]]Se déconnecter</button>
         </div>
       </section>
-      <button id="btn-theme" class="bouton-theme" type="button" aria-label="Passer en thème sombre">
+      <button id="btn-theme" class="bouton-theme" type="button" data-bascule-theme aria-label="Passer en thème sombre">
         <span class="icone-lune">[[i:lune]]</span><span class="icone-soleil">[[i:soleil]]</span>
         <span id="libelle-theme">Thème sombre</span>
       </button>
@@ -186,21 +231,25 @@ def html_debut() -> str:
   </aside>
 
   <main id="contenu">
-    <div id="banniere-etat">
-      <span class="banniere-contexte">[[i:dossier]]<span>Dossier actif : <strong id="bandeau-candidat-actif">Aucun</strong></span></span>
-      <span class="banniere-regle-courte">Données chiffrées par bureau. L'agent s'arrête toujours avant l'envoi officiel.</span>
+    <div id="banniere-etat" role="region" aria-label="Contexte de travail">
+      <span class="banniere-contexte">
+        <span class="banniere-pastille">[[i:dossier]]</span>
+        <span class="banniere-dossier"><span class="surtitre">Dossier actif</span><strong id="bandeau-candidat-actif">Aucun</strong></span>
+      </span>
+      <button class="btn btn-fantome btn-sm" type="button" data-aller-vers="vue-etudiants">Changer de dossier</button>
+      <span class="banniere-regle-courte">[[i:validation]]<span>L'agent s'arrête toujours avant l'envoi officiel</span></span>
     </div>
     <div id="bandeau-email-non-verifie" class="banniere-regle banniere-alerte cache" role="status">
       <strong>Adresse e-mail non vérifiée.</strong>
       <span>Confirmez votre adresse pour sécuriser votre compte et recevoir les messages de la plateforme.</span>
-      <button id="btn-renvoyer-verification" class="btn btn-secondaire btn-sm" type="button">Renvoyer l'e-mail de vérification</button>
+      <button id="btn-renvoyer-verification" class="btn btn-contour btn-sm" type="button">Renvoyer l'e-mail de vérification</button>
     </div>
     <div id="zone-notification" class="notif cache" role="status" aria-live="polite"></div>
-""")
+{_ECRAN_CONNEXION}""")
 
 
 JS_COQUILLE = """
-    // ===== Coquille : thème clair/sombre mémorisé, menu repliable sur téléphone =====
+    // ===== Coquille : thème clair/sombre mémorisé, menu en tiroir, écran de connexion =====
     function themeEffectif() {
       const choix = document.documentElement.getAttribute("data-theme");
       if (choix === "dark" || choix === "light") return choix;
@@ -209,16 +258,19 @@ JS_COQUILLE = """
 
     function majBoutonTheme() {
       const sombre = themeEffectif() === "dark";
-      const bouton = document.getElementById("btn-theme");
-      bouton.setAttribute("aria-label", sombre ? "Passer en thème clair" : "Passer en thème sombre");
+      document.querySelectorAll("[data-bascule-theme]").forEach((b) => {
+        b.setAttribute("aria-label", sombre ? "Passer en thème clair" : "Passer en thème sombre");
+      });
       document.getElementById("libelle-theme").textContent = sombre ? "Thème clair" : "Thème sombre";
     }
 
-    document.getElementById("btn-theme").addEventListener("click", () => {
-      const suivant = themeEffectif() === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", suivant);
-      try { localStorage.setItem("theme-interface", suivant); } catch (e) { /* mémorisation facultative */ }
-      majBoutonTheme();
+    document.querySelectorAll("[data-bascule-theme]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const suivant = themeEffectif() === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", suivant);
+        try { localStorage.setItem("theme-interface", suivant); } catch (e) { /* mémorisation facultative */ }
+        majBoutonTheme();
+      });
     });
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", majBoutonTheme);
     majBoutonTheme();
@@ -244,17 +296,53 @@ JS_COQUILLE = """
     });
 
     function fermerMenuMobile() {
+      const etaitOuvert = document.body.classList.contains("nav-ouverte");
       document.body.classList.remove("nav-ouverte");
-      document.getElementById("btn-menu").setAttribute("aria-expanded", "false");
+      const bouton = document.getElementById("btn-menu");
+      bouton.setAttribute("aria-expanded", "false");
+      bouton.setAttribute("aria-label", "Ouvrir le menu");
+      if (etaitOuvert) bouton.focus();
     }
 
     document.getElementById("btn-menu").addEventListener("click", () => {
       const ouvert = document.body.classList.toggle("nav-ouverte");
-      document.getElementById("btn-menu").setAttribute("aria-expanded", ouvert ? "true" : "false");
+      const bouton = document.getElementById("btn-menu");
+      bouton.setAttribute("aria-expanded", ouvert ? "true" : "false");
+      bouton.setAttribute("aria-label", ouvert ? "Fermer le menu" : "Ouvrir le menu");
+      if (ouvert) {
+        const actif = document.querySelector("aside button.nav-btn.actif") || document.querySelector("aside button.nav-btn");
+        if (actif) actif.focus();
+      }
     });
     document.getElementById("scrim-menu").addEventListener("click", fermerMenuMobile);
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") fermerMenuMobile();
     });
+
+    // Raccourcis déclaratifs : data-aller-vers="vue-..." (et data-ouvrir="id d'un details" facultatif)
+    document.addEventListener("click", (e) => {
+      const declencheur = e.target.closest("[data-aller-vers]");
+      if (!declencheur) return;
+      allerVersVue(declencheur.getAttribute("data-aller-vers"));
+      const aOuvrir = declencheur.getAttribute("data-ouvrir");
+      const cible = aOuvrir ? document.getElementById(aOuvrir) : null;
+      if (cible) cible.open = true;
+    });
+
+    // Écran de connexion : visible tant qu'aucune session n'est ouverte
+    document.getElementById("form-connexion").addEventListener("submit", (e) => e.preventDefault());
+
+    function majEtatSession() {
+      const connecte = !document.getElementById("btn-se-deconnecter").classList.contains("cache");
+      const etaitConnecte = !document.body.classList.contains("hors-session");
+      document.body.classList.toggle("hors-session", !connecte);
+      if (etaitConnecte && !connecte) {
+        document.getElementById("login-mdp").value = "";
+        allerVersVue("vue-tableau-bord");
+      }
+    }
+    new MutationObserver(majEtatSession).observe(
+      document.getElementById("btn-se-deconnecter"), { attributes: true, attributeFilter: ["class"] });
+    majEtatSession();
 
 """
