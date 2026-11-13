@@ -46,7 +46,10 @@ COPY serveur/app/ ./app/
 # ne fournit PAS psycopg. Il est donc installé ici (binaire précompilé, aucune lib système requise).
 RUN pip install --upgrade pip && \
     pip install . "psycopg[binary]>=3.1" && \
-    rm -rf /srv/plateforme/serveur/bureau_etudes_serveur.egg-info
+    rm -rf /srv/plateforme/serveur/bureau_etudes_serveur.egg-info /srv/plateforme/serveur/build
+# NB : `pip install .` installe aussi une copie du paquet `app` dans site-packages, mais c'est le
+# dossier courant (WORKDIR, ./app) qui est importé en premier par uvicorn, alembic et `python -m app.cli`.
+# Ne pas changer le WORKDIR : app/core/config.py déduit de son emplacement ../../config (= /srv/plateforme/config).
 
 # Chromium pour Playwright + dépendances système (exécuté en root, avant USER bureau).
 # Polices : Liberation (métriques Arial/Times), Noto (latin, arabe, emoji) pour que les pages
@@ -73,4 +76,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
 # Au démarrage : migrations Alembic (idempotentes) puis serveur.
 # `exec` garantit que uvicorn reçoit les signaux d'arrêt (SIGTERM) de Docker.
 # --forwarded-allow-ips '*' : seul Caddy atteint ce port (aucun port publié sur l'hôte).
+# UN SEUL processus (pas de --workers) : limiteurs de débit et sessions de navigateur sont en mémoire du processus.
 CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]

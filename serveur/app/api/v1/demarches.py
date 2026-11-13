@@ -7,6 +7,7 @@ personnaliser sans redéploiement. Seul un administrateur peut écrire.
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import asdict
 from datetime import date
 
 from fastapi import APIRouter, Depends, Response, status
@@ -18,6 +19,7 @@ from app.modeles.utilisateur import Role
 from app.schemas.document import DemarcheResumeSortie
 from app.services import demarches_bureau as service_demarches
 from app.services import pieces_requises as service_pieces
+from app.services import rappels_echeances as service_rappels
 from app.services.echeances_demarche import calculer_echeances
 from app.services.pieces_requises import ConfigDemarche
 
@@ -39,6 +41,15 @@ class EcheanceSortie(BaseModel):
     jours_restants: int | None
     statut: str
     rappels_dus: list[int]
+
+
+class RappelsEcheancesSortie(BaseModel):
+    demarches_examinees: int
+    echeances_notifiees: int
+    courriels_envoyes: int
+    deja_envoyes: int
+    sans_destinataire: int
+    echecs: int
 
 
 class DemarcheCompleteSortie(BaseModel):
@@ -63,6 +74,19 @@ def lister_gestion(
 ) -> list[DemarcheMetaSortie]:
     elements = service_demarches.lister_metadonnees(ctx.db, parametres.dossier_demarches)
     return [DemarcheMetaSortie(**e) for e in elements]
+
+
+@routeur.post("/rappels-echeances", response_model=RappelsEcheancesSortie)
+def lancer_rappels_echeances(
+    date_rentree: date | None = None,
+    ctx: ContexteAuth = Depends(exiger_roles(Role.ADMINISTRATEUR)),
+    parametres: Parametres = Depends(obtenir_parametres),
+) -> RappelsEcheancesSortie:
+    """Lance à la main l'envoi des rappels dus pour le bureau de l'appelant (idempotent)."""
+    resume = service_rappels.envoyer_rappels_bureau(
+        ctx.db, parametres, date_rentree=date_rentree
+    )
+    return RappelsEcheancesSortie(**asdict(resume))
 
 
 @routeur.get("/{code}/echeances", response_model=list[EcheanceSortie])

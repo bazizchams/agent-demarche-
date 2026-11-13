@@ -25,6 +25,7 @@
 - Liste exacte des pièces (photo, justificatifs d'emploi, relevés bancaires, montant de ressources journalier) : l'assistant France-Visas n'a pas pu être consulté.
 
 ### Écoles privées en France
+- Connexion à Études en France des écoles du catalogue (13 sur 15 non confirmées) : liste officielle uniquement en PDF Campus France (non lu), pages HTML campusfrance.org en 404 ; pages admissions des écoles relues le 2026-11-13 sans mention explicite. Langues/frais restants (EM Normandie, Rennes SB, EPITA, Efrei, ESILV, Strate, ECV, Vatel, Penninghen, Lyfe, MBS score) non publiés en HTML ; seule la langue de PSB a été levée.
 - Règles exactes de la procédure « Je suis accepté » pour une acceptation papier d'une école non connectée en Algérie (calendrier, frais, pièces, dispense éventuelle de certification de langue) : FAQ Campus France Algérie « acceptation papier / établissement non connecté » (https://www.algerie.campusfrance.org/faq/public/etudiants-4?page=5) dont le texte n'a pas été récupéré ; calendrier 2026-2027 (https://www.algerie.campusfrance.org/system/files/medias/documents/2025-09/Calendrier_2026-2027.pdf) illisible par l'outil (PDF).
 - Réduction de 50 % sur les frais de visa avec l'attestation d'acceptation (indiquée dans campus_france.yaml, non revérifiée ici).
 - Pièces du dossier de visa long séjour sur france-visas.gouv.fr (inaccessible, HTTP 403) ; seuil de ressources annuel non figé dans le YAML (615 EUR/mois vérifié, durée d'études variable).

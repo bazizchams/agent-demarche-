@@ -18,6 +18,7 @@ from app.modeles.discussion_dossier import (
 from app.modeles.document import DocumentCandidat
 from app.modeles.jeton_courriel import JetonCourriel, ObjetJetonCourriel
 from app.modeles.journal_audit import EntreeAudit, ResultatAudit
+from app.modeles.rappel_echeance import RappelEcheanceEnvoye
 from app.modeles.session_utilisateur import SessionUtilisateur
 from app.modeles.tache import (
     DecisionValidationHumaine,
@@ -51,6 +52,7 @@ __all__ = [
     "MessageDiscussionDossier",
     "MotifSuspensionTache",
     "PreuveConsentementCandidat",
+    "RappelEcheanceEnvoye",
     "ResultatAudit",
     "Role",
     "SessionUtilisateur",

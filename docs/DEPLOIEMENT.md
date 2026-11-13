@@ -4,7 +4,7 @@
 
 Ce guide a été rédigé en relisant le code (`Dockerfile`, `docker-compose.production.yml`, `Caddyfile`,
 `serveur/app/core/config.py`, `serveur/app/core/chiffrement.py`, `serveur/app/cli.py`, `serveur/app/main.py`).
-**Rien n'a été lancé** : ni `docker build`, ni `docker compose`, ni migration sur PostgreSQL, ni obtention
+Un audit statique complémentaire (variables `BE_*`, chemins lus à l'exécution, migrations, compose, Caddy) a corrigé plusieurs écarts. **Rien n'a été lancé** : ni `docker build`, ni `docker compose`, ni migration sur PostgreSQL, ni obtention
 de certificat HTTPS, ni test du point de contrôle de santé, ni sauvegarde ou restauration réelle.
 Les points à valider lors du premier déploiement sur un serveur de test sont signalés par **(à valider)**.
 
@@ -84,7 +84,7 @@ Le plus simple est de choisir uniquement des caractères alphanumériques et `-`
 
 ### 3.3 Secret du webhook Stripe
 
-Stripe n'est pas encore activé (voir section 9). Le fichier de production exige néanmoins une valeur qui n'est **pas** celle
+Stripe n'est activé qu'après les étapes de la section 9.2. Le fichier de production exige néanmoins une valeur qui n'est **pas** celle
 de développement. Générez une valeur provisoire de la forme attendue :
 
 ```bash
@@ -113,7 +113,11 @@ Renseignez au minimum :
 | `POSTGRES_PASSWORD` | Le mot de passe généré en 3.2 |
 | `BE_CLE_MAITRESSE_BASE64` | La clé générée en 3.1 |
 | `BE_STRIPE_SECRET_WEBHOOK` | La valeur provisoire générée en 3.3 |
+| `BE_SMTP_HOTE`, `BE_SMTP_EXPEDITEUR` (+ `BE_SMTP_UTILISATEUR`, `BE_SMTP_MOT_DE_PASSE`) | Serveur d'envoi de courriels. **Sans eux, rien n'est envoyé** (mot de passe oublié, vérification d'adresse) et, en production, la validation humaine d'un récapitulatif est refusée tant que l'adresse n'est pas vérifiée. |
 
+L'URL publique (`BE_URL_PUBLIQUE_PLATEFORME`) est déduite de `DOMAINE_PLATEFORME` par le compose. Toute variable `BE_*` doit figurer dans la
+section `environment` du compose pour atteindre le conteneur ; l'audit statique a vérifié que celles de `serveur/app/core/config.py` y sont, sauf
+`BE_EXIGER_ADRESSE_VERIFIEE`, `BE_BLOCAGE_ABONNEMENT_EXPIRE` et les limites de débit / durées de jetons (défauts du code, adaptés à la production).
 Les autres variables ont des valeurs par défaut sûres. Ne modifiez pas `BE_ENVIRONNEMENT` ni `BE_COOKIE_SECURISE` :
 ils sont fixés par `docker-compose.production.yml`.
 
@@ -191,35 +195,31 @@ Pour un nouveau bureau, répétez la commande `creer-bureau` avec un autre `--sl
 | Base PostgreSQL | volume `postgres` | Dossiers, comptes, journal d'audit |
 | Documents chiffrés | volume `documents_chiffres` | Pièces justificatives des candidats |
 | Clé maîtresse | `.env.production` et copie hors serveur | Sans elle, rien n'est lisible |
-| Fichier `.env.production` | serveur | Configuration et secrets |
+| Fichier `.env.production` | serveur | Configuration et secrets (sauvegardé hors serveur, jamais avec les dumps) |
 
 > **Limite importante.** Les archives produites par l'application (`POST /api/v1/sauvegardes`, fichiers `.be.enc`) ne contiennent que
 > des **métadonnées** (fiches et index des documents), pas les fichiers documents eux-mêmes et pas la base complète.
 > Elles ne suffisent **pas** à restaurer le service. Il faut donc faire les sauvegardes décrites ci-dessous.
 > L'application ne fournit pas non plus de commande de restauration automatique (voir section 11).
 
-### 7.2 Sauvegarde de la base
+### 7.2 Sauvegarde quotidienne automatique (`deploiement/sauvegarde.sh`)
+
+Le script fait un `pg_dump` (format custom, compressé) de la base et une archive des documents chiffrés, vérifie que les deux fichiers sont lisibles,
+écrit des sommes de contrôle SHA-256, purge les copies de plus de `RETENTION_JOURS` jours et, si `COPIE_DISTANTE_RSYNC` est renseigné, les copie hors serveur.
+Variables (dans `.env.production`) : `DEST_SAUVEGARDES` (défaut `/opt/sauvegardes`), `RETENTION_JOURS` (défaut 14), `COPIE_DISTANTE_RSYNC` (facultatif).
 
 ```bash
 cd /opt/agent-bureau/plateforme/deploiement
-mkdir -p /opt/sauvegardes
-docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
-  pg_dump -U agent_bureau -d agent_bureau --clean --if-exists \
-  | gzip > /opt/sauvegardes/base_$(date +%F_%H%M).sql.gz
+bash sauvegarde.sh                      # premier essai à la main
+sudo crontab -e                         # puis ajouter, pour une exécution chaque nuit à 02h30 :
+# 30 2 * * * /bin/bash /opt/agent-bureau/plateforme/deploiement/sauvegarde.sh >> /var/log/agent-bureau-sauvegarde.log 2>&1
 ```
 
-### 7.3 Sauvegarde des documents chiffrés
+Limites assumées : base et documents ne sont pas copiés dans un instantané atomique ; les profils de navigateur (cookies des portails) ne sont **pas**
+sauvegardés (secrets) ; la clé maîtresse n'est **pas** dans la sauvegarde (7.3). Une sauvegarde laissée sur le même disque ne protège pas de la perte du
+serveur : configurez la copie distante et chiffrez le stockage distant. **(à valider : scripts jamais exécutés, seulement relus et vérifiés par `bash -n`)**
 
-Le nom du volume dépend du nom du dossier de déploiement (`deploiement` par défaut). Vérifiez-le avec `docker volume ls`.
-
-```bash
-docker run --rm \
-  -v deploiement_volume_documents_chiffres:/source:ro \
-  -v /opt/sauvegardes:/sortie \
-  alpine tar czf /sortie/documents_$(date +%F_%H%M).tar.gz -C /source .   # (à valider : nom du volume)
-```
-
-### 7.4 Copie de la clé de secours
+### 7.3 Copie de la clé de secours
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.production.yml exec serveur \
@@ -229,35 +229,39 @@ docker compose --env-file .env.production -f docker-compose.production.yml exec 
 La commande affiche la clé en groupes lisibles, avec une somme de contrôle. Notez-la sur papier et rangez-la hors du serveur.
 Elle correspond à `BE_CLE_MAITRESSE_BASE64`.
 
-### 7.5 Règles
+### 7.4 Règles
 
-- Copiez les sauvegardes **hors du serveur** (autre machine, stockage distant), chiffrées, au minimum une fois par jour.
-- Les sauvegardes contiennent des données personnelles : protégez-les comme la base elle-même.
-- Testez une restauration sur un serveur de test au moins une fois avant la mise en service publique (à faire).
+- Les sauvegardes contiennent des données personnelles : protégez-les comme la base elle-même (droits `600`, stockage distant chiffré).
+- Surveillez `/var/log/agent-bureau-sauvegarde.log` : une sauvegarde silencieusement en échec est la panne la plus courante.
+- **Testez la restauration** (7.5) avant la mise en service, puis au moins chaque trimestre.
 
-### 7.6 Restauration
+### 7.5 Test de restauration sans risque (`restauration.sh verifier`)
 
-1. Arrêtez les services sans supprimer les volumes :
-   ```bash
-   docker compose --env-file .env.production -f docker-compose.production.yml down
-   ```
-   N'utilisez **jamais** l'option `-v`, qui supprime les volumes.
-2. Remettez la **même** clé `BE_CLE_MAITRESSE_BASE64` dans `.env.production`.
-3. Démarrez uniquement la base et restaurez-la sur une base vide :
-   ```bash
-   docker compose --env-file .env.production -f docker-compose.production.yml up -d postgres
-   gunzip -c /opt/sauvegardes/base_AAAA-MM-JJ_HHMM.sql.gz | \
-     docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
-     psql -U agent_bureau -d agent_bureau
-   ```
-4. Restaurez les documents dans le volume :
-   ```bash
-   docker run --rm \
-     -v deploiement_volume_documents_chiffres:/destination \
-     -v /opt/sauvegardes:/sortie:ro \
-     alpine sh -c "cd /destination && tar xzf /sortie/documents_AAAA-MM-JJ_HHMM.tar.gz"   # (à valider)
-   ```
-5. Relancez l'ensemble : `up -d`. Les migrations s'exécutent sans effet si elles sont déjà appliquées.
+Restaure la sauvegarde dans une base temporaire `restauration_test` du PostgreSQL en marche (la production n'est pas touchée), vérifie le nombre de
+tables et la version Alembic, contrôle l'archive de documents, puis supprime la base temporaire :
+
+```bash
+cd /opt/agent-bureau/plateforme/deploiement
+bash restauration.sh verifier /opt/sauvegardes/base_AAAA-MM-JJ_HHMM.dump /opt/sauvegardes/documents_AAAA-MM-JJ_HHMM.tar.gz
+# Attendu : « OK : la sauvegarde est restaurable (base temporaire supprimée). »
+```
+
+Ce test ne prouve pas que l'application démarre avec la base restaurée : faites la restauration complète (7.6) une fois sur un serveur de test.
+
+### 7.6 Restauration complète (`restauration.sh appliquer`)
+
+Sur un serveur neuf ou après incident : installez le dépôt, recréez `.env.production` avec **la même** `BE_CLE_MAITRESSE_BASE64`, copiez les deux fichiers
+de sauvegarde, puis :
+
+```bash
+cd /opt/agent-bureau/plateforme/deploiement
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build postgres   # base vide + volumes
+bash restauration.sh appliquer /chemin/base_AAAA-MM-JJ_HHMM.dump /chemin/documents_AAAA-MM-JJ_HHMM.tar.gz
+```
+
+Le script demande de taper `RESTAURER`, arrête `serveur` et `caddy`, recrée la base, y restaure le dump, remplace les documents, puis relance l'ensemble ;
+les migrations s'exécutent sans effet si elles sont déjà appliquées. N'utilisez **jamais** `docker compose down -v` (supprime les volumes).
+Les volumes s'appellent `agent-bureau_volume_*` (nom de projet fixé dans le compose).
 
 ---
 
@@ -268,7 +272,7 @@ cd /opt/agent-bureau/plateforme
 git pull                                   # ou remplacer le dossier par la nouvelle version
 cd deploiement
 
-# 1. Sauvegarder d'abord (section 7.2 et 7.3)
+# 1. Sauvegarder d'abord : bash sauvegarde.sh (section 7.2)
 # 2. Reconstruire et relancer
 docker compose --env-file .env.production -f docker-compose.production.yml up -d --build
 docker compose --env-file .env.production -f docker-compose.production.yml logs -f serveur
@@ -290,22 +294,34 @@ en cas de problème, revenez à la version précédente du code **et** restaurez
 
 Sans clé payante : IA locale (Ollama) ou niveau gratuit hébergé via `BE_IA_FOURNISSEUR=openai_compatible`, `BE_IA_URL_BASE`, `BE_IA_MODELE`, `BE_IA_CLE` : voir `docs/IA_GRATUITE.md` (risques RGPD / loi 18-07 inclus).
 
-### 9.2 Stripe : **non prêt**
+### 9.2 Stripe : à tester en mode test avant tout encaissement
 
-Le code actuel **ne permet pas encore une facturation réelle** :
+Le code appelle désormais l'API Stripe pour `POST /api/v1/abonnement/checkout-stripe` lorsque `BE_STRIPE_CLE_SECRETE` est renseignée
+(`serveur/app/services/paiement_stripe.py`) ; sans clé, il répond « Paiement en ligne non configuré » en production. Ce comportement a été relu dans le code,
+**jamais exécuté contre Stripe**. Les webhooks sont vérifiés par signature et refusés si le secret est celui de développement.
 
-- La vérification de la signature des webhooks (`POST /api/v1/webhooks/stripe`, en-tête `Stripe-Signature`) est implémentée.
-- La création de session de paiement (`POST /api/v1/abonnement/checkout-stripe`) **ne contacte pas Stripe** : elle fabrique un identifiant (`cs_test_...`) et une URL de paiement locaux.
-- `BE_STRIPE_CLE_SECRETE` est lue par la configuration mais n'est utilisée nulle part.
+1. Dans Stripe (mode test d'abord), créer un produit et un prix par forfait ; reporter les `price_...` dans `BE_STRIPE_PRIX_STARTER`,
+   `BE_STRIPE_PRIX_PROFESSIONNEL`, `BE_STRIPE_PRIX_ENTREPRISE`.
+2. Renseigner `BE_STRIPE_CLE_SECRETE` (`sk_test_...` puis `sk_live_...`, jamais dans Git).
+3. Créer un webhook vers `https://app.votre-bureau.dz/api/v1/webhooks/stripe` avec les événements `checkout.session.completed`,
+   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_succeeded` et `invoice.payment_failed`.
+4. Renseigner `BE_STRIPE_SECRET_WEBHOOK` avec le secret `whsec_...` fourni par Stripe, puis `docker compose ... up -d`.
+5. Dérouler un paiement complet en mode test (carte de test Stripe) sur un serveur de test avant de passer en `sk_live_...`.
 
-**Ne vendez aucun abonnement tant que la création de session n'appelle pas l'API Stripe.** Une fois ce développement fait, la procédure sera :
-
-1. Renseigner `BE_STRIPE_CLE_SECRETE` (clé `sk_live_...`, jamais dans Git).
-2. Dans le tableau de bord Stripe, créer un webhook vers `https://app.votre-bureau.dz/api/v1/webhooks/stripe` avec les événements `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` et `invoice.payment_failed`.
-3. Renseigner `BE_STRIPE_SECRET_WEBHOOK` avec le secret `whsec_...` fourni par Stripe.
-4. Tester d'abord en mode test de Stripe (`sk_test_...`) sur un serveur de test.
+L'ouverture d'un compte Stripe pour une activité établie en Algérie peut être restreinte : **à vérifier** auprès de Stripe avant de compter dessus.
 
 ---
+
+### 9.3 Rappels d'échéance par e-mail (cron)
+
+Prérequis : SMTP configuré (sinon rien n'est envoyé ni marqué). Destinataires : administrateurs et employés actifs, adresse vérifiée, par bureau.
+La commande est idempotente (table `rappels_echeances_envoyes`) : on peut la relancer sans doublon. Code retour 1 si un envoi a échoué.
+```bash
+# crontab (sudo crontab -e) : chaque jour à 07h00
+0 7 * * * cd /opt/agent-bureau/plateforme/deploiement && docker compose --env-file .env.production -f docker-compose.production.yml exec -T serveur python -m app.cli envoyer-rappels-echeances >> /var/log/agent-bureau-rappels.log 2>&1
+```
+Options : `--slug <bureau>`, `--date-rentree AAAA-MM-JJ`. Lancement manuel par un administrateur : `POST /api/v1/demarches/rappels-echeances` (jeton CSRF requis).
+Le courriel ne contient que le libellé, la date, les jours restants et le lien. Les échéances relatives à la rentrée ou au dépôt ne sont calculées que si la date est fournie.
 
 ## 10. Liste de contrôle de sécurité avant ouverture au public
 
@@ -342,9 +358,9 @@ Cochez chaque point. Un point non coché bloque la mise en service.
    - les **profils de navigateur** (cookies de session des portails) sont à persister sur un volume dédié et à **chiffrer**
      (disque chiffré ou volume chiffré) ; leur sauvegarde est un choix à assumer, ce sont des secrets ;
    - les sélecteurs des portails réels restent « non testés » tant que l'administrateur n'a pas attesté la validation (Règle 6).
-2. **Stripe non fonctionnel** pour la souscription réelle (section 9.2).
-3. **Sauvegardes incomplètes** : l'application ne crée que des archives de métadonnées et n'a pas de commande de restauration.
-   La sauvegarde complète passe par `pg_dump` et le volume de documents (section 7).
+2. **Stripe non éprouvé** : appel à l'API présent dans le code mais jamais testé contre Stripe (section 9.2).
+3. **Sauvegardes** : l'application ne crée que des archives de métadonnées et n'a pas de commande de restauration.
+   La sauvegarde complète passe par `deploiement/sauvegarde.sh` et `restauration.sh` (section 7), **jamais exécutés** à ce jour.
 4. **Pas de haute disponibilité** : un seul conteneur serveur, une seule base PostgreSQL, pas de réplication.
    Une panne de l'hôte interrompt le service jusqu'au redémarrage.
 5. **Pilote PostgreSQL absent de `pyproject.toml`.** `psycopg[binary]` est installé dans le `Dockerfile`. Pour le développement local
@@ -366,9 +382,9 @@ Cochez chaque point. Un point non coché bloque la mise en service.
 À cocher en plus de la section 10. Un point non coché bloque l'ouverture.
 
 - [ ] **Mode serveur** : `BE_ENVIRONNEMENT=production`, PostgreSQL uniquement, pages de démonstration `/demo/` refusées par la garde Règle 6.
-- [ ] **URL publique** : nom de domaine définitif, DNS et HTTPS valides, `URL publique` renseignée dans `.env.production` (liens des e-mails, retours de paiement, webhooks).
+- [ ] **URL publique** : nom de domaine définitif, DNS et HTTPS valides, `BE_URL_PUBLIQUE_PLATEFORME` est déduite de `DOMAINE_PLATEFORME` par le compose (liens des e-mails, retours de paiement, pont du Co-Pilote).
 - [ ] **SMTP** : serveur d'envoi configuré et testé (réinitialisation de mot de passe, invitations), expéditeur authentifié (SPF, DKIM, DMARC) pour éviter le dossier spam.
-- [ ] **SATIM non intégré** : le paiement local par carte CIB/Edahabia n'est pas branché ; ne pas l'annoncer. Stripe non plus (section 9.2). Prévoir un encaissement manuel hors plateforme tant que ce n'est pas fait.
+- [ ] **SATIM non intégré** : le paiement local par carte CIB/Edahabia n'est pas branché ; ne pas l'annoncer. Stripe : seulement après le test de la section 9.2. Prévoir un encaissement manuel hors plateforme tant que ce n'est pas fait.
 - [ ] **Sauvegardes** : sauvegarde complète (`pg_dump` + documents + clé) programmée, **restauration testée** sur un serveur de test, copie hors serveur.
 - [ ] **Clé de secours** : copie de `BE_CLE_MAITRESSE_BASE64` rangée hors du serveur et hors Git (sans elle, documents et identifiants chiffrés sont perdus).
 - [ ] **RGPD / loi 18-07** : conditions d'utilisation, consentement des candidats, durées de conservation et purge des archives, registre des traitements et contact de protection des données validés juridiquement.
@@ -402,9 +418,9 @@ Dans `.env.production` (valeurs par défaut du modèle) :
 | `BE_DOSSIER_PROFILS_NAVIGATEUR` | `/srv/plateforme/donnees/profils_navigateur` | Profils de navigateur (volume dédié). |
 | `SERVEUR_LIMITE_MEMOIRE` / `SERVEUR_LIMITE_CPU` | `3g` / `2.0` | Limites du conteneur `serveur`. |
 
-**Ces noms sont des hypothèses** : ils doivent correspondre aux champs ajoutés à `serveur/app/core/config.py` (préfixe `BE_`).
-Si le nom d'un paramètre diffère dans `config.py`, corrigez `docker-compose.production.yml`, `.env.production.exemple` et ce tableau :
-une variable absente de la section `environment` du compose n'est pas transmise au conteneur.
+Ces noms ont été **vérifiés** dans `serveur/app/core/config.py` (alias `BE_NAVIGATEUR_SERVEUR_*`). Piège : si `BE_NAVIGATEUR_SERVEUR_ACTIF` est absente,
+le code active le navigateur serveur **par défaut en production** ; le compose force donc `false`. Une variable absente de la section `environment`
+du compose n'est pas transmise au conteneur.
 
 ### 12.3 Dimensionnement
 
@@ -436,3 +452,35 @@ enregistré, ni journalisé, ni affiché dans l'historique.
 - Réservé aux humains administrateur et employé ; actions authentifiées avec jeton CSRF. L'opérateur voit exactement ce que l'agent voit :
   pas d'accès à d'autres onglets du serveur ni au système de fichiers.
 - Les captures contiennent des données personnelles de candidats : elles ne sont pas conservées par l'interface (une image remplace la précédente).
+
+---
+
+## 13. Choix de l'hébergeur (comparatif honnête, non vérifié en ligne)
+
+> **Aucun tarif ni aucune fonctionnalité n'a été vérifié en ligne** pour ce comparatif : il repose sur des connaissances générales. Tout prix est « à vérifier »
+> sur le site de l'hébergeur le jour de la commande. Aucun compte n'a été créé. Les points juridiques sont à valider par un juriste.
+
+**Contraintes du projet.** Utilisateurs en Algérie ; données personnelles de candidats (passeports, pièces justificatives) soumises à la loi 18-07 (elle
+encadre les transferts de données hors d'Algérie et crée une autorité de protection des données : **à valider juridiquement**, notamment pour savoir si une
+autorisation est requise pour un hébergement à l'étranger) et, pour les candidats européens, au RGPD. Taille minimale : 2 vCPU, 4 Go de mémoire
+(Chromium : environ 500 Mo par session), 40 Go de disque, adresse IP publique fixe, sauvegardes hors serveur.
+
+| Critère | OVHcloud (France) | Hetzner (Allemagne / Finlande) | Hébergeur en Algérie (centres de données locaux) |
+|---|---|---|---|
+| Juridiction / RGPD | UE, société française ; accord de traitement (DPA) normalement disponible : à vérifier | UE, société allemande ; DPA normalement disponible : à vérifier | Droit algérien : pas de transfert hors du pays ; RGPD des candidats européens à examiner |
+| Latence vers l'Algérie | Bonne attendue (France) : à mesurer | Un peu plus élevée attendue : à mesurer | La meilleure attendue : à mesurer |
+| Support en français | Oui attendu : à vérifier | Principalement anglais / allemand : à vérifier | Oui attendu |
+| Paiement depuis l'Algérie | Carte internationale ou virement : **blocage possible**, à vérifier | Idem ; vérification d'identité fréquente : à vérifier | Paiement local (dinar) probable : à vérifier |
+| VPS Linux avec Docker | Oui attendu | Oui attendu | **Souvent incertain** (Docker, IP fixe, ports 80/443, sauvegardes, niveau de service) : à vérifier |
+| Stockage de sauvegardes hors serveur | Stockage objet : à vérifier | Stockage dédié aux sauvegardes : à vérifier | Rarement bien outillé : à vérifier |
+| Prix d'un serveur 2 vCPU / 4 Go | à vérifier | à vérifier | à vérifier |
+
+**Recommandation : OVHcloud, région France, sur un VPS ou une instance de 4 Go ou plus.** Justification :
+1. l'hébergement reste dans l'UE sous RGPD, avec contrat et support en français ;
+2. la proximité réseau avec l'Algérie est a priori meilleure que celle du nord de l'Europe (à mesurer avec un serveur d'essai) ;
+3. il évite l'incertitude technique d'un hébergeur local sur Docker, les sauvegardes et le niveau de service.
+
+**Réserves.** (a) Si le paiement par carte internationale depuis l'Algérie n'est pas possible, il faudra un tiers payeur ou un revendeur : à examiner avant de s'engager.
+(b) Si un avis juridique impose de garder les données en Algérie, l'hébergeur local devient obligatoire : exigez alors, avant signature, Docker (ou accès root),
+IP fixe, instantanés et sauvegarde distante. (c) Hetzner est une alternative sérieuse si son tarif et le paiement sont meilleurs. (d) Quel que soit le choix : ne rangez jamais
+la clé maîtresse chez le fournisseur qui héberge les sauvegardes, et chiffrez disque et sauvegardes.

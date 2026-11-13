@@ -9,10 +9,22 @@
 # Les variables BE_* ne sont transmises au conteneur QUE si elles figurent dans la section
 # `environment` ci-dessous : toute nouvelle variable doit y être ajoutée.
 
+# Nom de projet fixe : les volumes s'appellent toujours agent-bureau_volume_* quel que soit le
+# dossier de lancement (les scripts de sauvegarde n'en dépendent pas, mais `docker volume ls` reste lisible).
+name: agent-bureau
+
+# Rotation des journaux Docker : sans elle, les journaux json-file grossissent sans limite.
+x-journalisation: &journalisation
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *journalisation
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-agent_bureau}
       POSTGRES_USER: ${POSTGRES_USER:-agent_bureau}
@@ -33,6 +45,7 @@ services:
       dockerfile: deploiement/Dockerfile
     image: agent-bureau-serveur:latest
     restart: unless-stopped
+    logging: *journalisation
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,16 +91,43 @@ services:
       # --- Conformité -----------------------------------------------------------------
       BE_VERSION_CGU_COURANTE: ${BE_VERSION_CGU_COURANTE:-CGU-2026.10}
       BE_VERSION_CONSENTEMENT_LOI_18_07: ${BE_VERSION_CONSENTEMENT_LOI_18_07:-L18-07-2026.1}
-      # --- Facturation Stripe (webhook obligatoire ; clé secrète réservée, non utilisée au code actuel)
+      # --- URL publique : liens des courriels, retours de paiement Stripe, pont du Co-Pilote.
+      # Sans elle, en production, le pont est désactivé et les liens des courriels sont vides.
+      BE_URL_PUBLIQUE_PLATEFORME: https://${DOMAINE_PLATEFORME}
+      # --- Inscription libre-service des agences et durée d'essai -----------------------
+      BE_INSCRIPTIONS_OUVERTES: ${BE_INSCRIPTIONS_OUVERTES:-true}
+      BE_DUREE_ESSAI_JOURS: ${BE_DUREE_ESSAI_JOURS:-30}
+      BE_JOURS_GRACE_IMPAYE: ${BE_JOURS_GRACE_IMPAYE:-7}
+      # --- Courriels (SMTP). Sans hôte ET expéditeur : transport « memoire », RIEN n'est envoyé
+      # (réinitialisation de mot de passe, vérification d'adresse impossibles) : à renseigner avant ouverture.
+      BE_COURRIEL_TRANSPORT: ${BE_COURRIEL_TRANSPORT:-auto}
+      BE_SMTP_HOTE: ${BE_SMTP_HOTE:-}
+      BE_SMTP_PORT: ${BE_SMTP_PORT:-587}
+      BE_SMTP_SECURITE: ${BE_SMTP_SECURITE:-starttls}
+      BE_SMTP_UTILISATEUR: ${BE_SMTP_UTILISATEUR:-}
+      BE_SMTP_MOT_DE_PASSE: ${BE_SMTP_MOT_DE_PASSE:-}
+      BE_SMTP_EXPEDITEUR: ${BE_SMTP_EXPEDITEUR:-}
+      # --- Facturation Stripe : webhook obligatoire (refusé si secret de développement) ;
+      # clé secrète + identifiants de prix requis pour créer de vraies sessions de paiement.
       BE_STRIPE_SECRET_WEBHOOK: ${BE_STRIPE_SECRET_WEBHOOK:?Definir BE_STRIPE_SECRET_WEBHOOK (whsec_... fourni par Stripe)}
       BE_STRIPE_CLE_SECRETE: ${BE_STRIPE_CLE_SECRETE:-}
+      BE_STRIPE_PRIX_STARTER: ${BE_STRIPE_PRIX_STARTER:-}
+      BE_STRIPE_PRIX_PROFESSIONNEL: ${BE_STRIPE_PRIX_PROFESSIONNEL:-}
+      BE_STRIPE_PRIX_ENTREPRISE: ${BE_STRIPE_PRIX_ENTREPRISE:-}
       # --- Assistant IA (Claude) : facultatif, sans clé les fonctions IA répondent 503 ---
       BE_CLE_API_ANTHROPIC: ${BE_CLE_API_ANTHROPIC:-}
       BE_MODELE_LLM: ${BE_MODELE_LLM:-claude-sonnet-5-5}
       BE_URL_API_ANTHROPIC: ${BE_URL_API_ANTHROPIC:-https://api.anthropic.com/v1/messages}
       BE_DELAI_LLM_SECONDES: ${BE_DELAI_LLM_SECONDES:-90}
+      # IA alternative (Ollama, Groq, Mistral...) : BE_IA_FOURNISSEUR=openai_compatible. Voir docs/IA_GRATUITE.md (RGPD / loi 18-07).
+      BE_IA_FOURNISSEUR: ${BE_IA_FOURNISSEUR:-anthropic}
+      BE_IA_URL_BASE: ${BE_IA_URL_BASE:-}
+      BE_IA_MODELE: ${BE_IA_MODELE:-}
+      BE_IA_CLE: ${BE_IA_CLE:-}
+      BE_IA_TENTATIVES: ${BE_IA_TENTATIVES:-2}
       # --- Navigateur de l'agent en ligne (désactivé par défaut) ------------------------
-      # Noms alignés sur app/core/config.py : à vérifier si le paramétrage y a été nommé autrement.
+      # Noms vérifiés dans app/core/config.py (alias BE_NAVIGATEUR_SERVEUR_*). Attention : sans cette variable,
+      # le code active le navigateur serveur PAR DÉFAUT en production ; on force donc false ici.
       BE_NAVIGATEUR_SERVEUR_ACTIF: ${BE_NAVIGATEUR_SERVEUR_ACTIF:-false}
       BE_NAVIGATEUR_SERVEUR_SESSIONS_MAX: ${BE_NAVIGATEUR_SERVEUR_SESSIONS_MAX:-3}
       BE_NAVIGATEUR_SERVEUR_INACTIVITE_MINUTES: ${BE_NAVIGATEUR_SERVEUR_INACTIVITE_MINUTES:-15}
@@ -104,6 +144,7 @@ services:
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
+    logging: *journalisation
     depends_on:
       - serveur
     ports:

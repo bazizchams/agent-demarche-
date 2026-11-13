@@ -11,10 +11,16 @@
 
     # En-têtes de sécurité envoyés au navigateur. Caddy les applique à toutes les réponses.
     header {
+        # `preload` : n'a d'effet que si le domaine est soumis à la liste de préchargement HSTS
+        # (engagement quasi irréversible, tous les sous-domaines en HTTPS). Retirer si doute.
         Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "no-referrer"
+        # CSP partielle : n'impose pas de politique sur les scripts (l'interface utilise du JavaScript intégré)
+        # mais interdit l'inclusion en cadre, les <base> et <object> détournés.
+        Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+        Cross-Origin-Opener-Policy "same-origin"
         Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
         -Server
     }

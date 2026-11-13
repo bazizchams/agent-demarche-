@@ -3,6 +3,7 @@
 Usage (depuis le dossier `serveur/`) :
     python -m app.cli creer-bureau --nom "Bureau Alger Centre" --slug bureau-alger --email-admin admin@exemple.dz --nom-admin "Responsable"
     python -m app.cli lister-bureaux
+    python -m app.cli envoyer-rappels-echeances   # idempotent, pour cron
 """
 
 from __future__ import annotations
@@ -114,8 +115,49 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_secours.set_defaults(func=_cmd_exporter_cle_secours)
 
+    p_rappels = sous.add_parser(
+        "envoyer-rappels-echeances",
+        help="Envoie les rappels d'échéance dus (idempotent ; à planifier par cron).",
+    )
+    p_rappels.add_argument("--slug", default=None, help="Limiter à un bureau (sinon tous les actifs)")
+    p_rappels.add_argument("--date", default=None, help="Date du jour simulée (AAAA-MM-JJ)")
+    p_rappels.add_argument(
+        "--date-rentree", default=None, help="Date de rentrée de référence (AAAA-MM-JJ)"
+    )
+    p_rappels.set_defaults(func=_cmd_envoyer_rappels_echeances)
+
     args = analyseur.parse_args(argv)
     return args.func(args)
+
+
+def _cmd_envoyer_rappels_echeances(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from app.services.rappels_echeances import envoyer_rappels_tous_bureaux
+
+    try:
+        jour = date.fromisoformat(args.date) if args.date else None
+        rentree = date.fromisoformat(args.date_rentree) if args.date_rentree else None
+    except ValueError:
+        print("Erreur : les dates doivent être au format AAAA-MM-JJ.", file=sys.stderr)
+        return 2
+    parametres = obtenir_parametres()
+    moteur = creer_moteur(parametres.url_base_donnees)
+    try:
+        resumes = envoyer_rappels_tous_bureaux(
+            creer_fabrique_sessions(moteur), parametres,
+            slug=args.slug, aujourd_hui=jour, date_rentree=rentree,
+        )
+    finally:
+        moteur.dispose()
+    if not resumes:
+        print("Aucun bureau actif correspondant.", file=sys.stderr)
+        return 1
+    total = resumes[0]
+    for r in resumes[1:]:
+        total = total + r
+    print(f"Rappels d'échéance : bureaux={len(resumes)} {total.en_texte()}")
+    return 1 if total.echecs else 0
 
 
 def _cmd_offrir_abonnement(args: argparse.Namespace) -> int:
