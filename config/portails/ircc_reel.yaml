@@ -8,9 +8,25 @@ statut_test_initial: "non testé"
 # Règle 7 : URL officielle et domaines autorisés en configuration YAML
 url_officielle: "https://portal-portail.apps.cic.gc.ca/signin?lang=fr"
 domaines_autorises:
+  # IRCC Portal (visiteur, super visa…) : lien « Sign in to the IRCC Portal ».
+  # Hôte vérifié le 2026-11-13 sur https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/portal-application-process.html
   - "portal-portail.apps.cic.gc.ca"
+  # Non revu le 2026-11-13 (aucun lien observé vers cet hôte sur les pages consultées) : conservé, à confirmer.
   - "onlineservices-servicesenligne.cic.gc.ca"
   - "www.canada.ca"
+  # Compte sécurisé IRCC : cible des boutons « GCKey Sign-In » et « Sign-In Partner » (/mycic/gccf?idp=gckey|securekey).
+  # Hôte vérifié le 2026-11-13 sur https://www.canada.ca/en/immigration-refugees-citizenship/services/application/account.html
+  - "onlineservices-servicesenligne-cic.fjgc-gccf.gc.ca"
+  # CléGC (GCKey) : redirection observée depuis le bouton « GCKey Sign-In » (page /j/eng/l ; charge un hCaptcha => règle 2).
+  # Hôte vérifié le 2026-11-13 sur https://www.canada.ca/en/immigration-refugees-citizenship/services/application/account.html
+  - "clegc-gckey.gc.ca"
+  # Partenaire de connexion (service de connexion Interac) : redirection observée depuis « Sign-In Partner ».
+  # Les hôtes des banques partenaires ne sont PAS ajoutés (non vérifiés).
+  # Hôte vérifié le 2026-11-13 sur https://www.canada.ca/en/immigration-refugees-citizenship/services/application/account.html
+  - "services.signin.interac-id.ca"
+  # IRCC Portal – New version (visiteur, super visa) : liens « Sign in » / « Register ».
+  # Hôte vérifié le 2026-11-13 sur https://www.canada.ca/en/immigration-refugees-citizenship/services/application/online-account.html
+  - "ircc-services.canada.ca"
 chemin_url: "/study-permit-application"
 
 # Règle 3 : l'agent vérifie la session ouverte par l'opérateur (aucune CléGC ni mot de passe stocké)

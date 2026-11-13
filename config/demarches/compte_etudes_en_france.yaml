@@ -1,0 +1,125 @@
+code: compte_etudes_en_france
+libelle: "Études en France — Créer ou reprendre un compte (Algérie)"
+description: "Création d'un compte Études en France (Espace Campus France Algérie) ou reprise d'un compte existant, puis enchaînement vers le dossier Campus France. Arrêt avant tout envoi ou paiement final ; CAPTCHA et codes laissés au conseiller."
+
+# Sources officielles relevées le 2026-11-13 (navigateur, lecture seule, sans connexion) : voir docs/sources_demarches.md,
+# section « Études en France : connexion et création de compte ». Toute mention « à vérifier » n'a PAS été confirmée.
+veille_reglementaire:
+  - titre: "Adresses officielles de connexion et d'inscription (vérifié le 2026-11-13)"
+    resume: "Connexion : https://etudesenfrance.diplomatie.gouv.fr/connexion (identifiant = adresse mail, mot de passe). Création de compte : lien « S'inscrire » vers /inscription. Mot de passe oublié : /connexion/mot-de-passe-oublie. L'ancienne adresse https://pastel.diplomatie.gouv.fr/etudesenfrance redirige vers une page qui renvoie vers ces liens. Aucun fournisseur d'identité externe."
+    reference: "etudesenfrance.diplomatie.gouv.fr/connexion et pastel.diplomatie.gouv.fr/etudesenfrance (2026-11-13)"
+  - titre: "Formulaire de création de compte (vérifié le 2026-11-13)"
+    resume: "Champs : Prénom, Nom, Espace Campus France de résidence (« Espace Campus France Algérie »), Région de résidence (liste dépendante de l'espace : libellés exacts à vérifier), Adresse mail, Mot de passe et confirmation (12 caractères minimum, 1 minuscule, 1 majuscule, 1 chiffre, 1 caractère spécial), case de consentement obligatoire, case France Alumni facultative (transmet nom, prénom, e-mail et cursus : à cocher seulement sur décision du candidat)."
+    reference: "etudesenfrance.diplomatie.gouv.fr/inscription (2026-11-13)"
+  - titre: "Un seul compte par candidat (vérifié le 2026-11-13)"
+    resume: "Campus France Algérie : « Vous avez déjà un compte ? Vous ne devez pas en créer un nouveau », les données sont rapatriées sur la nouvelle plateforme. Le site demande au candidat de créer et remplir lui-même son dossier et de ne pas communiquer ses identifiants à un tiers : l'agence agit avec le consentement écrit du candidat, en sa présence ou sous sa supervision."
+    reference: "algerie.campusfrance.org/utilisation-de-la-plateforme-etudes-en-france et /campagne-etudes-en-france-2027"
+  - titre: "Espaces Campus France en Algérie (vérifié le 2026-11-13)"
+    resume: "5 espaces : Alger (1 rue de Tripoli, Hussein Dey), Annaba (Tour Marina, 6 boulevard Ben Abdelmalek Ramdane), Constantine (1 boulevard de l'indépendance), Oran (112 rue Larbi Ben M'Hidi), Tlemcen (45 boulevard Dergal Abdelkader). L'interface de paiement propose les mêmes 5 espaces de rattachement. Règle d'affectation exacte selon l'adresse : à vérifier."
+    reference: "algerie.campusfrance.org/horaires-d-attention-au-public-septembre-2026 et paiement.if-algerie.com"
+  - titre: "Campagne 2027 (rentrée 2027) : 5 actions et dates limites (vérifié le 2026-11-13)"
+    resume: "Ouverture le 2026-10-01. Actions : projet d'études (TCF niveau B1 minimum, B2 pour la plupart des établissements), candidature, paiement des frais en ligne dans les 48 h après soumission, entretien sur rendez-vous pris depuis le compte, choix définitif avant le 2027-05-31. Soumission DAP : 2026-12-15 ; Hors DAP : 2026-12-22 (nouvelle date limite) ; entretiens : 2027-03-15."
+    reference: "algerie.campusfrance.org/campagne-etudes-en-france-2027 et /le-calendrier-de-la-procedure"
+  - titre: "Frais de dossier Campus France Algérie (à vérifier)"
+    resume: "Paiement en ligne sur https://paiement.if-algerie.com/ (vérifié le 2026-11-13). Montants et cas de dispense : la FAQ officielle répondait en erreur 503 le 2026-11-13 ; les montants du Guide Septembre 2026 repris dans la démarche campus_france (20 000 DZD plein tarif, 10 000 DZD demi-tarif) restent à vérifier pour la campagne 2027."
+    reference: "algerie.campusfrance.org/campagne-etudes-en-france-2027 ; FAQ frais de dossier (non lue)"
+  - titre: "Reprise d'un compte : points non confirmés (à vérifier)"
+    resume: "Non vérifiés sur source officielle : forme de l'activation du compte (lien reçu par courriel et hôte de ce lien), conduite à tenir en cas de compte bloqué (contact de l'Espace Campus France de rattachement ?), réactivation ou changement de campagne pour un compte d'une année précédente."
+    reference: "À vérifier — docs/sources_demarches.md"
+
+# Règle 4 : rien n'est inventé ; ces champs doivent exister sur la fiche avant toute action.
+champs_candidat_requis:
+  - nom
+  - prenom
+  - email
+  - telephone
+  - pays_residence
+  - adresse
+  - numero_passeport
+  - date_expiration_passeport
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport en cours de validité (pièce obligatoire pour créer le dossier électronique)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: consentement_candidat_compte
+    libelle: "Consentement écrit du candidat (gestion du compte par l'agence et conservation des identifiants au coffre)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: attestation_langue_francaise
+    libelle: "Attestation de test de français (TCF / DELF / DALF), niveau B1 minimum"
+    obligatoire: false
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: photo_identite
+    libelle: "Photo d'identité (format exigé par la plateforme : à vérifier)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+echeances:
+  - code: soumission_dap_2027
+    libelle: "Date limite de soumission DAP (L1, architecture) — campagne 2027"
+    date_fixe: 2026-12-15
+    rappel_jours_avant: [30, 7, 1]
+  - code: soumission_hors_dap_2027
+    libelle: "Date limite de soumission Hors DAP (L2, L3, Master, BUT, ingénieur, commerce) — campagne 2027"
+    date_fixe: 2026-12-22
+    rappel_jours_avant: [30, 7, 1]
+  - code: entretien_2027
+    libelle: "Date limite pour passer l'entretien Campus France — campagne 2027"
+    date_fixe: 2027-03-15
+    rappel_jours_avant: [30, 7]
+  - code: choix_definitif_2027
+    libelle: "Choix définitif de l'établissement — campagne 2027"
+    date_fixe: 2027-05-31
+    rappel_jours_avant: [30, 7, 1]
+
+etapes_tache:
+  - code: verification_prerequis_dossier
+    libelle: "Vérification de la fiche candidat, du consentement et du passeport"
+  - code: verification_compte_existant
+    libelle: "Le candidat a-t-il déjà un compte ? (ne jamais en créer un second)"
+  - code: creation_ou_reprise_compte
+    libelle: "Création du compte (S'inscrire) ou reprise (connexion, mot de passe oublié) par le conseiller"
+  - code: activation_et_premiere_connexion
+    libelle: "Activation et première connexion par le conseiller (lien, CAPTCHA et codes : humain uniquement)"
+  - code: enregistrement_identifiants_coffre
+    libelle: "Enregistrement des identifiants au coffre chiffré du bureau (jamais en clair)"
+  - code: enchainement_dossier_candidature
+    libelle: "Enchaînement vers la démarche campus_france : identité, parcours, langues, panier de formations"
+  - code: controle_avant_validation_humaine
+    libelle: "Récapitulatif et arrêt avant soumission du dossier et paiement des frais"
+
+instructions_agent: >-
+  Procédure « Créer ou reprendre un compte Études en France » (Algérie). Sources : docs/sources_demarches.md (relevé du
+  2026-11-13). Domaines admis (Règle 6) : etudesenfrance.diplomatie.gouv.fr, pastel.diplomatie.gouv.fr,
+  www.algerie.campusfrance.org, algerie.campusfrance.org, paiement.if-algerie.com ; refuser tout autre hôte.
+  1) Vérifier la fiche (Règle 4) : nom, prénom, adresse mail du candidat, téléphone, adresse, passeport valide, consentement
+  écrit. Ne rien inventer : signaler chaque manque.
+  2) Demander au conseiller si le candidat a déjà un compte. Si oui, ne jamais en créer un nouveau (consigne officielle).
+  3) Création : page https://etudesenfrance.diplomatie.gouv.fr/connexion puis lien « S'inscrire ». Préparer Prénom, Nom,
+  Espace Campus France de résidence = « Espace Campus France Algérie », Région de résidence (libellé exact à vérifier à
+  l'écran, d'après l'adresse ; espaces : Alger, Annaba, Constantine, Oran, Tlemcen), adresse mail du candidat (jamais
+  celle de l'agence). Le mot de passe (12 caractères, minuscule, majuscule, chiffre, caractère spécial) est choisi et
+  saisi par le conseiller, puis enregistré au coffre chiffré (Règle 3) ; il n'apparaît jamais dans les notes, journaux,
+  captures ou messages. La case de consentement et la case France Alumni sont cochées par le conseiller seulement, sur
+  décision du candidat. Le clic sur « S'inscrire » est fait par le conseiller.
+  4) Activation : forme exacte à vérifier (lien par courriel probable). Le candidat ou le conseiller ouvre le lien ; l'agent
+  ne lit pas la boîte mail.
+  5) Reprise : connexion avec les identifiants du coffre seulement si le portail le permet (sinon connexion manuelle).
+  Mot de passe oublié : /connexion/mot-de-passe-oublie, le conseiller saisit l'adresse et envoie le lien. Compte bloqué
+  ou compte d'une campagne précédente : à vérifier ; orienter vers l'Espace Campus France de rattachement.
+  6) Tout CAPTCHA, code reçu par courriel ou SMS, ou double authentification : pause immédiate, la main au conseiller
+  (Règle 2).
+  7) Enchaîner sur la démarche campus_france : identité, parcours (au moins 2 activités), langues, panier de formations
+  avec motivations. Enregistrer en brouillon uniquement.
+  8) Arrêt (Règle 1) : ne jamais cliquer « Soumettre mon dossier de candidature », les cases de certification, ni payer sur
+  paiement.if-algerie.com (frais à payer dans les 48 h après soumission, montants à vérifier). Produire le récapitulatif
+  pour validation humaine. Entretien : rendez-vous pris par le candidat depuis son compte après validation du dossier.

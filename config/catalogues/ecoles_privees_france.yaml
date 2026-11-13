@@ -1,0 +1,213 @@
+# Catalogue d'écoles privées françaises (étudiants algériens)
+# Voir docs/ecoles_privees_france.md pour la méthode et les mises en garde.
+# Règle : uniquement des données lues sur la page source ; null ou "à vérifier" sinon.
+# frais_annuels_eur : montant annuel principal relevé (programme phare, 1re année d'entrée indiquée) ; détail dans frais_detail.
+# connectee_etudes_en_france : true seulement si la page de l'école le dit ; null = non vérifié
+# (la liste officielle Campus France en PDF n'a pas pu être lue).
+
+meta:
+  consulte_le: "2026-11-13"
+  sources_officielles:
+    - https://www.algerie.campusfrance.org/etablissements-connectes-et-etablissements-non-connectes
+    - https://www.algerie.campusfrance.org/les-certifications-et-la-reconnaissance-des-diplomes
+    - https://www.algerie.campusfrance.org/faq/comment-savoir-si-l-etablissement-est-reconnu
+    - https://www.algerie.campusfrance.org/tests-et-examens-de-langue-francaise
+  avertissement: >
+    Les labels sont ceux affichés par les écoles ; à recouper sur France Compétences (RNCP),
+    CTI, CGE et les listes MESR (grade de master, EESPIG). Les frais changent chaque année.
+
+ecoles:
+  - nom: MBS School of Business
+    ville: [Montpellier, Paris]
+    domaines: [commerce, management]
+    formations: [Programme Grande École (Bac+5), Bachelor, MSc International Business]
+    reconnaissance: "PGE visé Bac+5, grade de Master (CEFDG), RNCP n°42675 ; AACSB, EQUIS, AMBA ; EESPIG"
+    langue_requise: "Enseignement bilingue français/anglais ou anglais ; score minimum à vérifier"
+    frais_annuels_eur: 15000
+    frais_detail: "Rentrée 2026 : PGE1 15 000 € ; PGE2 16 500 € ; PGE3 16 500 €"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.mbs-education.com/programmes-formations/pge-master-grande-ecole/admissions-pge-mbs/
+    source: https://www.mbs-education.com/programmes-formations/pge-master-grande-ecole/financement-pge-mbs/
+    consulte_le: "2026-11-13"
+
+  - nom: NEOMA Business School
+    ville: [Reims, Rouen]
+    domaines: [commerce, management]
+    formations: [Programme Grande École / Master in Management, MSc, International Pre-Master]
+    reconnaissance: "PGE Bac+5 visé, grade de Master, RNCP niveau 7 n°37683 ; EQUIS, AACSB, AMBA (affichés)"
+    langue_requise: "Track anglais : TOEIC 4-skills/TOEFL iBT/IELTS/Cambridge/Duolingo ; track français : + DELF/TCF niveau B2"
+    frais_annuels_eur: 18000
+    frais_detail: "Pré-Master 18 000 €/an ; 'M1 & M2 : 36 000 €' (total ou annuel à vérifier)"
+    connectee_etudes_en_france: null
+    url_admissions: https://neoma-bs.fr/formations/programme-grande-ecole/admissions
+    source: https://neoma-bs.fr/formations/programme-grande-ecole
+    consulte_le: "2026-11-13"
+
+  - nom: EM Normandie
+    ville: "à vérifier"
+    domaines: [commerce, management]
+    formations: [Programme Grande École, Bachelor en Management, IBBA, MSc]
+    reconnaissance: "PGE visé Bac+5, grade de Master"
+    langue_requise: "Cursus possible 100 % en anglais ; niveau requis à vérifier"
+    frais_annuels_eur: 13950
+    frais_detail: "2027-2028 : PGE U1-U3 13 950 € ; M1/M2 14 350 € ; IBBA 12 500 € ; la plupart des MSc 17 000 € ; bourse Early Bird -10 % (internationaux)"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.em-normandie.com/votre-admission-lem-normandie
+    source: https://www.em-normandie.com/votre-admission-lem-normandie/frais-de-scolarite-pour-les-programmes-de-formation-em-normandie
+    consulte_le: "2026-11-13"
+
+  - nom: Rennes School of Business
+    ville: [Rennes]
+    domaines: [commerce, management]
+    formations: [Programme Grande École, MSc, Bachelor]
+    reconnaissance: "PGE grade de Master, RNCP niveau 7 titre n°41234 ; 'triplement accréditée' (AMBA renouvelée)"
+    langue_requise: "Anglais ou français ; niveau requis à vérifier"
+    frais_annuels_eur: 16000
+    frais_detail: "Rentrée 2027 (non-Européens = Européens) : PGE1 16 000 € ; PGE2 16 500 € ; PGE3 17 500 €"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.rennes-sb.fr/programmes/programme-grande-ecole/programme-grande-ecole/
+    source: https://www.rennes-sb.fr/financer-ses-etudes/tarifs-et-financement-pge/
+    consulte_le: "2026-11-13"
+
+  - nom: Paris School of Business (PSB)
+    ville: [Paris]
+    domaines: [commerce, management]
+    formations: [Programme Grande École (5 ans), Bachelor Management International, MSc, MBA]
+    reconnaissance: "PGE visé Bac+5, grade de Master, RNCP niveau 7 ; membre CGE ; AACSB, AMBA, EQUIS"
+    langue_requise: "Français ou anglais ; niveau requis à vérifier"
+    frais_annuels_eur: 12500
+    frais_detail: "2025-2026, non-résidents UE : PGE 12 500 €/an (acompte 3 000 €) ; Bachelor 10 700 €/an"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.psbedu.paris/fr/admissions/programme-grande-ecole
+    source: https://www.psbedu.paris/fr/admissions/tarifs-et-financement
+    consulte_le: "2026-11-13"
+
+  - nom: EPITA
+    ville: [Paris (Kremlin-Bicêtre), Lyon, Rennes, Strasbourg, Toulouse]
+    domaines: [ingenieur, informatique]
+    formations: [Diplôme d'ingénieur (5 ans), Bachelors, MSc]
+    reconnaissance: "Diplôme d'ingénieur habilité CTI"
+    langue_requise: "Français ou anglais selon la majeure ; niveau requis à vérifier"
+    frais_annuels_eur: 12950
+    frais_detail: "2027-2028 : cycle ingénieur 12 950 € (1re inscription) ; prépa 10 350 € ; MSc Info & Management 11 990 € + 600 € accompagnement internationaux"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.epita.fr/formation-internationale/etudiants-internationaux/
+    source: https://www.epita.fr/tarifs-et-financement/
+    consulte_le: "2026-11-13"
+
+  - nom: Efrei
+    ville: [Paris (Villejuif), Bordeaux]
+    domaines: [ingenieur, informatique]
+    formations: [Programme Grande École ingénieur, Bachelors, Mastères (PEx)]
+    reconnaissance: "Ingénieur CTI ; EESPIG ; EUR-ACE ; établissement privé sous contrat avec le ministère"
+    langue_requise: "à vérifier"
+    frais_annuels_eur: 11300
+    frais_detail: "2027-2028 : ING1 11 300 € ; ING2/ING3 12 300 € ; B1/B2 9 300 € ; Master 1 11 800 € ; non-résidents : 1 650 € + 50 % min. avant attestation"
+    connectee_etudes_en_france: true
+    url_admissions: https://www.efrei.fr/admission/admissions-candidats-internationaux/
+    source: https://www.efrei.fr/financer-ses-etudes/
+    consulte_le: "2026-11-13"
+
+  - nom: ESIEA
+    ville: [Paris/Ivry-sur-Seine, Laval, Agen]
+    domaines: [ingenieur, informatique]
+    formations: [Diplôme d'ingénieur (5 ans), Bachelor Cybersécurité, Programmes experts]
+    reconnaissance: "Diplôme d'ingénieur habilité CTI"
+    langue_requise: "Français B2 minimum (programme ingénieur)"
+    frais_annuels_eur: 10000
+    frais_detail: "2027-2028 (Paris/Laval) : 1re-2e années 10 000 € ; 3e-5e années 11 900 €"
+    connectee_etudes_en_france: true
+    url_admissions: https://www.esiea.fr/etudiants-internationaux/
+    source: https://www.esiea.fr/admissions-programme-ingenieur-cti/
+    consulte_le: "2026-11-13"
+
+  - nom: ESILV
+    ville: [Paris La Défense, Nantes, Montpellier]
+    domaines: [ingenieur, informatique]
+    formations: [Cursus ingénieur généraliste, Bachelors, MSc]
+    reconnaissance: "Cursus ingénieur habilité CTI ; MSc labellisés CGE (RNCP niveau 7)"
+    langue_requise: "à vérifier"
+    frais_annuels_eur: 11400
+    frais_detail: "2026-2027 : prépa intégrée et cycle ingénieur 11 400 €/an ; Bachelors 7 900 € ; MSc 13 400 € ; acompte 1 000 €"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.esilv.fr/admissions/
+    source: https://www.esilv.fr/admissions/tarifs-et-financement/
+    consulte_le: "2026-11-13"
+
+  - nom: EPF École d'ingénieurs
+    ville: [Paris-Cachan, Troyes, Montpellier, Saint-Nazaire]
+    domaines: [ingenieur]
+    formations: [Ingénieur généraliste, Bachelors, Mastère Spécialisé]
+    reconnaissance: "Habilitée CTI (tous diplômes d'ingénieur) ; EESPIG ; membre CGE"
+    langue_requise: "Français B1 minimum (étudiants internationaux)"
+    frais_annuels_eur: 10180
+    frais_detail: "2026-2027 : 10 180 € (Troyes/Saint-Nazaire : 9 160 € puis 9 928 €) ; Bachelors 7 636 € ; acompte 1 500 €"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.epf.fr/vous-etes-etudiant-international
+    source: https://www.epf.fr/droits-scolarite-financements
+    consulte_le: "2026-11-13"
+
+  - nom: Strate École de Design
+    ville: [Paris, Lyon]
+    domaines: [design]
+    formations: [Design, Design Prototypage]
+    reconnaissance: "Établissement d'enseignement supérieur technique privé reconnu par l'État ; diplôme de designer reconnu par l'État"
+    langue_requise: "TEF niveau 4 ou B2"
+    frais_annuels_eur: null
+    frais_detail: "à vérifier"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.strate.design/international/demande-inscription-etudiant-etranger
+    source: https://www.strate.design/ecole-design/finance-logement
+    consulte_le: "2026-11-13"
+
+  - nom: ECV
+    ville: [Paris, Aix-en-Provence, Bordeaux, Nantes, Lille]
+    domaines: [design, communication, digital]
+    formations: [Bachelors design/animation/game/digital, Mastères Direction artistique, Programmes en anglais]
+    reconnaissance: "Titres RNCP : n°42637 niveau 6 ; n°39251 niveau 7 (et autres) ; pas de grade universitaire"
+    langue_requise: "Français B2 certifié (TCF, TEF, DELF, DALF) ; programmes en anglais : B2 (IELTS 5.5-6.0, TOEFL iBT 72-94, TOEIC 785-940)"
+    frais_annuels_eur: null
+    frais_detail: "Droits d'inscription 500 € + pack technique 130 €/an ; frais de scolarité à vérifier (fiche PDF non lue)"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.ecv.fr/international/admissions-internationales/
+    source: https://www.ecv.fr/lecole/certifications-rncp/
+    consulte_le: "2026-11-13"
+
+  - nom: Penninghen (ESAG)
+    ville: [Paris]
+    domaines: [design, communication, architecture interieure]
+    formations: [Année préparatoire arts appliqués, Architecture intérieure, Direction artistique communication, Direction artistique image et média]
+    reconnaissance: "Deux titres RNCP niveau 7 ; établissement privé technique déclaré au rectorat"
+    langue_requise: "à vérifier"
+    frais_annuels_eur: 13990
+    frais_detail: "2027-2028 : prépa 10 990 € ; années suivantes 13 990 €/an ; cursus 2 ans 15 990 €/an ; dossier 590 € (1 550 € en 2 ans) ; pack international 4 900 € (non-francophones)"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.penninghen.fr/admission
+    source: https://www.penninghen.fr/frais-scolarite
+    consulte_le: "2026-11-13"
+
+  - nom: Vatel
+    ville: [Paris, Lyon, Nîmes, Nantes, Bordeaux]
+    domaines: [hotellerie, tourisme]
+    formations: [Bachelor management hôtelier international (3 ans)]
+    reconnaissance: "Titre RNCP 39885 niveau 6 ; diplôme Eurhodip EQF 6"
+    langue_requise: "Enseignement en français (Nîmes et Bordeaux aussi en anglais) ; niveau requis à vérifier"
+    frais_annuels_eur: null
+    frais_detail: "à vérifier"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.vatel.fr/fr/formations/management/bachelor
+    source: https://www.vatel.fr/fr/formations/management/bachelor
+    consulte_le: "2026-11-13"
+
+  - nom: Institut Lyfe (ex-Institut Paul Bocuse)
+    ville: [Lyon]
+    domaines: [hotellerie, restauration, arts culinaires]
+    formations: [Bachelor Management International de l'Hôtellerie et de la Restauration, Bachelor Arts Culinaires, Bachelor Pâtisserie, MSc]
+    reconnaissance: "Bachelor hôtellerie-restauration visé Bac+4 par le MESR ; label Bienvenue en France"
+    langue_requise: "à vérifier"
+    frais_annuels_eur: null
+    frais_detail: "à vérifier"
+    connectee_etudes_en_france: null
+    url_admissions: https://www.institutlyfe.com/admissions-et-financement/
+    source: https://www.institutlyfe.com/niveau/bachelors/bachelor-management-international-de-lhotellerie/
+    consulte_le: "2026-11-13"

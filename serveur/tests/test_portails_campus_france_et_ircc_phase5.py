@@ -745,7 +745,10 @@ def test_guide_campus_france_septembre_2026_pilote_navigateur_et_interface_sans_
         assert "Passeport biométrique en cours de validité" in texte_options
 
         page.locator("#btn-verifier-completude").click()
-        page.wait_for_timeout(400)
+        page.wait_for_function(
+            "() => (document.querySelector('#zone-completude') || {}).innerText?.includes('Dossier complet')",
+            timeout=10000,
+        )
         texte_completude = page.locator("#zone-completude").inner_text()
         assert "Dossier complet" in texte_completude
         assert "{" not in texte_completude
@@ -754,7 +757,10 @@ def test_guide_campus_france_septembre_2026_pilote_navigateur_et_interface_sans_
         # Onglet 4 : Discussion & Score d'acceptation -> calcul du score et envoi d'une question au Conseiller
         page.locator("aside button.nav-btn[data-vue='vue-conseiller']").click()
         page.locator("#btn-calculer-score").click()
-        page.wait_for_timeout(400)
+        page.wait_for_function(
+            "() => (document.querySelector('#zone-score-acceptation') || {}).innerText?.includes(\"Score d'acceptation estimé\")",
+            timeout=10000,
+        )
         texte_score = page.locator("#zone-score-acceptation").inner_text()
         assert "Score d'acceptation estimé" in texte_score
         assert "{" not in texte_score

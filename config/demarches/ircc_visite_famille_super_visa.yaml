@@ -1,0 +1,141 @@
+code: ircc_visite_famille_super_visa
+libelle: "IRCC Canada — Visite à la famille (visa de visiteur) et super visa parents/grands-parents"
+description: "Préparation d'une demande de visa de visiteur pour visite familiale (6 mois ou moins) ou d'un super visa (parents et grands-parents d'un citoyen canadien, résident permanent ou Indien inscrit, séjours jusqu'à 5 ans). Arrêt avant paiement et soumission (règle 1)."
+
+# Sources officielles consultées le 2026-11-13 (canada.ca, ircc.canada.ca) :
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/apply-visitor-visa.html (motif « For a family visit »)
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/parent-grandparent-super-visa.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/parent-grandparent-super-visa/eligibility.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/parent-grandparent-super-visa/forms-documents.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/parent-grandparent-super-visa/apply.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/biometrics/where-to-give.html
+# - https://ircc.canada.ca/english/information/fees/fees.asp (page modifiée le 2026-11-10)
+# À vérifier : barème du revenu minimal nécessaire de l'hôte (page « Proof of financial support » non lue), délai de traitement pour l'Algérie.
+veille_reglementaire:
+  - titre: "Visite familiale de 6 mois ou moins : visa de visiteur"
+    resume: "Pour une visite familiale, le demandeur doit prouver son lien avec la personne ou le membre de la famille qui l'invite (copie d'acte de mariage, formulaire IMM 5409 d'union de fait, acte de naissance ou document officiel le désignant comme parent). Mêmes frais, biométrie et portail que le visa de visiteur. Pour plus de 6 mois auprès d'enfants ou petits-enfants, voir le super visa."
+    reference: "canada.ca — How to apply for a visitor visa, motif « For a family visit » (2026-11-13)"
+  - titre: "Super visa : principe"
+    resume: "Le super visa permet aux parents et grands-parents de rendre visite à leurs enfants ou petits-enfants (citoyens canadiens, résidents permanents ou Indiens inscrits) jusqu'à 5 ans par séjour, avec entrées multiples sur une période pouvant aller jusqu'à 10 ans. Aucune personne à charge ne peut être incluse dans la demande. Le demandeur doit être hors du Canada au dépôt."
+    reference: "canada.ca — Super visa for parents and grandparents (2026-11-13)"
+  - titre: "Super visa : exigences de l'hôte"
+    resume: "L'hôte (enfant ou petit-enfant biologique ou adopté) doit être citoyen canadien, résident permanent ou Indien inscrit, avoir au moins 18 ans, vivre au Canada, atteindre ou dépasser le revenu minimal nécessaire et rédiger et signer une lettre d'invitation. Son époux ou conjoint de fait peut cosigner (pas les frères et sœurs). Barème du revenu minimal : à vérifier."
+    reference: "canada.ca — Super visa : Who can apply / Forms and documents (2026-11-13)"
+  - titre: "Super visa : assurance maladie privée"
+    resume: "Assurance d'une compagnie canadienne (ou étrangère autorisée par le BSIF/OSFI et ayant émis la police en faisant affaire au Canada), valide au moins 1 an à compter de l'entrée, payée intégralement ou par versements avec acompte (devis refusés), couvrant soins, hospitalisation et rapatriement, avec une couverture d'urgence d'au moins 100 000 CAD, valide à chaque entrée."
+    reference: "canada.ca — Super visa : Forms and documents (2026-11-13)"
+  - titre: "Super visa : examen médical obligatoire"
+    resume: "Le demandeur doit passer un examen médical aux fins de l'immigration auprès d'un médecin désigné (panel physician) et en fournir la preuve avec la demande."
+    reference: "canada.ca — Super visa : Who can apply / Forms and documents (2026-11-13)"
+  - titre: "Portail, biométrie et CRDV d'Alger"
+    resume: "Demande en ligne sur le portail IRCC (ou IRCC Portal – New version si admissible) ; pour le super visa, choisir « Visitor visa or super visa » puis « To visit my children or grandchildren for more than 6 months (super visa) ». Après la BIL, biométrie en personne dans les 30 jours ; canada.ca indique pour l'Algérie le CRDV (VAC) d'Alger : https://visa.vfsglobal.com/dza/en/can. Pas d'instructions locales du bureau des visas pour l'Algérie."
+    reference: "canada.ca — Super visa : Submit your application / Biometrics : Where to give (2026-11-13)"
+  - titre: "Traduction des documents"
+    resume: "Tout document qui n'est pas en anglais ou en français doit être accompagné d'une traduction anglaise ou française et, si le traducteur n'est pas agréé, d'un affidavit du traducteur, avec le document dans la langue d'origine."
+    reference: "canada.ca — Super visa : Forms and documents (2026-11-13)"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - adresse
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Copie couleur du passeport valide (page de naissance et pages avec tampons/visas), validité conseillée 6 mois après le voyage"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: preuve_lien_parente
+    libelle: "Preuve du lien de parenté avec l'hôte (acte de naissance ou de baptême de l'hôte, acte de mariage, IMM 5409, document officiel)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: lettre_invitation_hote
+    libelle: "Lettre d'invitation de l'hôte (super visa : signée par l'enfant/petit-enfant, avec preuve de revenu et liste des personnes du foyer)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_statut_hote_canada
+    libelle: "Super visa : preuve que l'hôte est citoyen canadien, résident permanent ou Indien inscrit"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_revenu_minimal_hote
+    libelle: "Super visa : preuve que l'hôte (et le cosignataire éventuel) atteint le revenu minimal nécessaire"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: assurance_maladie_super_visa
+    libelle: "Super visa : assurance maladie privée, 1 an minimum dès l'entrée, couverture d'urgence d'au moins 100 000 CAD, payée"
+    obligatoire: false
+    exige_date_expiration: true
+    validite_minimale_jours: 365
+
+  - type_piece: preuve_examen_medical
+    libelle: "Super visa : preuve d'examen médical auprès d'un médecin désigné (panel physician)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: releves_bancaires_6_mois
+    libelle: "Relevés bancaires (au moins 6 mois d'historique) — recommandé pour la visite familiale"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: traductions_affidavit
+    libelle: "Traductions anglaises ou françaises (et affidavit si traducteur non agréé) des documents en arabe ou autre langue"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: formulaire_imm5476
+    libelle: "Recours aux services d'un représentant (IMM 5476), si l'agence agit comme représentant"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+frais:
+  - libelle: "Visa de visiteur (visite familiale) ou super visa — par personne (barème IRCC du 2026-11-10)"
+    montant: 100
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la fin de la demande en ligne (paiement par le candidat, jamais par l'agent)"
+  - libelle: "Visa de visiteur — famille de 5 personnes ou plus (maximum ; la page de demande du super visa n'indique que le tarif par personne)"
+    montant: 500
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la fin de la demande en ligne"
+  - libelle: "Frais de biométrie — par personne"
+    montant: 85
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "avec la demande (sinon retards)"
+
+instructions_agent: "Demander d'abord à l'opérateur le type de visite : visite familiale de 6 mois ou moins (visa de visiteur) ou super visa (parent/grand-parent, plus de 6 mois). Pour un super visa, les pièces marquées « Super visa » sont toutes exigées : les signaler comme manquantes si absentes, sans rien inventer (règle 4) ; ne jamais estimer le revenu minimal de l'hôte (barème à vérifier sur canada.ca). Préparer le brouillon dans le portail IRCC ouvert par l'opérateur et s'arrêter avant le paiement et la soumission (règle 1). En cas de CAPTCHA ou de double authentification, pause et alerte (règle 2)."
+
+etapes_tache:
+  - code: verification_prerequis_dossier
+    libelle: "Vérification des prérequis : type de visite, lien de parenté, pièces de l'hôte et (super visa) assurance et examen médical"
+  - code: ouverture_session_portail_ircc
+    libelle: "Vérification de la session IRCC Portal ouverte par l'opérateur"
+  - code: questionnaire_et_formulaire_visite_famille
+    libelle: "Pré-remplissage du questionnaire (visite familiale ou super visa) et du formulaire"
+  - code: televersement_liste_documents_personnalisee
+    libelle: "Téléversement des pièces selon la liste de documents personnalisée du portail"
+  - code: controle_avant_validation_humaine
+    libelle: "Capture de contrôle et arrêt de sécurité avant paiement et soumission finale"

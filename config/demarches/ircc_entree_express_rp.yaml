@@ -1,0 +1,166 @@
+code: ircc_entree_express_rp
+libelle: "IRCC Canada — Résidence permanente via Entrée express (profil, SCG, invitation, demande)"
+description: "Parcours complet Entrée express : vérification d'admissibilité (TQF, CEC, TMF, PNP via Entrée express), création du profil, score SCG/CRS, invitation à présenter une demande puis préparation de la demande de RP. Arrêt avant soumission du profil et de la demande, et avant paiement (règle 1)."
+
+# Sources officielles consultées le 2026-11-13 (canada.ca, ircc.canada.ca) :
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/changes.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/who-can-apply.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/check-score.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/documents/proof-funds.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/rounds-invitations.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/apply-permanent-residence.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/after-apply.html
+# - https://ircc.canada.ca/english/information/fees/fees.asp (page modifiée le 2026-11-10)
+# Voir aussi canada_residence_permanente.yaml (préparation : tests de langue, ÉDÉ, fonds), vérifié le 2026-11-11.
+# À vérifier : délais de traitement (« Varies by program », outil non lu), grille SCG détaillée hors facteur « intégration au marché du travail ».
+veille_reglementaire:
+  - titre: "Trois programmes gérés par Entrée express"
+    resume: "Catégorie de l'expérience canadienne (CEC) : 1 an d'expérience au Canada dans les 3 dernières années, CLB 7 (TEER 0-1) ou CLB 5 (TEER 2-3). Travailleurs qualifiés fédéraux (TQF/FSW) : 1 an continu dans les 10 dernières années en TEER 0-3, CLB 7, études secondaires exigées. Métiers spécialisés fédéraux (TMF/FST) : 2 ans dans les 5 dernières années dans un métier admissible, CLB 5 (oral) et 4 (écrit), offre d'emploi d'au moins 1 an ou certificat de qualification canadien. Un candidat admissible peut aussi passer par le Programme des candidats des provinces (PNP)."
+    reference: "canada.ca — Express Entry : Who can apply (consulté le 2026-11-13)"
+  - titre: "Changements SCG/CRS au 2026-11-03"
+    resume: "Depuis le 2026-11-03, nouveau facteur « intégration au marché du travail » (maximum 150 points) : points pour l'expérience de travail canadienne (durée + professions à salaire élevé) OU pour une offre d'emploi admissible dans une profession à salaire élevé (100 points), jamais les deux. Exigences d'EIMT supprimées pour les offres d'emploi Entrée express. Recalcul des profils jusqu'à 2 semaines, rondes d'invitations suspendues pendant ce temps. Pour TQF/TMF, l'admissibilité au programme reste évaluée séparément (offre en TEER 0-3)."
+    reference: "canada.ca — Express Entry : What has changed / Check your score (2026-11-13)"
+  - titre: "Rondes d'invitations"
+    resume: "IRCC invite les candidats les mieux classés selon le SCG lors de rondes générales, propres à un programme ou par catégorie. Dernière ronde affichée le 2026-11-13 : « Transport Occupations, 2026-Version 2 » du 2026-10-28, score minimal 477, 150 invitations. Les seuils varient à chaque ronde : ne jamais promettre d'invitation."
+    reference: "canada.ca — Express Entry : Rounds of invitations (consulté le 2026-11-13)"
+  - titre: "Délais : profil 12 mois, invitation 60 jours"
+    resume: "Sans invitation dans les 12 mois suivant la soumission du profil, celui-ci expire. Une invitation à présenter une demande est valable 60 jours ; si elle n'est ni déclinée ni suivie d'une demande, elle expire et le profil est retiré du bassin. Si la situation change et que le score recalculé passe sous le seuil de la ronde, il faut décliner l'invitation (sinon refus possible sans remboursement)."
+    reference: "canada.ca — Express Entry : Apply for permanent residence (2026-11-13)"
+  - titre: "Preuve de fonds (TQF et TMF)"
+    resume: "Montants affichés le 2026-11-13 (tableau « Updated July 7, 2025 ») : 1 personne 15 263 CAD ; 2 : 19 001 ; 3 : 23 360 ; 4 : 28 362 ; 5 : 32 168 ; 6 : 36 280 ; 7 : 40 392 ; par personne supplémentaire 4 112 CAD. Montants révisés chaque année : revérifier avant chaque profil."
+    reference: "canada.ca — Express Entry : Proof of funds (consulté le 2026-11-13)"
+  - titre: "Examen médical et biométrie"
+    resume: "Un examen médical aux fins de l'immigration auprès d'un médecin désigné est exigé pour la RP, y compris pour les membres de la famille qui n'accompagnent pas ; le passer après l'invitation, au plus près du dépôt (fournir la fiche imprimée ou le formulaire IMM 1017B). Biométrie obligatoire entre 14 et 79 ans pour chaque demande de RP, dans les 30 jours de la lettre ; pour l'Algérie, CRDV d'Alger indiqué par canada.ca (https://visa.vfsglobal.com/dza/en/can)."
+    reference: "canada.ca — Express Entry : Apply for PR / After you apply / Biometrics (2026-11-13)"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - adresse
+  - niveau_actuel
+  - fonds_disponibles_eur
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Passeport valide (à renouveler s'il expire dans les 6 mois suivant la demande)"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: resultats_test_langue
+    libelle: "Résultats de test de langue approuvé (TEF Canada, TCF Canada, IELTS GT, CELPIP-G, PTE Core), moins de 2 ans"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: rapport_eca_diplomes
+    libelle: "Évaluation des diplômes d'études (ÉDÉ / ECA) pour les études hors Canada, moins de 5 ans"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_experience_travail
+    libelle: "Lettres d'employeur ou de référence prouvant l'expérience de travail (contenu exact exigé : à vérifier)"
+    obligatoire: true
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: lettre_bancaire_preuve_fonds
+    libelle: "Preuve de fonds (TQF et TMF ; non exigée pour la CEC ni avec offre d'emploi valide et autorisation de travail)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: certificat_police
+    libelle: "Certificats de police (demandés pour la demande de RP après invitation)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_examen_medical
+    libelle: "Preuve d'examen médical (fiche imprimée du médecin désigné ou IMM 1017B), après invitation"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: offre_emploi_ou_certificat_qualification
+    libelle: "Offre d'emploi valide ou certificat de qualification canadien (obligatoire pour les métiers spécialisés)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: etat_civil_famille
+    libelle: "Actes d'état civil selon la situation : acte de mariage, IMM 5409, divorce, décès, actes de naissance des enfants à charge"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: traductions_affidavit
+    libelle: "Traductions anglaises ou françaises certifiées (ou avec affidavit) des documents en arabe ou autre langue"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: formulaire_imm5476
+    libelle: "Recours aux services d'un représentant (IMM 5476), si l'agence agit comme représentant"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+frais:
+  - libelle: "Demandeur principal : frais de traitement (barème IRCC du 2026-11-10, immigration économique dont Entrée express)"
+    montant: 990
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la soumission de la demande de RP (paiement par le candidat, jamais par l'agent)"
+  - libelle: "Droit de résidence permanente (DRP / RPRF), par adulte"
+    montant: 600
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "conseillé avec la demande ; exigible avant l'octroi de la RP, remboursable en cas de retrait ou de refus"
+  - libelle: "Époux ou conjoint : frais de traitement (hors DRP)"
+    montant: 990
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la soumission de la demande de RP"
+  - libelle: "Enfant à charge, par enfant"
+    montant: 270
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la soumission de la demande de RP"
+  - libelle: "Frais de biométrie — par personne"
+    montant: 85
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la soumission de la demande de RP"
+  - libelle: "Frais de biométrie — famille de 2 personnes ou plus (maximum)"
+    montant: 170
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la soumission de la demande de RP"
+
+instructions_agent: "Deux arrêts obligatoires (règle 1) : 1) avant la soumission du profil Entrée express, 2) avant la soumission et le paiement de la demande de RP après invitation. Ne jamais accepter ni décliner une invitation à la place du candidat. Vérifier d'abord l'admissibilité (TQF, CEC, TMF) avec l'outil officiel « Come to Canada » ou le questionnaire du compte sécurisé IRCC ; ne jamais garantir un score SCG ni une invitation. Surveiller les échéances : profil à soumettre dans les 60 jours après son début, expiration du profil à 12 mois, invitation valable 60 jours. Montants de fonds et frais : reprendre ceux de la procédure et les revérifier sur canada.ca (révision annuelle). CAPTCHA ou double authentification : pause et alerte (règle 2)."
+
+etapes_tache:
+  - code: verification_prerequis_dossier
+    libelle: "Vérification de l'admissibilité (TQF, CEC, TMF), des tests de langue, de l'ÉDÉ et de la preuve de fonds"
+  - code: ouverture_session_compte_securise_ircc
+    libelle: "Vérification de la session du compte sécurisé IRCC ouverte par l'opérateur (CléGC ou partenaire de connexion)"
+  - code: preremplissage_profil_entree_express
+    libelle: "Pré-remplissage du profil Entrée express (identité, langue, études, expérience, fonds)"
+  - code: controle_profil_avant_validation_humaine
+    libelle: "Capture de contrôle du profil et score SCG affiché, arrêt avant soumission du profil"
+  - code: preparation_demande_rp_apres_invitation
+    libelle: "Après invitation (60 jours) : pré-remplissage de la demande de RP et téléversement selon la liste personnalisée"
+  - code: controle_avant_validation_humaine
+    libelle: "Capture de contrôle et arrêt de sécurité avant paiement et soumission finale de la demande de RP"

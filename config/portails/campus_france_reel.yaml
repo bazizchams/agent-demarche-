@@ -33,10 +33,23 @@ statut_test_initial: "non testé"
 
 # Règle 7 : URL officielle et domaines autorisés en configuration YAML (jamais en dur dans le code)
 url_officielle: "https://pastel.diplomatie.gouv.fr/etudesenfrance"
+# Relevé des pages de connexion / création de compte (lecture seule, sans connexion) : voir docs/sources_demarches.md.
+# La connexion et l'inscription n'utilisent AUCUN fournisseur d'identité externe (formulaires sur le domaine lui-même).
 domaines_autorises:
+  # vérifié le 2026-11-13 sur https://etudesenfrance.diplomatie.gouv.fr/connexion (connexion, formulaire sur le même
+  # hôte), /inscription (création de compte) et /connexion/mot-de-passe-oublie
   - "etudesenfrance.diplomatie.gouv.fr"
+  # vérifié le 2026-11-13 sur https://pastel.diplomatie.gouv.fr/etudesenfrance (redirige vers
+  # /etudesenfrance/dyn/public/authentification/login.html, ancienne page de connexion qui renvoie vers
+  # etudesenfrance.diplomatie.gouv.fr/connexion et /inscription)
   - "pastel.diplomatie.gouv.fr"
+  # vérifié le 2026-11-13 sur https://www.algerie.campusfrance.org/utilisation-de-la-plateforme-etudes-en-france
+  # (lien « créer un compte » vers etudesenfrance.diplomatie.gouv.fr)
   - "www.algerie.campusfrance.org"
+  # vérifié le 2026-11-13 sur https://algerie.campusfrance.org/ (redirige vers https://www.algerie.campusfrance.org/)
+  - "algerie.campusfrance.org"
+  # vérifié le 2026-11-13 sur https://www.algerie.campusfrance.org/campagne-etudes-en-france-2027 (lien « je paye les
+  # frais de dossier en ligne » ; https://paiement.if-algerie.com/ redirige vers /verifier-statut)
   - "paiement.if-algerie.com"
 chemin_url: "/etudesenfrance"
 

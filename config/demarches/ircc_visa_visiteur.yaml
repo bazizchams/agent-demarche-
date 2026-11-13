@@ -1,0 +1,131 @@
+code: ircc_visa_visiteur
+libelle: "IRCC Canada — Visa de visiteur (visa de résident temporaire, tourisme)"
+description: "Préparation d'une demande de visa de visiteur pour le Canada (motif : tourisme), en ligne sur le portail IRCC. L'agent prépare le dossier en brouillon et s'arrête avant le paiement et la soumission (règle 1)."
+
+# Sources officielles consultées le 2026-11-13 (canada.ca, ircc.canada.ca) :
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/apply-visitor-visa.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/eligibility.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/after-apply-next-steps.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/portal-application-process.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/biometrics/how-to-give.html
+# - https://www.canada.ca/en/immigration-refugees-citizenship/services/biometrics/where-to-give.html
+# - https://ircc.canada.ca/english/information/fees/fees.asp (page modifiée le 2026-11-10)
+# À vérifier : délai de traitement pour l'Algérie (outil « Check processing times » non lu), montant de fonds exigé (non chiffré par IRCC).
+veille_reglementaire:
+  - titre: "Conditions de base (admissibilité)"
+    resume: "Le demandeur doit avoir un document de voyage valide, être en bonne santé, n'avoir aucune condamnation criminelle ou liée à l'immigration, convaincre l'agent de ses attaches (emploi, logement, biens, famille) et de son départ à la fin du séjour, et disposer d'assez d'argent (le montant dépend de la durée et du mode d'hébergement). Un examen médical ou une lettre d'invitation peuvent être exigés."
+    reference: "canada.ca — Visitor visa : Who can apply (consulté le 2026-11-13)"
+  - titre: "Passeport : validité de 6 mois conseillée"
+    resume: "Le passeport devrait être valide au moins 6 mois à compter de la date de voyage prévue ; le renouveler avant la demande si besoin. Fournir une copie claire en couleur de la page de naissance/pays d'origine et de toutes les pages portant tampons, visas ou mentions."
+    reference: "canada.ca — How to apply for a visitor visa (consulté le 2026-11-13)"
+  - titre: "Demande en ligne obligatoire (IRCC Portal)"
+    resume: "La demande se fait en ligne sur le portail IRCC (option 1) ou sur le « IRCC Portal – New version » (option 2, réservé aux 18 ans et plus, demandant seul, n'ayant jamais fait de demande et sans représentant). Le papier n'est admis qu'en cas d'impossibilité (handicap) ou de document de voyage de réfugié/apatride. Une liste de documents personnalisée est fournie dans le portail."
+    reference: "canada.ca — How to apply for a visitor visa / Sign in: IRCC Portal"
+  - titre: "Biométrie"
+    resume: "Après paiement des frais de biométrie, une lettre d'instructions (BIL) est envoyée ; le rendez-vous se prend dès réception, il est gratuit, et la biométrie doit être donnée dans les 30 jours suivant la BIL, en personne, avec la BIL et le passeport. Pour l'Algérie, canada.ca indique le centre de réception des demandes de visa (CRDV / VAC) d'Alger : https://visa.vfsglobal.com/dza/en/can."
+    reference: "canada.ca — Biometrics : How to give / Where to give (consulté le 2026-11-13)"
+  - titre: "Pas d'instructions locales pour l'Algérie"
+    resume: "L'outil « Check if your local visa office requires additional documents » affiche pour l'Algérie : aucune instruction locale du bureau des visas (2026-11-13)."
+    reference: "canada.ca — How to apply for a visitor visa (sélection Algeria)"
+  - titre: "Après la demande : délai et passeport"
+    resume: "IRCC traite la plupart des demandes en quelques semaines ou moins (variable selon le bureau des visas et les étapes supplémentaires : entrevue, informations complémentaires, examen médical, certificat de police). En cas d'approbation d'une demande en ligne, une lettre dans le compte IRCC indique comment remettre le passeport pour l'apposition du visa. Délai précis pour l'Algérie : à vérifier."
+    reference: "canada.ca — After you apply for a visitor visa (consulté le 2026-11-13)"
+
+champs_candidat_requis:
+  - nom
+  - prenom
+  - sexe
+  - date_naissance
+  - lieu_naissance
+  - nationalite
+  - pays_residence
+  - email
+  - telephone
+  - numero_passeport
+  - date_expiration_passeport
+  - adresse
+
+pieces_requises:
+  - type_piece: passeport
+    libelle: "Copie couleur du passeport valide (page de naissance et pages avec tampons/visas), validité conseillée 6 mois après le voyage"
+    obligatoire: true
+    exige_date_expiration: true
+    validite_minimale_jours: 180
+
+  - type_piece: historique_voyages
+    libelle: "Historique de voyages : anciens passeports/visas (10 dernières années), tampons d'entrée et de sortie (recommandé)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: itineraire_voyage
+    libelle: "Itinéraire : réservation de vol, preuve d'hébergement, inscription à un événement (recommandé)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: releves_bancaires_6_mois
+    libelle: "Relevés bancaires : nom et coordonnées de la banque, nom et adresse du titulaire, au moins 6 mois d'historique (recommandé)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: lettre_employeur
+    libelle: "Lettre de l'employeur sur papier à en-tête, datée de moins de 3 mois (poste, date d'embauche, salaire, contact, signature)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: preuve_statut_pays_residence
+    libelle: "Preuve du statut légal dans le pays de résidence (si différent du pays de citoyenneté)"
+    obligatoire: false
+    exige_date_expiration: true
+    validite_minimale_jours: 0
+
+  - type_piece: autorisation_voyage_mineur
+    libelle: "Lettre autorisant un enfant mineur à voyager au Canada (le cas échéant)"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+  - type_piece: formulaire_imm5476
+    libelle: "Recours aux services d'un représentant (IMM 5476), si l'agence agit comme représentant"
+    obligatoire: false
+    exige_date_expiration: false
+    validite_minimale_jours: 0
+
+frais:
+  - libelle: "Frais de traitement du visa de visiteur — par personne (barème IRCC du 2026-11-10)"
+    montant: 100
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la fin de la demande en ligne (paiement par le candidat, jamais par l'agent)"
+  - libelle: "Frais de traitement du visa de visiteur — famille de 5 personnes ou plus (maximum)"
+    montant: 500
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "à la fin de la demande en ligne"
+  - libelle: "Frais de biométrie — par personne"
+    montant: 85
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "avec la demande (sinon retards)"
+  - libelle: "Frais de biométrie — famille de 2 personnes ou plus (maximum)"
+    montant: 170
+    devise: CAD
+    beneficiaire: "IRCC"
+    moment: "avec la demande"
+
+instructions_agent: "Préparer uniquement le brouillon de la demande de visa de visiteur (motif tourisme) dans le portail IRCC ouvert par l'opérateur. Ne jamais payer, signer ni soumettre : s'arrêter avant l'écran de paiement et produire le récapitulatif pour validation humaine (règle 1). En cas de CAPTCHA (hCaptcha sur la page CléGC) ou de double authentification, se mettre en pause et alerter l'opérateur (règle 2). Ne pas inventer de montant de fonds ni de délai : IRCC ne fixe pas de montant pour le tourisme et le délai pour l'Algérie reste à vérifier. Suivre la liste de documents personnalisée affichée par le portail."
+
+etapes_tache:
+  - code: verification_prerequis_dossier
+    libelle: "Vérification des prérequis (passeport, attaches, ressources) et des pièces recommandées"
+  - code: ouverture_session_portail_ircc
+    libelle: "Vérification de la session IRCC Portal ouverte par l'opérateur (CléGC / partenaire de connexion)"
+  - code: questionnaire_et_formulaire_visiteur
+    libelle: "Pré-remplissage du questionnaire et du formulaire de visa de visiteur (motif : tourisme)"
+  - code: televersement_liste_documents_personnalisee
+    libelle: "Téléversement des pièces selon la liste de documents personnalisée du portail"
+  - code: controle_avant_validation_humaine
+    libelle: "Capture de contrôle et arrêt de sécurité avant paiement et soumission finale"

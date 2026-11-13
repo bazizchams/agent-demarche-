@@ -203,6 +203,321 @@ JS_DEMARCHES = """
       lancerActionNavigateur("ircc_permis_etudes", "instruction_libre", inst);
     });
 
+    // -----------------------------------------------------------------------
+    // Cadre « Navigateur et assistant » : barre d'adresse, actions rapides, synchronisation,
+    // vue capture, puces d'exemples et dictée vocale. Tout passe par les routes existantes
+    // (/api/v1/portails/action-dom-directe, /api/v1/portails/etat-navigateur,
+    // /api/v1/navigateur/etat et /capture) via appelApi (en-tête CSRF).
+    // Règle 6 : contrôle du domaine côté client (domaines des YAML via /api/v1/portails),
+    // puis contrôle définitif côté serveur. Règle 1 : aucune de ces actions ne clique un bouton.
+    // -----------------------------------------------------------------------
+
+    const PREFIXES_DIRECT = { campus_france: "cf", ircc_permis_etudes: "ircc" };
+    const ACTIONS_DOM_RAPIDES = ["retour", "suivant", "actualiser", "scroll_haut", "scroll_bas", "focus_fenetre"];
+    const LIBELLES_TYPE_ELEMENT = {
+      champ: "Champ", liste: "Liste", zone_texte: "Zone de texte", bouton: "Bouton", lien: "Lien", fichier: "Fichier",
+    };
+    let etatsDirects = {
+      campus_france: { cible: "campus_france_officiel", mode: "dom" },
+      ircc_permis_etudes: { cible: "ircc_officiel", mode: "dom" },
+    };
+    let domainesAutorisesParDemarche = null;
+    let dicteeEnCours = null;
+
+    function dirPrefixe(codeDemarche) {
+      return PREFIXES_DIRECT[codeDemarche] || null;
+    }
+
+    function dirElement(codeDemarche, suffixe) {
+      const p = dirPrefixe(codeDemarche);
+      return p ? document.getElementById(p + "-" + suffixe) : null;
+    }
+
+    function dirMettreAJourEtat(codeDemarche, changements) {
+      etatsDirects = Object.assign({}, etatsDirects, {
+        [codeDemarche]: Object.assign({}, etatsDirects[codeDemarche], changements),
+      });
+    }
+
+    function dirRetour(codeDemarche, message, ok) {
+      const zone = document.getElementById("zone-retour-" + dirPrefixe(codeDemarche));
+      if (zone) zone.replaceChildren(demNoeud("div", "notif " + (ok ? "notif-ok" : "notif-err"), message));
+      notifier(message, ok);
+    }
+
+    async function dirLireErreur(rep, defaut) {
+      const err = await rep.json().catch(() => ({}));
+      return typeof err.detail === "string" ? err.detail : defaut;
+    }
+
+    function dirAfficherElements(codeDemarche, titre, url, elements) {
+      const titreEl = dirElement(codeDemarche, "titre-page-live");
+      if (titreEl && titre) titreEl.textContent = titre;
+      const urlEl = dirElement(codeDemarche, "url-live");
+      if (urlEl && url) urlEl.value = url;
+      const conteneur = dirElement(codeDemarche, "elements-dom-live");
+      if (!conteneur) return;
+      const liste = Array.isArray(elements) ? elements : [];
+      if (liste.length === 0) {
+        conteneur.replaceChildren(demNoeud("p", "aide", "Aucun champ ni bouton visible sur la page ouverte."));
+        return;
+      }
+      const ul = demNoeud("ul", "liste-propre");
+      liste.forEach((e) => {
+        const li = demNoeud("li");
+        li.appendChild(demNoeud("strong", "", (LIBELLES_TYPE_ELEMENT[e.type_element] || "Élément") + " : "));
+        li.appendChild(document.createTextNode(String(e.libelle || "")));
+        ul.appendChild(li);
+      });
+      conteneur.replaceChildren(
+        demNoeud("p", "aide", liste.length + " élément(s) interactif(s) visible(s) sur la page."), ul);
+    }
+
+    function dirChargerCapture(codeDemarche) {
+      const img = dirElement(codeDemarche, "capture-direct");
+      const message = dirElement(codeDemarche, "capture-message");
+      if (!img || !message) return;
+      message.textContent = "Chargement de la capture…";
+      img.onload = () => {
+        img.classList.remove("cache");
+        message.textContent = "Capture de la page ouverte dans le navigateur du bureau.";
+      };
+      img.onerror = () => {
+        img.classList.add("cache");
+        message.textContent = "Aucune capture disponible : ouvrez d'abord le site avec « Ouvrir le site ».";
+      };
+      img.src = "/api/v1/navigateur/capture?jeton=" + Date.now();
+    }
+
+    async function dirNavigateurOuvert() {
+      const rep = await appelApi("/api/v1/navigateur/etat");
+      if (!rep.ok) return { ok: false, message: await dirLireErreur(rep, "État du navigateur indisponible.") };
+      const etat = await rep.json();
+      return { ok: true, ouvert: Boolean(etat.navigateur_ouvert), etat: etat };
+    }
+
+    async function dirEnvoyerActionDom(codeDemarche, corps) {
+      const visible = dirElement(codeDemarche, "fenetre-visible");
+      const rep = await appelApi("/api/v1/portails/action-dom-directe", {
+        method: "POST",
+        body: JSON.stringify(Object.assign({}, corps, { ouvrir_fenetre_visible: visible ? visible.checked : true })),
+      });
+      if (!rep.ok) {
+        dirRetour(codeDemarche, await dirLireErreur(rep, "Action refusée par le serveur."), false);
+        return;
+      }
+      const res = await rep.json();
+      dirAfficherElements(codeDemarche, res.titre_page, res.url_courante, res.elements_interactifs_page);
+      if (etatsDirects[codeDemarche].mode === "capture") dirChargerCapture(codeDemarche);
+      dirRetour(codeDemarche, res.message || "Action exécutée.", Boolean(res.succes));
+    }
+
+    // Actions rapides de la barre (précédent, suivant, actualiser, haut, bas, premier plan) :
+    // toutes existent côté serveur (type_operation de /portails/action-dom-directe).
+    async function executerActionDomRapide(codeDemarche, action) {
+      if (!dirPrefixe(codeDemarche) || !ACTIONS_DOM_RAPIDES.includes(action)) {
+        notifier("Action de navigation inconnue.", false);
+        return;
+      }
+      const etat = await dirNavigateurOuvert();
+      if (!etat.ok) {
+        dirRetour(codeDemarche, etat.message, false);
+        return;
+      }
+      if (!etat.ouvert) {
+        dirRetour(codeDemarche, "Aucun navigateur ouvert pour votre bureau : cliquez d'abord sur « Ouvrir le site ».", false);
+        return;
+      }
+      await dirEnvoyerActionDom(codeDemarche, { type_operation: action });
+    }
+
+    async function dirChargerDomainesAutorises() {
+      if (domainesAutorisesParDemarche) return domainesAutorisesParDemarche;
+      const rep = await appelApi("/api/v1/portails");
+      if (!rep.ok) return null;
+      const portails = await rep.json();
+      const table = {};
+      portails.forEach((p) => {
+        const liste = table[p.code_demarche] || [];
+        table[p.code_demarche] = liste.concat((p.domaines_autorises || []).map((d) => String(d).toLowerCase()));
+      });
+      domainesAutorisesParDemarche = table;
+      return table;
+    }
+
+    // Règle 6 côté client : HTTPS et hôte exact parmi les domaines du portail ; pages de démonstration
+    // locales acceptées ici, le serveur les refuse en production.
+    function dirMotifRefusUrl(texte, domaines) {
+      let analyse;
+      try {
+        analyse = new URL(texte);
+      } catch (e) {
+        return "Adresse invalide : saisissez une adresse complète commençant par https://.";
+      }
+      if (analyse.username || analyse.password) return "Navigation refusée (règle 6) : adresse avec identifiants intégrés.";
+      const hote = analyse.hostname.toLowerCase();
+      if (hote === "portail.local" && analyse.pathname.startsWith("/demo/")) return null;
+      if (analyse.protocol !== "https:") return "Navigation refusée (règle 6) : seules les adresses HTTPS officielles sont acceptées.";
+      if (!domaines.includes(hote)) return "Navigation refusée (règle 6) : le domaine « " + hote + " » n'est pas un domaine officiel de ce portail.";
+      return null;
+    }
+
+    async function naviguerUrlDirecte(codeDemarche) {
+      const champ = dirElement(codeDemarche, "url-live");
+      if (!champ) return;
+      const texte = champ.value.trim();
+      if (!texte) {
+        dirRetour(codeDemarche, "Saisissez l'adresse à ouvrir.", false);
+        return;
+      }
+      const table = await dirChargerDomainesAutorises();
+      if (!table) {
+        dirRetour(codeDemarche, "Navigation annulée (règle 6) : impossible de vérifier les domaines officiels du portail.", false);
+        return;
+      }
+      const refus = dirMotifRefusUrl(texte, table[codeDemarche] || []);
+      if (refus) {
+        dirRetour(codeDemarche, refus, false);
+        return;
+      }
+      await dirEnvoyerActionDom(codeDemarche, { type_operation: "naviguer", url_destination: texte });
+    }
+
+    function basculerModeVueDirecte(codeDemarche) {
+      const p = dirPrefixe(codeDemarche);
+      if (!p) return;
+      const versCapture = etatsDirects[codeDemarche].mode !== "capture";
+      dirMettreAJourEtat(codeDemarche, { mode: versCapture ? "capture" : "dom" });
+      dirElement(codeDemarche, "panneau-dom-live").classList.toggle("cache", versCapture);
+      dirElement(codeDemarche, "vue-capture").classList.toggle("cache", !versCapture);
+      const bouton = document.getElementById("btn-mode-vue-" + p);
+      if (bouton) bouton.textContent = versCapture ? "Vue : capture de la page" : "Vue : contrôle DOM et fenêtre";
+      if (versCapture) dirChargerCapture(codeDemarche);
+    }
+
+    async function synchroniserEtatNavigateurDirect(codeDemarche) {
+      if (!dirPrefixe(codeDemarche)) return;
+      const etat = await dirNavigateurOuvert();
+      if (!etat.ok) {
+        dirRetour(codeDemarche, etat.message, false);
+        return;
+      }
+      if (!etat.ouvert) {
+        dirAfficherElements(codeDemarche, "Aucun navigateur ouvert", "", []);
+        dirRetour(codeDemarche, "Aucun navigateur ouvert pour votre bureau : cliquez d'abord sur « Ouvrir le site ».", false);
+        return;
+      }
+      const rep = await appelApi("/api/v1/portails/etat-navigateur");
+      if (!rep.ok) {
+        dirRetour(codeDemarche, await dirLireErreur(rep, "Synchronisation impossible."), false);
+        return;
+      }
+      const detail = await rep.json();
+      dirAfficherElements(codeDemarche, detail.titre_page || etat.etat.titre_page, detail.url_courante || etat.etat.url_courante,
+        detail.elements_interactifs_page);
+      if (etatsDirects[codeDemarche].mode === "capture") dirChargerCapture(codeDemarche);
+      if (etat.etat.controle_securite_detecte) {
+        dirRetour(codeDemarche, "CAPTCHA ou code de sécurité détecté : à résoudre par vous (règle 2).", false);
+        return;
+      }
+      notifier("Navigateur synchronisé.", true);
+    }
+
+    // Portail choisi : mémorisé et reporté dans la barre d'adresse. « Ouvrir le site » lit déjà ce choix.
+    function changerCibleNavigateurDirect(codeDemarche) {
+      const liste = dirElement(codeDemarche, "cible-navigateur");
+      if (!liste) return;
+      dirMettreAJourEtat(codeDemarche, { cible: liste.value });
+      const option = liste.options[liste.selectedIndex];
+      const url = option ? option.getAttribute("data-url") : "";
+      const champ = dirElement(codeDemarche, "url-live");
+      if (champ && url) champ.value = url;
+    }
+
+    // Puce d'exemple : même chemin que le bouton « Exécuter ».
+    function envoyerConsigneRapideCopilote(codeDemarche, texte) {
+      const p = dirPrefixe(codeDemarche);
+      const champ = dirElement(codeDemarche, "instruction-agent");
+      const bouton = p ? document.getElementById("btn-piloter-" + p + "-instruction") : null;
+      if (!champ || !bouton) return;
+      champ.value = String(texte || "");
+      bouton.click();
+    }
+
+    function dirReconnaissanceVocale() {
+      return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+    }
+
+    // Dictée (Web Speech API du navigateur, fr-FR) : remplit le champ de consigne, sans rien
+    // envoyer à notre serveur ; l'opérateur relit puis clique sur « Exécuter ».
+    function demarrerDicteeVocale(codeDemarche) {
+      const p = dirPrefixe(codeDemarche);
+      const champ = dirElement(codeDemarche, "instruction-agent");
+      const bouton = p ? document.getElementById("btn-dictee-" + p) : null;
+      if (!champ || !bouton) return;
+      const Reconnaissance = dirReconnaissanceVocale();
+      if (!Reconnaissance) {
+        bouton.disabled = true;
+        dirRetour(codeDemarche, "La dictée vocale n'est pas disponible dans ce navigateur : saisissez la consigne au clavier.", false);
+        return;
+      }
+      if (dicteeEnCours) {
+        dicteeEnCours.stop();
+        return;
+      }
+      const rec = new Reconnaissance();
+      rec.lang = "fr-FR";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onresult = (ev) => {
+        const resultat = ev.results && ev.results[0] && ev.results[0][0];
+        if (resultat && resultat.transcript) {
+          champ.value = resultat.transcript.trim();
+          dirRetour(codeDemarche, "Consigne dictée. Relisez-la puis cliquez sur « Exécuter ».", true);
+        }
+      };
+      rec.onerror = (ev) => {
+        const refus = ev.error === "not-allowed" || ev.error === "service-not-allowed";
+        dirRetour(codeDemarche, refus ? "Micro refusé : autorisez le micro pour cette page ou saisissez la consigne."
+          : "Dictée interrompue : aucune parole reconnue.", false);
+      };
+      rec.onend = () => {
+        dicteeEnCours = null;
+        bouton.setAttribute("aria-pressed", "false");
+      };
+      dicteeEnCours = rec;
+      bouton.setAttribute("aria-pressed", "true");
+      try {
+        rec.start();
+        notifier("Dictée en cours : parlez, puis cliquez à nouveau sur le micro pour arrêter.", true);
+      } catch (e) {
+        dicteeEnCours = null;
+        bouton.setAttribute("aria-pressed", "false");
+        dirRetour(codeDemarche, "Impossible de démarrer la dictée vocale.", false);
+      }
+    }
+
+    (function dirBrancherCadres() {
+      const dicteeDispo = Boolean(dirReconnaissanceVocale());
+      Object.keys(PREFIXES_DIRECT).forEach((codeDemarche) => {
+        const p = PREFIXES_DIRECT[codeDemarche];
+        const micro = document.getElementById("btn-dictee-" + p);
+        if (micro && !dicteeDispo) {
+          micro.disabled = true;
+          micro.title = "Dictée vocale indisponible dans ce navigateur (Web Speech API absente)";
+          const zone = document.getElementById("zone-retour-" + p);
+          if (zone) zone.appendChild(demNoeud("p", "note",
+            "La dictée vocale n'est pas disponible dans ce navigateur : saisissez la consigne au clavier."));
+        }
+        const champUrl = dirElement(codeDemarche, "url-live");
+        if (champUrl) {
+          champUrl.addEventListener("keydown", (ev) => {
+            if (ev.key === "Enter") naviguerUrlDirecte(codeDemarche);
+          });
+        }
+      });
+    })();
+
     // Statut d'une étape de tâche -> composant « étapes » du guide.
     const ETAPE_TACHE_AFFICHAGE = {
       terminee: { classe: "etape-faite", texte: "Terminée" },

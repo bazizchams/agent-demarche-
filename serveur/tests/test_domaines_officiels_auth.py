@@ -90,3 +90,128 @@ def test_domaines_connexion_documentes_dans_les_yaml(parametres_test: Parametres
         "https://portal-portail.apps.cic.gc.ca/signin?lang=fr",
     ):
         assert politique.motif_refus(url) is None
+
+
+# --- Études en France : domaines de connexion / création de compte (relevé du 2026-11-13) -----------------------
+# Source : docs/sources_demarches.md, section « Études en France : connexion et création de compte ».
+
+from pathlib import Path  # noqa: E402
+
+from app.agent_local.config_portail import ModePortail, charger_config_portail  # noqa: E402
+
+YAML_EEF_REEL = Path(__file__).resolve().parents[2] / "config" / "portails" / "campus_france_reel.yaml"
+
+DOMAINES_EEF_VERIFIES_2026_11_13 = {
+    "etudesenfrance.diplomatie.gouv.fr",
+    "pastel.diplomatie.gouv.fr",
+    "www.algerie.campusfrance.org",
+    "algerie.campusfrance.org",
+    "paiement.if-algerie.com",
+}
+
+
+def test_domaines_etudes_en_france_verifies_presents_dans_le_yaml() -> None:
+    cfg = charger_config_portail(YAML_EEF_REEL)
+    assert cfg.mode_portail == ModePortail.REEL
+    assert DOMAINES_EEF_VERIFIES_2026_11_13 <= {d.lower() for d in cfg.domaines_autorises}
+
+
+def test_domaines_etudes_en_france_commentaires_de_verification() -> None:
+    texte = YAML_EEF_REEL.read_text(encoding="utf-8")
+    assert texte.count("vérifié le 2026-11-13 sur https://") >= len(DOMAINES_EEF_VERIFIES_2026_11_13)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://etudesenfrance.diplomatie.gouv.fr/connexion",
+        "https://etudesenfrance.diplomatie.gouv.fr/connexion/mot-de-passe-oublie",
+        "https://etudesenfrance.diplomatie.gouv.fr/inscription",
+        "https://pastel.diplomatie.gouv.fr/etudesenfrance",
+        "https://pastel.diplomatie.gouv.fr/etudesenfrance/dyn/public/login.html?ecf=DZ&locale=fr_DZ",
+        "https://algerie.campusfrance.org/",
+        "https://www.algerie.campusfrance.org/utilisation-de-la-plateforme-etudes-en-france",
+        "https://paiement.if-algerie.com/verifier-statut",
+    ],
+)
+def test_domaines_etudes_en_france_pages_connexion_acceptees(parametres_test: Parametres, url: str) -> None:
+    assert politique_depuis_parametres(parametres_test).motif_refus(url) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Ressources seulement (scripts) : volontairement non autorisé en navigation principale.
+        "https://cdn.diplomatie.gouv.fr/yui/yui/3.8.1/yui/yui-min.js",
+        # Domaines parents trop larges ou voisins non relevés.
+        "https://diplomatie.gouv.fr/",
+        "https://campusfrance.org/",
+        "https://if-algerie.com/",
+        "https://etudesenfrance.diplomatie.gouv.fr.connexion-eef.example/connexion",
+        "http://etudesenfrance.diplomatie.gouv.fr/connexion",
+    ],
+)
+def test_domaines_etudes_en_france_hotes_non_releves_refuses(parametres_test: Parametres, url: str) -> None:
+    assert politique_depuis_parametres(parametres_test).motif_refus(url) is not None
+
+
+# --- IRCC : domaines de connexion (relevé du 2026-11-13 sur canada.ca) -------------------------------------------
+# Source : docs/sources_demarches.md, section « Domaines d'authentification des portails réels (Règle 6) ».
+
+YAML_IRCC_REEL = Path(__file__).resolve().parents[2] / "config" / "portails" / "ircc_reel.yaml"
+
+DOMAINES_IRCC_VERIFIES_2026_11_13 = {
+    "portal-portail.apps.cic.gc.ca",  # IRCC Portal
+    "onlineservices-servicesenligne-cic.fjgc-gccf.gc.ca",  # compte sécurisé IRCC (GCKey / Sign-In Partner)
+    "clegc-gckey.gc.ca",  # CléGC
+    "services.signin.interac-id.ca",  # partenaire de connexion Interac
+    "ircc-services.canada.ca",  # IRCC Portal – New version
+}
+
+
+def test_domaines_ircc_verifies_presents_dans_le_yaml() -> None:
+    cfg = charger_config_portail(YAML_IRCC_REEL)
+    assert cfg.mode_portail == ModePortail.REEL
+    assert DOMAINES_IRCC_VERIFIES_2026_11_13 <= {d.lower() for d in cfg.domaines_autorises}
+
+
+def test_domaines_ircc_commentaires_de_verification() -> None:
+    texte = YAML_IRCC_REEL.read_text(encoding="utf-8")
+    assert texte.count("vérifié le 2026-11-13 sur https://www.canada.ca/") >= len(DOMAINES_IRCC_VERIFIES_2026_11_13)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://onlineservices-servicesenligne-cic.fjgc-gccf.gc.ca/mycic/gccf?lang=fra&idp=gckey&svc=/mycic/start",
+        "https://onlineservices-servicesenligne-cic.fjgc-gccf.gc.ca/mycic/gccf?lang=eng&idp=securekey&svc=/mycic/start",
+        "https://clegc-gckey.gc.ca/j/eng/l",
+        "https://services.signin.interac-id.ca/cbs/saml/login?l=1&lang=eng",
+        "https://portal-portail.apps.cic.gc.ca/signin?lang=en",
+        "https://portal-portail.apps.cic.gc.ca/portal/signin?lang=en",
+        "https://ircc-services.canada.ca/cxp/s/login/?language=en_CA&c__LanguageCode=en",
+    ],
+)
+def test_domaines_ircc_pages_connexion_acceptees(parametres_test: Parametres, url: str) -> None:
+    assert politique_depuis_parametres(parametres_test).motif_refus(url) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # hCaptcha chargé par la page CléGC : jamais une destination de navigation (règle 2 : pause).
+        "https://newassets.hcaptcha.com/captcha/v1/",
+        "https://hcaptcha.com/",
+        # Domaines parents trop larges ou voisins non relevés.
+        "https://gc.ca/",
+        "https://fjgc-gccf.gc.ca/",
+        "https://interac-id.ca/",
+        "https://canada.ca/",
+        # Centre de réception des demandes de visa (prestataire) : documenté, pas un domaine de connexion.
+        "https://visa.vfsglobal.com/dza/en/can",
+        "https://clegc-gckey.gc.ca.connexion-ircc.example/j/eng/l",
+        "http://clegc-gckey.gc.ca/j/eng/l",
+    ],
+)
+def test_domaines_ircc_hotes_non_releves_refuses(parametres_test: Parametres, url: str) -> None:
+    assert politique_depuis_parametres(parametres_test).motif_refus(url) is not None

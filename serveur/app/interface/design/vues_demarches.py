@@ -146,6 +146,10 @@ _CADRE_NAVIGATEUR = """
             <div id="{P}-conteneur-iframe" class="cache">
               <iframe id="{P}-iframe-direct" class="iframe-navigateur-direct" src="{S}" title="{T}"></iframe>
             </div>
+            <div id="{P}-vue-capture" class="corps-navigateur-direct cache">
+              <p id="{P}-capture-message" class="aide" aria-live="polite">Capture de la page ouverte dans le navigateur du bureau.</p>
+              <img id="{P}-capture-direct" class="capture-apercu cache" alt="Capture de la page ouverte dans le navigateur du bureau" />
+            </div>
             <div id="{P}-panneau-dom-live" class="corps-navigateur-direct">
               <div class="entete-live">
                 <div>
@@ -295,10 +299,10 @@ HTML_CAMPUS_FRANCE = (
         <div class="grille-2">
           <label class="champ" for="cf-cible-navigateur">Portail cible dans le navigateur
             <select id="cf-cible-navigateur" onchange="changerCibleNavigateurDirect('campus_france')">
-              <option value="campus_france_officiel" selected>Site officiel Études en France (etudesenfrance.diplomatie.gouv.fr)</option>
-              <option value="demo_campus_france">Portail interactif Études en France (mode direct intégré)</option>
-              <option value="campus_france_algerie">Site Campus France Algérie (algerie.campusfrance.org)</option>
-              <option value="paiement_ifa_algerie">Portail de paiement IFA Algérie (paiement.if-algerie.com)</option>
+              <option value="campus_france_officiel" data-url="https://etudesenfrance.diplomatie.gouv.fr/" selected>Site officiel Études en France (etudesenfrance.diplomatie.gouv.fr)</option>
+              <option value="demo_campus_france" data-url="http://portail.local/demo/campus-france">Portail interactif Études en France (mode direct intégré)</option>
+              <option value="campus_france_algerie" data-url="https://www.algerie.campusfrance.org/horaires-d-attention-au-public">Site Campus France Algérie (algerie.campusfrance.org)</option>
+              <option value="paiement_ifa_algerie" data-url="https://paiement.if-algerie.com">Portail de paiement IFA Algérie (paiement.if-algerie.com)</option>
             </select>
           </label>
           <label class="case" style="align-self:end;">
@@ -359,7 +363,7 @@ HTML_CAMPUS_FRANCE = (
             </div>
             <div class="barre-saisie">
               <input id="cf-instruction-agent" type="text" value="Pré-remplir tout le dossier Études en France du candidat (identité, passeport, scolarité, langues, panier de formations et motivation) et enregistrer le brouillon" placeholder="Parlez naturellement à l'agent" aria-label="Consigne pour le co-pilote" />
-              <button class="btn btn-secondaire btn-icone" type="button" style="margin:0;" onclick="demarrerDicteeVocale('campus_france')" title="Dicter la consigne à la voix" aria-label="Dicter la consigne à la voix">[[i:micro]]</button>
+              <button id="btn-dictee-cf" class="btn btn-secondaire btn-icone" type="button" style="margin:0;" onclick="demarrerDicteeVocale('campus_france')" title="Dicter la consigne à la voix" aria-label="Dicter la consigne à la voix">[[i:micro]]</button>
               <button id="btn-piloter-cf-instruction" class="btn btn-primaire" type="button" style="margin:0;">Exécuter</button>
             </div>
             <div id="zone-retour-cf" class="panneau-texte zone-retour-demarche" aria-live="polite">
@@ -438,9 +442,9 @@ HTML_IRCC = (
         <div class="grille-2">
           <label class="champ" for="ircc-cible-navigateur">Portail cible dans le navigateur
             <select id="ircc-cible-navigateur" onchange="changerCibleNavigateurDirect('ircc_permis_etudes')">
-              <option value="ircc_officiel" selected>Portail officiel IRCC Canada (portal-portail.apps.cic.gc.ca)</option>
-              <option value="demo_ircc">Portail interactif IRCC (mode direct intégré)</option>
-              <option value="ircc_canada_info">Page officielle Permis d'études sur Canada.ca</option>
+              <option value="ircc_officiel" data-url="https://portal-portail.apps.cic.gc.ca/signin?lang=fr" selected>Portail officiel IRCC Canada (portal-portail.apps.cic.gc.ca)</option>
+              <option value="demo_ircc" data-url="http://portail.local/demo/ircc">Portail interactif IRCC (mode direct intégré)</option>
+              <option value="ircc_canada_info" data-url="https://www.canada.ca/fr/immigration-refugies-citoyennete/services/etudier-canada/permis-etudes.html">Page officielle Permis d'études sur Canada.ca</option>
             </select>
           </label>
           <label class="case" style="align-self:end;">
@@ -490,7 +494,7 @@ HTML_IRCC = (
             </div>
             <div class="barre-saisie">
               <input id="ircc-instruction-agent" type="text" value="Pré-remplir toute la demande de permis d'études IRCC (identité, passeport, établissement DLI, ressources financières et pièces justificatives) et sauvegarder le brouillon" placeholder="Parlez naturellement à l'agent IRCC" aria-label="Consigne pour le co-pilote IRCC" />
-              <button class="btn btn-secondaire btn-icone" type="button" style="margin:0;" onclick="demarrerDicteeVocale('ircc_permis_etudes')" title="Dicter la consigne à la voix" aria-label="Dicter la consigne à la voix">[[i:micro]]</button>
+              <button id="btn-dictee-ircc" class="btn btn-secondaire btn-icone" type="button" style="margin:0;" onclick="demarrerDicteeVocale('ircc_permis_etudes')" title="Dicter la consigne à la voix" aria-label="Dicter la consigne à la voix">[[i:micro]]</button>
               <button id="btn-piloter-ircc-instruction" class="btn btn-primaire" type="button" style="margin:0;">Exécuter</button>
             </div>
             <div id="zone-retour-ircc" class="panneau-texte zone-retour-demarche" aria-live="polite">
