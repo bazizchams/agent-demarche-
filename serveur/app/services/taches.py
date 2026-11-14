@@ -1248,16 +1248,26 @@ def obtenir_synthese_centre_validation(
     )
 
 
+def _exiger_action_avec_pieces(tache: TacheDossier) -> None:
+    """Minimisation des données : une action « Ouvrir sur mon PC » (ajout de vœux) n'a besoin ni de la fiche
+    complète ni des pièces du candidat ; ni l'agent ni personne ne les reçoit par ces routes."""
+    if tache.action in ACTIONS_OUVERTURE_PC:
+        raise AccesRefuse("Cette action n'a pas besoin du dossier ni des pièces du candidat : accès refusé.")
+
+
 def obtenir_contexte_dossier_execution(
     db: Session,
     *,
     tache_id: uuid.UUID,
+    agent_local_id: uuid.UUID | None,
     cle_maitresse: bytes,
 ) -> ContexteDossierExecutionSortie:
     """Retourne les données déchiffrées du candidat et la liste de ses documents
-    uniquement si la tâche est actuellement `en_cours`."""
+    uniquement si la tâche est actuellement `en_cours` et si l'action en a besoin."""
     _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
+    _exiger_action_avec_pieces(tache)
     if tache.statut != StatutTache.EN_COURS:
         raise Conflit(
             "Le contexte d'exécution du dossier n'est accessible que pour une tâche à l'état 'en_cours'."
@@ -1280,6 +1290,7 @@ def lire_document_pour_tache_en_cours(
     *,
     tache_id: uuid.UUID,
     document_id: uuid.UUID,
+    agent_local_id: uuid.UUID | None,
     parametres: Parametres,
     cle_maitresse: bytes,
 ) -> tuple[str, str, bytes]:
@@ -1287,6 +1298,8 @@ def lire_document_pour_tache_en_cours(
     d'une pièce justificative du candidat afin de la téléverser sur le portail."""
     _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
+    _exiger_action_avec_pieces(tache)
     if tache.statut != StatutTache.EN_COURS:
         raise Conflit(
             "Le téléchargement d'une pièce par l'agent n'est autorisé que pour une tâche à l'état 'en_cours'."

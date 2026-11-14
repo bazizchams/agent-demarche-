@@ -16,10 +16,12 @@ from app.modeles.discussion_dossier import (
     MessageDiscussionDossier,
 )
 from app.modeles.document import DocumentCandidat
+from app.modeles.evenement_agent import EvenementAgent
 from app.modeles.extraction_document import ExtractionDocument, StatutExtraction
 from app.modeles.fiche_formation import FicheFormation, StatutFiche
 from app.modeles.jeton_courriel import JetonCourriel, ObjetJetonCourriel
 from app.modeles.journal_audit import EntreeAudit, ResultatAudit
+from app.modeles.point_fort import PointFort, ProjetProfessionnel, StatutPointFort, StatutProjet
 from app.modeles.rappel_echeance import RappelEcheanceEnvoye
 from app.modeles.session_utilisateur import SessionUtilisateur
 from app.modeles.tache import (
@@ -55,7 +57,12 @@ __all__ = [
     "ForfaitAbonnement",
     "MessageDiscussionDossier",
     "MotifSuspensionTache",
+    "EvenementAgent",
+    "PointFort",
     "PreuveConsentementCandidat",
+    "ProjetProfessionnel",
+    "StatutPointFort",
+    "StatutProjet",
     "RappelEcheanceEnvoye",
     "ResultatAudit",
     "Role",

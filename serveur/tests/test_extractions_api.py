@@ -262,7 +262,8 @@ def test_appliquer_ne_prend_que_les_champs_confirmes_et_n_ecrase_jamais(contexte
     did = _deposer(client, cid, "passeport", [corpus.TEXTE_PASSEPORT_VALIDE])
     champs = _par_champ(_extraire(client, cid, did))
     base = f"/api/v1/candidats/{cid}/extractions"
-    client.post(f"{base}/{champs['nom']['id']}/valider")  # nom identique à la fiche
+    for champ in ("nom", "numero_passeport", "date_expiration_passeport", "sexe", "date_naissance"):
+        client.post(f"{base}/{champs[champ]['id']}/valider")  # même les valeurs « auto » exigent un clic humain
 
     rapport = client.post(f"{base}/appliquer").json()
     appliques = {a["champ"] for a in rapport["appliques"]}
@@ -312,7 +313,9 @@ def test_appliquer_passeport_deja_utilise_par_un_autre_candidat_est_un_conflit(c
     _creer_candidat(client, nom="Autre", prenom="Personne", numero_passeport="L898902C3")
     cid = _creer_candidat(client)
     did = _deposer(client, cid, "passeport", [corpus.TEXTE_PASSEPORT_VALIDE])
-    _extraire(client, cid, did)
+    champs = _par_champ(_extraire(client, cid, did))
+    for champ in ("numero_passeport", "date_expiration_passeport"):
+        client.post(f"/api/v1/candidats/{cid}/extractions/{champs[champ]['id']}/valider")
     rapport = client.post(f"/api/v1/candidats/{cid}/extractions/appliquer").json()
     assert "numero_passeport" in {c["champ"] for c in rapport["conflits"]}
     assert "numero_passeport" not in {a["champ"] for a in rapport["appliques"]}

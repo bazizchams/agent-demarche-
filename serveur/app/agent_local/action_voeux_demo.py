@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.agent_local.demon_ecoute import ContexteExecution, ResultatExecution
 from app.agent_local.garde_fous import SuspensionRequiseParGardeFou
+from app.agent_local.journal_agent import JournalAgent
 from app.agent_local.pilote_navigateur import (
     _detecter_captcha_ou_2fa_sur_page,
     _est_element_soumission_interdit_regle1,
@@ -60,11 +62,31 @@ def _lire_voeux(ctx: ContexteExecution) -> list[dict[str, Any]]:
     ]
 
 
+PORTS_PAR_DEFAUT = {"http": 80, "https": 443}
+
+
+def _origine(url: str) -> tuple[str, str, int | None]:
+    """(schéma, hôte, port) normalisés : le port par défaut du schéma est rendu explicite."""
+    morceaux = urlsplit(url)
+    schema = morceaux.scheme.lower()
+    return schema, (morceaux.hostname or "").lower(), morceaux.port or PORTS_PAR_DEFAUT.get(schema)
+
+
+def _verifier_page_attendue(page: Any, url_serveur: str) -> None:
+    """Après la navigation : la page doit être exactement celle du serveur de l'agent (schéma, hôte, port et
+    chemin). Une redirection ailleurs fait échouer la tâche AVANT tout remplissage ou capture."""
+    attendue = urlsplit(url_serveur + CHEMIN_PAGE_DEMO)
+    courante = urlsplit(page.url or "")
+    if _origine(page.url or "") != _origine(url_serveur) or courante.path.rstrip("/") != attendue.path:
+        raise RuntimeError("la page d'arrivée n'est pas la page de démonstration attendue : tâche interrompue")
+
+
 def _ouvrir_page_demo(ctx: ContexteExecution) -> None:
     page = ctx.page
     reponse = page.goto(ctx.url_serveur + CHEMIN_PAGE_DEMO, wait_until="domcontentloaded")
     if reponse is None or reponse.status != 200:
         raise RuntimeError("page de démonstration indisponible (désactivée en production)")
+    _verifier_page_attendue(page, ctx.url_serveur)
     ctx.amener_au_premier_plan()
 
 
@@ -86,6 +108,19 @@ def _verifier_securite_avant(ctx: ContexteExecution) -> None:
 
 
 def executer_ajout_voeux_demo(ctx: ContexteExecution) -> ResultatExecution:
+    """Annonce chaque étape dans la discussion de la fenêtre (`journal_agent`) ; toute suspension (R2, R3, R4)
+    y devient une demande d'aide à l'humain avant d'être relancée au démon."""
+    journal_agent = JournalAgent.depuis_contexte(ctx)
+    try:
+        return _executer(ctx, journal_agent)
+    except SuspensionRequiseParGardeFou as susp:
+        if susp.code_etape == CODE_ETAPE:
+            journal_agent.demander_humain(susp.message_alerte)
+        raise
+
+
+def _executer(ctx: ContexteExecution, jr: JournalAgent) -> ResultatExecution:
+    jr.dire("Bonjour, je prépare l'ajout de vos vœux validés au panier de démonstration.")
     voeux = _lire_voeux(ctx)
     if not voeux:  # R4
         raise _suspension(
@@ -94,9 +129,13 @@ def executer_ajout_voeux_demo(ctx: ContexteExecution) -> ResultatExecution:
             "puis reprenez la tâche (règle 4).",
         )
 
+    jr.dire(f"J'ai {len(voeux)} vœu(x) validé(s) à ajouter. J'ouvre la page de démonstration du portail.")
     _ouvrir_page_demo(ctx)
+    jr.dire("Je vérifie qu'aucun CAPTCHA ni double authentification n'est demandé et que vous êtes connecté.")
     _verifier_securite_avant(ctx)
 
+    jr.agir("Je me place sur la recherche de formations", PROFIL_PANIER_DEMO.recherche)
+    jr.dire("J'ajoute les vœux au panier, un par un.")
     resultats, _notes, blocage = ajouter_voeux_au_panier(
         ctx.page,
         voeux,
@@ -112,6 +151,7 @@ def executer_ajout_voeux_demo(ctx: ContexteExecution) -> ResultatExecution:
         )
 
     ctx.amener_au_premier_plan()
+    jr.dire("Les vœux sont traités. Je prends une capture de contrôle pour le Centre de validation.")
     try:
         capture = ctx.page.screenshot(type="png")
     except Exception as exc:  # la capture n'est qu'un plus : on ne fait jamais échouer la tâche pour elle
@@ -145,4 +185,12 @@ def executer_ajout_voeux_demo(ctx: ContexteExecution) -> ResultatExecution:
             f"{len(resultats) - reussis} vœu(x) sur {len(resultats)} n'ont pas pu être ajoutés "
             "(introuvable, ambigu ou refusé) : contrôlez la fenêtre ouverte sur votre PC avant de valider."
         )
+    if reussis == len(resultats):
+        jr.dire(f"J'ai ajouté {reussis} vœu(x) au panier. Je m'arrête ici : je n'envoie rien.")
+    else:
+        jr.alerter(f"{len(resultats) - reussis} vœu(x) sur {len(resultats)} n'ont pas pu être ajoutés.")
+    jr.demander_humain(
+        "Contrôlez le panier dans cette fenêtre, puis validez le récapitulatif dans le Centre de validation : "
+        "je ne peux pas valider à votre place."
+    )
     return ResultatExecution(recapitulatif=recapitulatif, message_alerte=message, capture_png=capture)

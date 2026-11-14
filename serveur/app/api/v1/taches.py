@@ -163,7 +163,7 @@ def obtenir_contexte_execution(
     cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
 ) -> ContexteDossierExecutionSortie:
     return service_taches.obtenir_contexte_dossier_execution(
-        ctx.db, tache_id=tache_id, cle_maitresse=cle_maitresse
+        ctx.db, tache_id=tache_id, agent_local_id=ctx.agent_local_id, cle_maitresse=cle_maitresse
     )
 
 
@@ -179,6 +179,7 @@ def telecharger_document_pour_tache(
         ctx.db,
         tache_id=tache_id,
         document_id=document_id,
+        agent_local_id=ctx.agent_local_id,
         parametres=parametres,
         cle_maitresse=cle_maitresse,
     )

@@ -21,6 +21,7 @@ from app.db.tenant import tenant_courant
 from app.modeles.fiche_formation import FicheFormation, StatutFiche
 from app.modeles.journal_audit import ResultatAudit
 from app.services import audit
+from app.services.transaction import commit_ou_conflit
 from app.services.fiche_formation import (
     FicheEntree,
     cle_fiche,
@@ -58,7 +59,10 @@ def _tenant(db: Session) -> uuid.UUID:
     return tid
 
 
-def _appliquer(orm: FicheFormation, fiche: FicheEntree) -> None:
+def _appliquer(orm: FicheFormation, fiche: FicheEntree, *, conserver_confirmees: bool = False) -> None:
+    if conserver_confirmees:
+        # exigences « aucune » confirmées par un humain : écrasées seulement par un import manuel plus récent
+        fiche = fiche.model_copy(update={"aucune_exigence_confirmee": list(orm.aucune_exigence_confirmee or [])})
     for champ in _CHAMPS_COPIES:
         setattr(orm, champ, getattr(fiche, champ))
     orm.pieces = list(fiche.pieces)
@@ -75,7 +79,8 @@ def enregistrer_fiches(
 ) -> dict[str, int]:
     """Crée ou met à jour (clé : établissement + intitulé + niveau d'entrée) les fiches du bureau.
 
-    Une fiche déjà présente n'est remplacée que par un relevé de date égale ou plus récente.
+    Une fiche déjà présente n'est remplacée que par un relevé de date égale ou plus récente ; les exigences confirmées par un humain ne sont
+    écrasées que par un import manuel strictement plus récent.
     """
     if len(fiches) > MAX_FICHES_PAR_IMPORT:
         raise DonneesInvalides(f"Import limité à {MAX_FICHES_PAR_IMPORT} fiches par appel.")
@@ -94,7 +99,8 @@ def enregistrer_fiches(
             existantes[cle] = orm
             crees += 1
         elif fiche.date_releve >= actuelle.date_releve:
-            _appliquer(actuelle, fiche)
+            plus_recente_manuelle = fiche.source == "manuel" and fiche.date_releve > actuelle.date_releve
+            _appliquer(actuelle, fiche, conserver_confirmees=not plus_recente_manuelle)
             mises_a_jour += 1
         else:
             ignorees += 1
@@ -111,7 +117,7 @@ def enregistrer_fiches(
             "sources": ",".join(sorted(sources)),
         },
     )
-    db.commit()
+    commit_ou_conflit(db, "Import concurrent des mêmes fiches : réessayez.")
     return {"crees": crees, "mises_a_jour": mises_a_jour, "ignorees_plus_anciennes": ignorees}
 
 

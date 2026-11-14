@@ -321,6 +321,9 @@ class _FenetreFactice:
     def __init__(self) -> None:
         self.premier_plan = 0
 
+    def choisir_candidat(self, candidat_id: str) -> None:
+        pass
+
     def page(self) -> object:
         return object()
 

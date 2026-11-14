@@ -22,8 +22,10 @@ from app.db.tenant import definir_tenant, sans_filtre_tenant, tenant_courant
 from app.modeles.agent_local import AgentLocal
 from app.modeles.bureau import Bureau
 from app.modeles.journal_audit import ResultatAudit
+from app.modeles.tache import StatutTache, TacheDossier
 from app.schemas.tache import AgentLocalCreation, AgentLocalEnroleSortie, AgentLocalSortie
 from app.services import audit
+from app.services.taches import _liberer_verrou_dossier
 
 
 def enroler_agent_local(
@@ -72,6 +74,21 @@ def lister_agents_locaux(db: Session) -> list[AgentLocalSortie]:
     return [AgentLocalSortie.model_validate(a) for a in agents]
 
 
+def _liberer_taches_en_cours(db: Session, agent_id: uuid.UUID) -> list[uuid.UUID]:
+    """Révocation : les tâches `en_cours` de l'agent repassent en attente (et leur verrou de dossier est levé)
+    dans la MÊME transaction, pour qu'un autre poste les reprenne aussitôt."""
+    taches = db.scalars(
+        select(TacheDossier).where(
+            TacheDossier.agent_local_id == agent_id, TacheDossier.statut == StatutTache.EN_COURS
+        )
+    ).all()
+    for tache in taches:
+        tache.statut = StatutTache.EN_ATTENTE
+        tache.agent_local_id = None
+        _liberer_verrou_dossier(db, tache_id=tache.id)
+    return [t.id for t in taches]
+
+
 def changer_statut_agent_local(
     db: Session,
     *,
@@ -84,6 +101,7 @@ def changer_statut_agent_local(
         raise NonTrouve("Agent local introuvable.")
 
     agent.actif = actif
+    liberees = [] if actif else _liberer_taches_en_cours(db, agent.id)
     audit.journaliser(
         db,
         "agent_local.activation" if actif else "agent_local.revocation",
@@ -91,6 +109,7 @@ def changer_statut_agent_local(
         acteur_id=acteur_id,
         ressource_type="agent_local",
         ressource_id=agent.id,
+        details={"taches_liberees": len(liberees)} if liberees else None,
     )
     db.commit()
     return AgentLocalSortie.model_validate(agent)

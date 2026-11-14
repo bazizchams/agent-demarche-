@@ -15,12 +15,16 @@ from app.api.v1 import (
     catalogue_formations,
     coffre_identifiants,
     courriel,
+    deductions,
     demarches,
+    evenements_agent,
+    dossier_automatique,
     extractions,
     ia,
     inscription,
     navigateur_serveur,
     portails,
+    projet_professionnel,
     sante,
     taches,
     utilisateurs,
@@ -38,6 +42,9 @@ routeur_v1.include_router(utilisateurs.routeur)
 routeur_v1.include_router(bureau.routeur)
 routeur_v1.include_router(candidats.routeur)
 routeur_v1.include_router(extractions.routeur)
+routeur_v1.include_router(deductions.routeur)
+routeur_v1.include_router(dossier_automatique.routeur)
+routeur_v1.include_router(projet_professionnel.routeur)
 routeur_v1.include_router(voeux.routeur)
 routeur_v1.include_router(voeux_suggestions.routeur)
 routeur_v1.include_router(catalogue_formations.routeur)
@@ -48,6 +55,7 @@ routeur_v1.include_router(portails.routeur)
 routeur_v1.include_router(navigateur_serveur.routeur)
 routeur_v1.include_router(agents_locaux.routeur)
 routeur_v1.include_router(taches.routeur)
+routeur_v1.include_router(evenements_agent.routeur)
 routeur_v1.include_router(validations.routeur)
 routeur_v1.include_router(validation_recapitulatif.routeur)
 routeur_v1.include_router(acces_abonnement.routeur)

@@ -34,6 +34,7 @@ lecture = [
     "pypdf>=5.0",
     "rapidocr>=2.0",
     "onnxruntime>=1.18",
+    "pillow>=10.0",
 ]
 dev = [
     "pytest>=8.2",

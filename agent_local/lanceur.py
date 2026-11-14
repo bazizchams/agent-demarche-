@@ -34,6 +34,10 @@ from app.agent_local.portails import (  # noqa: E402
     diagnostiquer_page_portail,
     verifier_url_officielle_portail,
 )
+from app.agent_local.ouverture_visible import (  # noqa: E402
+    dossier_profils_par_defaut,
+    restreindre_acces_utilisateur,
+)
 from app.api.dependances import EN_TETE_JETON_AGENT  # noqa: E402
 
 
@@ -104,8 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     analyseur.add_argument(
         "--profil-navigateur",
-        default=str(RACINE_PLATEFORME / "agent_local" / "profil_chromium"),
-        help="Dossier du profil Chromium dédié au bureau",
+        default=str(dossier_profils_par_defaut()),
+        help="Dossier du profil Chromium dédié au bureau (défaut : %%LOCALAPPDATA%%/AgentBureau, hors dépôt)",
     )
     analyseur.add_argument(
         "--dossier-captures",
@@ -136,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     config_portail = charger_config_portail(Path(args.config_portail))
     dossier_profil = Path(args.profil_navigateur)
     dossier_profil.mkdir(parents=True, exist_ok=True)
+    restreindre_acces_utilisateur(dossier_profil)
     dossier_captures = Path(args.dossier_captures)
     dossier_captures.mkdir(parents=True, exist_ok=True)
 

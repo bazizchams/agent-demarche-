@@ -36,8 +36,12 @@ captures/
 *.db-shm
 *.be.enc
 
-# Profils navigateur de l'agent local
+# Profils navigateur de l'agent local (cookies de session des portails) et captures de contrôle
 agent_local/profil_navigateur/
+agent_local/profil_chromium/
+**/profil_chromium/
+agent_local/captures_controle/
+agent_local/.venv-agent/
 **/profil_navigateur*/
 **/profil_navigateur_agent/
 

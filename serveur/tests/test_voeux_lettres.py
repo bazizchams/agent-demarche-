@@ -27,7 +27,11 @@ class FauxClient:
     def generer(self, *, systeme, message, outil=None, max_tokens=4096) -> ReponseLLM:
         self.messages.append(message)
         return ReponseLLM(
-            texte="Madame, Monsieur,\n\nJe candidate à cette formation avec sérieux.\n\n[Prénom NOM]",
+            texte=(
+                "Madame, Monsieur,\n\nJe candidate à la formation « Master Traitement automatique "
+                "des langues » de l'Université de Lorraine.\n\n2023-2025 : Master Linguistique et "
+                "didactique, moyenne 13,16/20, mémoire 16/20. Mémoire noté 16/20.\n\n[Prénom NOM]"
+            ),
             tokens_entree=10,
             tokens_sortie=20,
         )

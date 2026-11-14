@@ -98,6 +98,11 @@ class Parametres(BaseSettings):
     inscription_max_par_heure_par_ip: int = Field(default=5, ge=1, le=1000)
     inscription_limite_active_en_test: bool = False
 
+    # Lecture des documents (OCR coûteux) : limites de débit par utilisateur et par heure.
+    extraction_max_par_heure_par_utilisateur: int = Field(default=60, ge=1, le=10000)
+    extraction_lot_max_par_heure_par_utilisateur: int = Field(default=10, ge=1, le=1000)
+    extraction_limite_active_en_test: bool = False
+
     # Contrôle de l'abonnement : un bureau dont l'essai est terminé ou l'abonnement suspendu
     # passe en LECTURE SEULE (consultation, export et droits des candidats restent possibles).
     # None => contrôle actif uniquement en production (même principe que docs_api_actives).

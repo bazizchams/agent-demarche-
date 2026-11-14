@@ -54,6 +54,8 @@ class ClientApi(Protocol):
 
 
 class FenetreAgent(Protocol):
+    def choisir_candidat(self, candidat_id: str) -> None: ...
+
     def page(self) -> Any: ...
 
     def amener_au_premier_plan(self) -> None: ...
@@ -184,6 +186,8 @@ class DemonEcoute:
         )
         fil.start()
         try:
+            # Une session de portail par candidat : la fenêtre ouvre le profil de CE candidat (jamais celui d'un autre).
+            self._fenetre.choisir_candidat(str(tache["candidat_id"]))
             self._fenetre.amener_au_premier_plan()
             contexte = ContexteExecution(
                 tache=tache,

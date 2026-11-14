@@ -23,6 +23,8 @@ $lanceur = Join-Path $dossierAgent "lanceur.py"
 $dossierConfig = Join-Path $env:APPDATA "AgentBureau"
 $fichierUrl = Join-Path $dossierConfig "serveur.txt"
 $fichierJeton = Join-Path $dossierConfig "jeton.dpapi"
+# Profil navigateur (cookies de session des portails) : hors dépôt Git, réservé à l'utilisateur Windows courant.
+$dossierProfil = Join-Path (Join-Path $env:LOCALAPPDATA "AgentBureau") "profil_chromium"
 
 if ($Oublier) {
   Remove-Item -LiteralPath $fichierUrl, $fichierJeton -Force -ErrorAction SilentlyContinue
@@ -47,8 +49,9 @@ if ($UrlServeur -notmatch '^https?://[^\s/]+') {
   exit 2
 }
 $UrlServeur = $UrlServeur.TrimEnd('/')
-if ($UrlServeur -match '^http://' -and $UrlServeur -notmatch '^http://(127\.0\.0\.1|localhost)(:|/|$)') {
-  Write-Host "Attention : cette adresse n'est pas chiffrée (http). Utilisez https:// dès que possible." -ForegroundColor Yellow
+if ($UrlServeur -match '^http://' -and $UrlServeur -notmatch '^http://(127\.0\.0\.1|localhost)(:\d+)?(/|$)') {
+  Write-Host "Adresse refusée : http:// n'est accepté que vers localhost ou 127.0.0.1 (la clé de l'agent ne doit jamais circuler en clair). Utilisez https://" -ForegroundColor Red
+  exit 2
 }
 
 # --- Clé de l'agent -----------------------------------------------------------------------------
@@ -94,9 +97,16 @@ $env:BE_JETON_AGENT = $jeton.Trim()
 $jeton = $null
 Write-Host ""
 Write-Host "Connexion à $UrlServeur ... (Ctrl+C pour arrêter proprement)"
+New-Item -ItemType Directory -Force -Path $dossierProfil | Out-Null
+# Droits : plus d'héritage, accès complet au seul utilisateur courant (au mieux : un échec n'empêche pas le lancement).
+try {
+  & icacls $dossierProfil /inheritance:r /grant:r "$($env:USERDOMAIN)\$($env:USERNAME):(OI)(CI)F" | Out-Null
+} catch {
+  Write-Host "Droits du dossier de profil non restreints : $($_.Exception.Message)" -ForegroundColor Yellow
+}
 Push-Location $racine
 try {
-  & $python $lanceur --mode ecouter --url-serveur $UrlServeur --profil-navigateur (Join-Path $dossierAgent "profil_chromium")
+  & $python $lanceur --mode ecouter --url-serveur $UrlServeur --profil-navigateur $dossierProfil
   $code = $LASTEXITCODE
 } finally {
   Pop-Location

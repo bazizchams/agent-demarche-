@@ -3,8 +3,11 @@
 - Ordre de préférence : Google Chrome installé, puis Microsoft Edge (installé d'office sur Windows),
   puis le Chromium fourni par Playwright (`python -m playwright install chromium`).
 - Fenêtre visible (`headless=False`, maximisée) amenée au premier plan.
-- Profil persistant par bureau ET par navigateur : `<racine_profils>/<bureau_id>/<canal>` (les cookies d'un
-  portail restent d'une exécution à l'autre ; deux navigateurs différents ne partagent jamais un profil).
+- Profil persistant par bureau, par candidat ET par navigateur : `<racine_profils>/<bureau_id>/<candidat_id>/<canal>`
+  (les cookies d'un portail restent d'une exécution à l'autre pour un même candidat ; la session portail d'un
+  candidat n'est jamais visible depuis la tâche d'un autre ; deux navigateurs ne partagent jamais un profil).
+- Le profil contient des cookies de session de portail : par défaut il vit sous `%LOCALAPPDATA%/AgentBureau`
+  (hors dépôt Git) et son dossier racine est restreint à l'utilisateur Windows courant (`icacls`).
 - Règle 3 : le mot de passe d'un portail n'est jamais fourni par ce module ; la connexion se fait à la
   main dans la fenêtre visible. Règle 6 : ce module n'ouvre aucune URL, il fournit seulement la fenêtre.
 """
@@ -12,7 +15,10 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+import os
+import subprocess
+import uuid
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +30,9 @@ journal = logging.getLogger("app.agent_local.ouverture_visible")
 CANAUX_PAR_DEFAUT: tuple[str | None, ...] = ("chrome", "msedge", None)
 NOM_PROFIL_CHROMIUM_PLAYWRIGHT = "chromium"
 VIEWPORT_HEADLESS = {"width": 1280, "height": 900}
+NOM_DOSSIER_APPLICATION = "AgentBureau"
+NOM_DOSSIER_PROFILS = "profil_chromium"
+DELAI_ICACLS_S = 15
 
 MESSAGE_AUCUN_NAVIGATEUR = (
     "Aucun navigateur n'a pu être ouvert (Chrome et Edge introuvables, Chromium de Playwright absent). "
@@ -37,6 +46,49 @@ class ErreurOuvertureNavigateur(RuntimeError):
 
 def dossier_profil_canal(racine_bureau: Path, canal: str | None) -> Path:
     return racine_bureau / (canal or NOM_PROFIL_CHROMIUM_PLAYWRIGHT)
+
+
+def dossier_profils_par_defaut(environnement: Mapping[str, str] | None = None) -> Path:
+    """Racine des profils navigateur : `%LOCALAPPDATA%/AgentBureau/profil_chromium`, jamais dans le dépôt."""
+    env = os.environ if environnement is None else environnement
+    base = env.get("LOCALAPPDATA")
+    racine = Path(base) if base else Path.home() / ".agent_bureau"
+    return racine / NOM_DOSSIER_APPLICATION / NOM_DOSSIER_PROFILS
+
+
+def restreindre_acces_utilisateur(
+    dossier: Path,
+    *,
+    utilisateur: str | None = None,
+    executer: Callable[..., Any] = subprocess.run,
+    est_windows: bool | None = None,
+) -> bool:
+    """Réserve `dossier` (et ce qu'il contiendra) à l'utilisateur courant : sous Windows `icacls /inheritance:r`
+    puis droit complet à lui seul ; ailleurs `chmod 700`. Au mieux : un échec ne bloque jamais le lancement
+    (renvoie False et journalise)."""
+    windows = os.name == "nt" if est_windows is None else est_windows
+    try:
+        if not windows:
+            dossier.chmod(0o700)
+            return True
+        nom = utilisateur or "\\".join(
+            p for p in (os.environ.get("USERDOMAIN"), os.environ.get("USERNAME")) if p
+        )
+        if not nom:
+            return False
+        resultat = executer(
+            ["icacls", str(dossier), "/inheritance:r", "/grant:r", f"{nom}:(OI)(CI)F"],
+            capture_output=True,
+            check=False,
+            timeout=DELAI_ICACLS_S,
+        )
+        reussi = resultat.returncode == 0
+    except (OSError, subprocess.SubprocessError) as exc:
+        journal.warning("Droits du dossier de profil non restreints : %s", type(exc).__name__)
+        return False
+    if not reussi:
+        journal.warning("Droits du dossier de profil non restreints (icacls a refusé).")
+    return reussi
 
 
 def ouvrir_contexte_visible(
@@ -90,7 +142,16 @@ class FenetreVisible:
         self._canaux = tuple(canaux)
         self._headless = headless
         self._contexte: BrowserContext | None = None
+        self._candidat: str | None = None
         self.canal: str | None = None
+
+    def choisir_candidat(self, candidat_id: str) -> None:
+        """Isole la session du portail par candidat : changer de candidat ferme la fenêtre et rouvre
+        le profil `<bureau>/<candidat_id>/<canal>`. L'identifiant doit être un UUID (jamais un chemin)."""
+        identifiant = str(uuid.UUID(str(candidat_id)))
+        if identifiant != self._candidat:
+            self._fermer_silencieusement()
+            self._candidat = identifiant
 
     def _contexte_vivant(self) -> bool:
         if self._contexte is None:
@@ -104,8 +165,9 @@ class FenetreVisible:
         vient_de_s_ouvrir = False
         if not self._contexte_vivant():
             self._fermer_silencieusement()
+            racine = self._racine / self._candidat if self._candidat else self._racine
             self._contexte, self.canal = ouvrir_contexte_visible(
-                self._playwright, self._racine, canaux=self._canaux, headless=self._headless
+                self._playwright, racine, canaux=self._canaux, headless=self._headless
             )
             vient_de_s_ouvrir = True
         assert self._contexte is not None

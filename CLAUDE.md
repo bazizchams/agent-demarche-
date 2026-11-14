@@ -13,6 +13,12 @@ Ce dossier contient la **Plateforme Agent Bureau d'Études — Algérie (Campus 
   - `serveur/app/demo/routeur_demo.py` : pages de simulation locales (`/demo/campus-france` et `/demo/ircc`)
   - `serveur/app/services/` : logique métier (`candidats.py`, `documents.py`, `conseiller_dossier.py`, `taches.py`, `abonnements.py`, `conformite.py`, `sauvegardes.py`)
   - `serveur/app/api/v1/` : routes REST (`/api/v1/auth`, `/api/v1/candidats`, `/api/v1/taches`, `/api/v1/portails`, `/api/v1/validations`, `/api/v1/audit`, etc.)
+  - Lecture des documents : `services/lecture_documents.py` (texte PDF, OCR local), `lecture_vision.py` (vision locale, désactivée par défaut), `extractions.py`, `application_extractions.py` ; routes `api/v1/extractions.py`
+  - Points forts et projet professionnel : `services/deductions_dossier.py`, `projet_professionnel.py` ; routes `api/v1/deductions.py`, `api/v1/projet_professionnel.py`
+  - Catalogue et vœux : `services/catalogue_formations.py`, `fiche_formation.py`, `prerequis_formation.py`, `selection_voeux.py` (suggestions, lecture seule), `lettres_voeux.py` (brouillons) ; routes `api/v1/catalogue_formations.py`, `api/v1/voeux_suggestions.py`, `api/v1/voeux.py`
+  - Rappels d'échéance : `services/rappels_echeances.py`, `echeances_demarche.py` ; commande `python -m app.cli envoyer-rappels-echeances`
+  - Agent local à l'écoute (navigateur visible) : `services/reservation_taches.py`, `taches_ouverture_pc.py`, `serveur/app/agent_local/demon_ecoute.py`, `ouverture_visible.py`, `action_voeux_demo.py`, `agent_local/lanceur.py` ; routes `api/v1/agents_locaux.py`, `api/v1/taches.py`
+  - Parcours complet d'un dossier et endpoints : `docs/FLUX_DOSSIER.md`
 - Configurations YAML :
   - `config/demarches/campus_france.yaml` & `config/demarches/ircc_permis_etudes.yaml`
   - `config/portails/`

@@ -1,8 +1,8 @@
 """Application des valeurs lues à la fiche du candidat.
 
 Garanties (règles 1, 4 et 5) :
-- seules les extractions `auto` ou `valide_humain` sont applicables ; `a_verifier` et `rejete`
-  ne le sont jamais ;
+- seules les extractions `valide_humain` (confirmées ou corrigées par un humain, même si la
+  lecture était `auto`) sont applicables ; `auto`, `a_verifier` et `rejete` ne le sont jamais ;
 - une valeur déjà présente sur la fiche n'est JAMAIS écrasée : une valeur différente est
   signalée comme conflit, une valeur identique comme « déjà identique » ;
 - deux valeurs applicables différentes pour un même champ sont un conflit, pas un choix ;

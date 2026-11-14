@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependances import (
     ContexteAuth,
@@ -19,7 +19,7 @@ from app.api.dependances import (
     obtenir_cle_maitresse,
     obtenir_contexte_auth,
 )
-from app.core.config import Parametres, obtenir_parametres
+from app.core.config import Environnement, Parametres, obtenir_parametres
 from app.modeles.extraction_document import StatutExtraction
 from app.modeles.utilisateur import Role
 from app.schemas.extraction import (
@@ -31,12 +31,31 @@ from app.schemas.extraction import (
 )
 from app.services import application_extractions as service_application
 from app.services import extractions as service_extractions
+from app.services.jetons_courriel import LimiteurDemandes
 from app.services.lecture_documents import LecteurDocument, LecteurDocumentLocal
 from app.services.lecture_vision import LecteurVision, construire_lecteur_vision
 
 routeur = APIRouter(prefix="/candidats/{candidat_id}", tags=["lecture des documents"])
 
 ExigerEcriture = Depends(exiger_roles(Role.ADMINISTRATEUR, Role.EMPLOYE))
+
+
+def _limiter_extractions(
+    requete: Request, ctx: ContexteAuth, parametres: Parametres, *, lot: bool
+) -> None:
+    """La lecture (OCR) est coûteuse : débit limité par utilisateur et par heure (limiteur en mémoire partagé
+    avec la réinitialisation de mot de passe). Inactif en test sauf demande explicite."""
+    if parametres.environnement is Environnement.TEST and not parametres.extraction_limite_active_en_test:
+        return
+    etat = requete.app.state
+    if not hasattr(etat, "limiteur_extractions"):
+        etat.limiteur_extractions = LimiteurDemandes()
+    maximum = (
+        parametres.extraction_lot_max_par_heure_par_utilisateur
+        if lot
+        else parametres.extraction_max_par_heure_par_utilisateur
+    )
+    etat.limiteur_extractions.verifier_et_compter(f"{'lot' if lot else 'doc'}:{ctx.utilisateur.id}", maximum)
 
 
 def obtenir_lecteur_document() -> LecteurDocument:
@@ -57,12 +76,14 @@ def obtenir_lecteur_vision(
 def extraire_document(
     candidat_id: uuid.UUID,
     document_id: uuid.UUID,
+    requete: Request,
     ctx: ContexteAuth = ExigerEcriture,
     parametres: Parametres = Depends(obtenir_parametres),
     cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
     lecteur: LecteurDocument = Depends(obtenir_lecteur_document),
     vision: LecteurVision | None = Depends(obtenir_lecteur_vision),
 ) -> ResultatExtractionDocumentSortie:
+    _limiter_extractions(requete, ctx, parametres, lot=False)
     return service_extractions.lancer_extraction_document(
         ctx.db,
         candidat_id=candidat_id,
@@ -78,6 +99,7 @@ def extraire_document(
 @routeur.post("/extractions/lot", response_model=ResultatLotSortie)
 def extraire_lot(
     candidat_id: uuid.UUID,
+    requete: Request,
     code_demarche: str | None = Query(default=None, max_length=60),
     ctx: ContexteAuth = ExigerEcriture,
     parametres: Parametres = Depends(obtenir_parametres),
@@ -85,6 +107,7 @@ def extraire_lot(
     lecteur: LecteurDocument = Depends(obtenir_lecteur_document),
     vision: LecteurVision | None = Depends(obtenir_lecteur_vision),
 ) -> ResultatLotSortie:
+    _limiter_extractions(requete, ctx, parametres, lot=True)
     return service_extractions.lancer_extraction_lot(
         ctx.db,
         candidat_id=candidat_id,

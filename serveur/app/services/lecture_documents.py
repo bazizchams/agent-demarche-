@@ -7,11 +7,16 @@
   moment : sans l'extra, l'application et ses tests fonctionnent ; seule la lecture d'un
   document répond par une erreur claire (503) disant quoi installer.
 - Jamais de contenu de document dans les messages d'erreur ni les journaux (règle 5).
+- Bornes anti-abus (un fichier déposé est une entrée non fiable) : une image au-delà de
+  `MAX_PIXELS_IMAGE` est refusée AVANT l'OCR (dimensions lues par Pillow sans décoder l'image),
+  le nombre d'images décodées par page est plafonné et la lecture d'un PDF s'arrête au-delà de
+  `DELAI_MAX_LECTURE_S` (avertissement : lecture partielle).
 """
 
 from __future__ import annotations
 
 import io
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Protocol
@@ -19,6 +24,9 @@ from typing import Any, Protocol
 from app.core.erreurs import DonneesInvalides, ServiceIndisponible
 
 MAX_PAGES_LUES = 30
+MAX_PIXELS_IMAGE = 25_000_000  # ~25 Mpx : au-delà, refus avant tout décodage ou OCR
+MAX_IMAGES_PAR_PAGE = 5
+DELAI_MAX_LECTURE_S = 120.0  # durée totale maximale de lecture d'un document (vérifiée entre les pages)
 SEUIL_COUCHE_TEXTE = 20  # caractères non blancs minimum pour considérer qu'une page a un texte natif
 ORIGINE_COUCHE_TEXTE = "couche_texte"
 ORIGINE_OCR = "ocr"
@@ -64,6 +72,31 @@ def _importer_pypdf() -> Any:
     import pypdf  # noqa: PLC0415 - import paresseux voulu (extra optionnel)
 
     return pypdf
+
+
+def _importer_pillow() -> Any:
+    from PIL import Image  # noqa: PLC0415 - import paresseux voulu (extra optionnel)
+
+    return Image
+
+
+def _verifier_dimensions_image(octets: bytes) -> None:
+    """Refuse une image de plus de `MAX_PIXELS_IMAGE` pixels sans la décoder (en-tête seulement).
+    Sans Pillow, aucun OCR réel n'est possible non plus (RapidOCR en dépend) : rien à protéger."""
+    try:
+        image_pil = _importer_pillow()
+    except ImportError:
+        return
+    image_pil.MAX_IMAGE_PIXELS = MAX_PIXELS_IMAGE  # Pillow refuse lui-même les bombes de décompression
+    try:
+        with image_pil.open(io.BytesIO(octets)) as image:
+            largeur, hauteur = image.size
+    except Exception as exc:  # image corrompue ou bombe détectée par Pillow : jamais de détail du contenu
+        raise DonneesInvalides("Image illisible ou trop grande : lecture impossible.") from exc
+    if largeur * hauteur > MAX_PIXELS_IMAGE:
+        raise DonneesInvalides(
+            f"Image trop grande (plus de {MAX_PIXELS_IMAGE // 1_000_000} millions de pixels) : lecture impossible."
+        )
 
 
 class _MoteurRapidOcr:
@@ -132,6 +165,7 @@ class LecteurDocumentLocal:
         return self._moteur_ocr
 
     def _page_ocr(self, numero: int, image: bytes) -> PageTexte:
+        _verifier_dimensions_image(image)
         lignes = [(t.strip(), s) for t, s in self._ocr().reconnaitre(image) if t and t.strip()]
         if not lignes:
             return PageTexte(numero, "", ORIGINE_OCR, 0.0)
@@ -169,6 +203,8 @@ class LecteurDocumentLocal:
                 mime = _mime_depuis_signature(img.data)
                 if mime is not None:
                     images.append((img.data, mime))
+                if len(images) >= MAX_IMAGES_PAR_PAGE:
+                    break  # plafond : on n'extrait pas (ni ne décode) les images suivantes
         except Exception:  # image exotique ou flux invalide : on ignore, la page restera sans texte
             return []
         return images
@@ -180,7 +216,13 @@ class LecteurDocumentLocal:
         total = len(lecteur.pages)
         if total > MAX_PAGES_LUES:
             avertissements.append(f"Seules les {MAX_PAGES_LUES} premières pages sur {total} ont été lues.")
+        debut = time.monotonic()
         for numero, page in enumerate(lecteur.pages[:MAX_PAGES_LUES], start=1):
+            if numero > 1 and time.monotonic() - debut > DELAI_MAX_LECTURE_S:
+                avertissements.append(
+                    f"Délai de lecture dépassé : seules les {numero - 1} premières pages ont été lues."
+                )
+                break
             try:
                 texte = (page.extract_text() or "").strip()
             except Exception:

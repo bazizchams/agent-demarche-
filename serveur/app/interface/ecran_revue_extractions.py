@@ -65,9 +65,10 @@ HTML_VUE = rendre_icones(
         </div>
       </header>
       <div class="banniere-regle">
-        Rien n'est écrit sur la fiche sans votre confirmation. Une valeur douteuse reste « à vérifier »
-        et n'est jamais appliquée ; un champ illisible reste vide (Règle 4). Une valeur déjà saisie sur
-        la fiche n'est jamais écrasée.
+        Rien n'est écrit sur la fiche sans votre confirmation, même une valeur lue automatiquement
+        avec certitude : cliquez sur « Confirmer ». Une valeur douteuse reste « à vérifier » et n'est
+        jamais appliquée ; un champ illisible reste vide (Règle 4). Une valeur déjà saisie sur la
+        fiche n'est jamais écrasée.
       </div>
       <div class="rx-barre">
         <label class="champ" for="rx-demarche">Pièces à contrôler avant la lecture
@@ -100,7 +101,7 @@ JS_REVUE = """
       niveau_francais: "Niveau de français", niveau_anglais: "Niveau d'anglais", ielts_bande: "Note IELTS"
     };
     const RX_STATUTS = {
-      auto: ["Lu automatiquement", "badge-info"],
+      auto: ["Lu automatiquement : à confirmer", "badge-info"],
       a_verifier: ["À vérifier", "badge-completer"],
       valide_humain: ["Confirmé", "badge-valide"],
       rejete: ["Rejeté", "badge-refuse"]
@@ -276,10 +277,18 @@ JS_REVUE = """
       }
     }
 
+    function rxLibererImages() {
+      Object.keys(rxImagesDocuments).forEach((id) => {
+        URL.revokeObjectURL(rxImagesDocuments[id]);
+        delete rxImagesDocuments[id];
+      });
+    }
+
     async function rxActualiser() {
       const liste = document.getElementById("rx-liste");
       const resume = document.getElementById("rx-resume");
       rxVider(liste);
+      rxLibererImages();
       if (!candidatActifId) {
         resume.textContent = "Choisissez d'abord un étudiant dans la liste des étudiants.";
         resume.classList.remove("cache");

@@ -1,7 +1,7 @@
 """Mode `--mode ecouter` du lanceur : démon d'écoute de l'Agent Local sur le PC du bureau.
 
 Assemble le client API (jeton `X-Agent-Token`), la fenêtre visible (Chrome > Edge > Chromium Playwright,
-profil persistant par bureau) et le démon. Le jeton se passe de préférence par la variable d'environnement
+profil persistant par bureau et par candidat) et le démon. Le jeton se passe de préférence par la variable d'environnement
 `BE_JETON_AGENT` (le script `lancer_agent.bat` le fait) : un jeton sur la ligne de commande reste visible
 dans la liste des processus.
 """
@@ -15,13 +15,18 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 from types import FrameType
+from urllib.parse import urlsplit
 
 import httpx
 from playwright.sync_api import sync_playwright
 
 from app.agent_local.action_voeux_demo import executer_ajout_voeux_demo
 from app.agent_local.demon_ecoute import DemonEcoute
-from app.agent_local.ouverture_visible import CANAUX_PAR_DEFAUT, FenetreVisible
+from app.agent_local.ouverture_visible import (
+    CANAUX_PAR_DEFAUT,
+    FenetreVisible,
+    restreindre_acces_utilisateur,
+)
 from app.api.dependances import EN_TETE_JETON_AGENT
 from app.modeles.tache import ACTION_AJOUTER_VOEUX_PANIER
 
@@ -34,6 +39,22 @@ CANAUX_CHOISIS: dict[str, tuple[str | None, ...]] = {
 }
 CODE_SORTIE_USAGE = 2
 CODE_SORTIE_JETON_REFUSE = 3
+HOTES_LOCAUX = frozenset({"localhost", "127.0.0.1"})
+
+
+def url_serveur_autorisee(url: str) -> bool:
+    """https partout ; http seulement vers cette machine (le jeton agent ne circule jamais en clair sur un réseau)."""
+    try:
+        morceaux = urlsplit(url.strip())
+        hote = (morceaux.hostname or "").lower()
+        morceaux.port  # noqa: B018 - lève ValueError si le port est invalide
+    except ValueError:
+        return False
+    if not hote:
+        return False
+    if morceaux.scheme == "https":
+        return True
+    return morceaux.scheme == "http" and hote in HOTES_LOCAUX
 
 
 def _installer_arret_propre(demon: DemonEcoute, sortie: Callable[[str], None]) -> None:
@@ -63,6 +84,13 @@ def lancer_ecoute(
     headless: bool = False,
     sortie: Callable[[str], None] = print,
 ) -> int:
+    if not url_serveur_autorisee(url_serveur):
+        print(
+            "Adresse du serveur refusée : le jeton de l'agent ne doit jamais circuler en clair. "
+            "Utilisez une adresse https:// (http:// n'est accepté que vers localhost ou 127.0.0.1).",
+            file=sys.stderr,
+        )
+        return CODE_SORTIE_USAGE
     jeton = jeton_agent or os.environ.get(VARIABLE_ENV_JETON, "")
     if not jeton.strip():
         print(
@@ -72,6 +100,8 @@ def lancer_ecoute(
         )
         return CODE_SORTIE_USAGE
 
+    racine_profils.mkdir(parents=True, exist_ok=True)
+    restreindre_acces_utilisateur(racine_profils)  # cookies de portails : réservés à cet utilisateur Windows
     with httpx.Client(
         base_url=url_serveur.rstrip("/"), headers={EN_TETE_JETON_AGENT: jeton.strip()}, timeout=30.0
     ) as client_api:

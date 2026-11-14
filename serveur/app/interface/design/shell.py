@@ -88,7 +88,7 @@ def _groupe(identifiant: str, titre: str, contenu: str) -> str:
 def _navigation() -> str:
     compteur = '<span id="nav-compteur-validation" class="nav-compteur cache" title="Dossiers à traiter"></span>'
     return (
-        _groupe("accueil", "", bouton_nav("vue-tableau-bord", "Tableau de bord", "accueil", actif=True))
+        _groupe("accueil", "", "<!-- nav:flux -->" + bouton_nav("vue-tableau-bord", "Tableau de bord", "accueil", actif=True))
         + _groupe(
             "dossiers",
             "Dossiers",

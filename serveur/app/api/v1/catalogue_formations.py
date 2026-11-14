@@ -32,12 +32,14 @@ class ImportFiches(SchemaEntree):
 def _verifier_domaines_officiels(fiches: list[FicheEntree], parametres: Parametres) -> None:
     domaines = politique_depuis_parametres(parametres).domaines_https
     for fiche in fiches:
-        if fiche.source != "exploration":
+        if fiche.source == "yaml":
+            raise DonneesInvalides("Source « yaml » refusée : réservée à l'import des écoles du bureau.")
+        if fiche.source != "exploration" and not fiche.url_officielle:
             continue
         hote = (urlparse(fiche.url_officielle or "").hostname or "").lower()
         if hote not in domaines:
             raise DonneesInvalides(
-                "Fiche refusée (Règle 6) : l'URL d'une fiche explorée doit appartenir à un domaine officiel."
+                "Fiche refusée (Règle 6) : l'URL d'une fiche doit appartenir à un domaine officiel."
             )
 
 

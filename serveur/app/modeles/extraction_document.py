@@ -5,8 +5,9 @@ Principes (règles 4 et 5) :
   pas de ligne ;
 - la valeur, la valeur alternative du second lecteur et l'extrait littéral du document sont
   CHIFFRÉS (AES-256-GCM, clé du bureau) : ils contiennent des données personnelles ;
-- le statut décide de ce qui peut atteindre la fiche : seuls `auto` et `valide_humain` sont
-  applicables ; `a_verifier` et `rejete` ne le sont jamais ;
+- le statut décide de ce qui peut atteindre la fiche : SEUL `valide_humain` est applicable (un clic
+  de confirmation d'un humain authentifié, y compris pour une valeur `auto` dont la zone lisible
+  par machine est valide) ; `auto`, `a_verifier` et `rejete` ne le sont jamais ;
 - le `motif` est un code technique (jamais une donnée personnelle).
 """
 
@@ -29,7 +30,8 @@ class StatutExtraction(str, enum.Enum):
     REJETE = "rejete"
 
 
-STATUTS_APPLICABLES = frozenset({StatutExtraction.AUTO, StatutExtraction.VALIDE_HUMAIN})
+# Règles 1 et 4 : même une lecture sûre (`auto`) exige la confirmation d'un humain avant la fiche.
+STATUTS_APPLICABLES = frozenset({StatutExtraction.VALIDE_HUMAIN})
 
 
 def _valeurs(enum_cls: type[enum.Enum]) -> list[str]:

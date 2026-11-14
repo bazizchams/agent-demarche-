@@ -125,3 +125,9 @@ Encart de règle : `.banniere-regle` (+ `.banniere-alerte`).
 - `body.hors-session` : l'écran `#ecran-connexion` remplace `#vue-tableau-bord` ; suit l'état de `#btn-se-deconnecter`.
 - Thème : tout bouton `[data-bascule-theme]` bascule `data-theme` sur `<html>` (mémorisé dans `localStorage["theme-interface"]`).
 - Mobile (≤ 900 px) : tiroir `body.nav-ouverte`, gouttière 16 px, toasts en bas ; aucun défilement horizontal de la page à 375 px.
+
+## Composant « Discussion de l'agent » (`ecran_discussion_agent.py`)
+
+Fil en direct (SSE, repli par interrogation) de la fenêtre de l'agent, avec saisie, Pause / Reprendre / Arrêter et lien
+« Voir la fenêtre sur mon PC ». Intégration : `monterDiscussionAgent(conteneur, tacheId)` (voir l'en-tête du fichier) ;
+`assembler_discussion_agent(html)` insère le style et le script. Classes préfixées `.da-`, tokens uniquement.

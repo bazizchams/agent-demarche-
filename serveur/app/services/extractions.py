@@ -17,6 +17,7 @@ import uuid
 from datetime import date
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.chiffrement import chiffrer_champ, dechiffrer_champ
@@ -262,7 +263,16 @@ def lancer_extraction_document(
     lecture_b = _lecture_b(lecteur_document, lecteur_vision, contenu, meta.type_mime, famille, avertissements)
     fusionnes = fusionner_lectures(lecture_a, lecture_b, textes)
 
-    _persister(db, doc, fusionnes, tid, cle_maitresse)
+    try:
+        _persister(db, doc, fusionnes, tid, cle_maitresse)
+    except IntegrityError:
+        # Deux lectures simultanées du même document : l'autre a inséré les mêmes lignes (unicité
+        # tenant/document/champ). On annule, on relit ses lignes puis on réapplique notre lecture.
+        db.rollback()
+        doc = db.scalar(select(DocumentCandidat).where(DocumentCandidat.id == document_id))
+        if doc is None:
+            raise NonTrouve("Document introuvable.") from None
+        _persister(db, doc, fusionnes, tid, cle_maitresse)
     alertes = _recalculer_controles(db, candidat_id, cle_maitresse, date_reference or date.today())
     audit.journaliser(
         db,

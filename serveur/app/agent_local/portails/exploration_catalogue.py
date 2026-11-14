@@ -36,6 +36,7 @@ from app.services.fiche_formation import (
 )
 
 SELECTEUR_LIENS_FICHES = 'a[href*="/catalogue-formations/formation/"]'
+PATRON_IDENTIFIANT = re.compile(r"[A-Za-z0-9_-]+")
 PATRON_LIEN_FICHE = re.compile(r"/catalogue-formations/formation/([^/?#]+)/site/([^/?#]+)")
 CHEMIN_API_FICHE = "/parcours-api/espace-etudiant/catalogue/formations/{id_formation}/site/{id_site}"
 MAX_FICHES_PAR_EXPLORATION = 50
@@ -44,9 +45,11 @@ _JS_LIRE_LIENS = "(els) => els.map(e => e.href || '')"
 _JS_LIRE_FICHE_GET = """async (url) => {
     const r = await fetch(url, {
         method: "GET",
+        redirect: "manual",
         credentials: "include",
         headers: { "Accept": "application/json" }
     });
+    if (r.type === "opaqueredirect" || r.redirected) return { __erreur: "redirection" };
     if (!r.ok) return { __erreur: r.status };
     return await r.json();
 }"""
@@ -146,6 +149,9 @@ def explorer_catalogue(
     for href in hrefs:
         correspondance = PATRON_LIEN_FICHE.search(str(href))
         if correspondance is None:
+            continue
+        if not (PATRON_IDENTIFIANT.fullmatch(correspondance.group(1)) and PATRON_IDENTIFIANT.fullmatch(correspondance.group(2))):
+            ignorees.append({"fiche": "*", "raison": "Identifiant de fiche non conforme."})
             continue
         motif_lien = politique.motif_refus(str(href))
         if motif_lien:

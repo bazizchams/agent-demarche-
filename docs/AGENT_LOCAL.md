@@ -122,3 +122,19 @@ dans l'interface, **révoquez** son agent ; sa clé cesse immédiatement de fonc
   uniquement, tâche détenue par l'agent appelant), `GET /api/v1/agents-locaux/moi`.
 - Aucune route ne transmet le mot de passe du coffre à un PC. Une future connexion automatique exigerait un
   endpoint à usage unique, à durée courte et avec consentement explicite : il n'existe pas aujourd'hui.
+
+## La discussion avec l'agent (panneau dans la fenêtre)
+
+Dans la fenêtre ouverte sur votre PC, un **panneau repliable à droite** affiche ce que l'agent annonce : ce qu'il va
+faire, ce qu'il fait, ce qu'il a fait, les problèmes et les demandes d'aide (CAPTCHA, 2FA, connexion à faire vous-même,
+validation du récapitulatif). Vous le voyez agir **en direct** (élément surligné, petit curseur) et non sur des captures.
+Vous pouvez lui écrire, ou utiliser **Pause / Reprendre / Arrêter** ; le même fil, avec les mêmes boutons et un lien
+« Voir la fenêtre sur mon PC », est disponible dans l'interface web (composant `monterDiscussionAgent`).
+
+- Une consigne ne lève **jamais** les règles 1, 2, 3 ou 6 : l'agent refuse poliment (« je ne peux pas valider à votre
+  place, c'est à vous de… »). Ne tapez jamais de mot de passe dans la discussion : tout texte est masqué avant envoi.
+- Côté serveur : table `evenements_agent` (texte chiffré, sans donnée personnelle, **purgée après 7 jours**) ; routes
+  `POST /taches/{id}/evenements` (agent), `GET /taches/{id}/evenements[/flux]`, `POST /taches/{id}/messages|pause|reprise|arret|premier-plan`
+  (humain), `GET /taches/{id}/messages-en-attente` (agent).
+- Code : `panneau_discussion.py` (script injecté, Shadow DOM, sans `innerHTML`), `journal_agent.py` (`dire`, `agir`, `alerter`,
+  `demander_humain`), `services/evenements_agent.py`, `services/consignes_agent.py`.
