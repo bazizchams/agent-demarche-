@@ -178,3 +178,28 @@ def obtenir_contexte_execution_tache(
     return ContexteExecutionTache(
         db=db, utilisateur=ctx_humain.utilisateur, agent_local=None
     )
+
+
+@dataclass(frozen=True)
+class ContexteAgentLocal:
+    """Appel réservé à un Agent Local enrôlé (`X-Agent-Token` obligatoire, bureau lié par le jeton)."""
+
+    db: Session
+    agent_local: AgentLocal
+
+
+def obtenir_agent_local_requis(
+    requete: Request,
+    db: Session = Depends(obtenir_db),
+    parametres: Parametres = Depends(obtenir_parametres),
+) -> ContexteAgentLocal:
+    """Exige un jeton d'agent valide : refuse tout utilisateur humain (cookie) sur ces routes.
+    Un jeton révoqué ou d'un bureau suspendu est refusé par `verifier_jeton_agent_local`."""
+    jeton_agent = requete.headers.get(EN_TETE_JETON_AGENT)
+    if not jeton_agent:
+        raise NonAuthentifie("Jeton d'agent local (X-Agent-Token) obligatoire pour cette opération.")
+    agent = service_agents.verifier_jeton_agent_local(db, jeton_clair=jeton_agent)
+    acces_abonnement.exiger_ecriture_autorisee(
+        methode=requete.method, chemin=requete.url.path, db=db, parametres=parametres
+    )
+    return ContexteAgentLocal(db=db, agent_local=agent)

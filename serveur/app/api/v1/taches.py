@@ -10,9 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.api.dependances import (
     EN_TETE_JETON_AGENT,
+    ContexteAgentLocal,
     ContexteAuth,
     ContexteExecutionTache,
     exiger_roles,
+    obtenir_agent_local_requis,
     obtenir_cle_maitresse,
     obtenir_contexte_auth,
     obtenir_contexte_auth_brut,
@@ -20,13 +22,14 @@ from app.api.dependances import (
     obtenir_db,
 )
 from app.core.config import Parametres, obtenir_parametres
-from app.modeles.tache import StatutTache
+from app.modeles.tache import ACTION_PREREMPLISSAGE, StatutTache
 from app.modeles.utilisateur import Role
 from app.schemas.commun import Page
 from app.schemas.tache import (
     ContexteDossierExecutionSortie,
     DemarrerTacheEntree,
     RejetValidationEntree,
+    ReservationTacheSortie,
     SignalerErreurTacheEntree,
     SoumissionValidationEntree,
     SuspendreTacheEntree,
@@ -34,9 +37,12 @@ from app.schemas.tache import (
     TacheSortie,
     TerminerEtapeEntree,
     ValidationHumaineEntree,
+    VoeuxAAjouterSortie,
 )
 from app.services import agents_locaux as service_agents
+from app.services import reservation_taches as service_reservation
 from app.services import taches as service_taches
+from app.services import taches_ouverture_pc as service_ouverture_pc
 
 routeur = APIRouter(prefix="/taches", tags=["tâches et validation humaine"])
 
@@ -89,12 +95,50 @@ def creer(
     parametres: Parametres = Depends(obtenir_parametres),
     cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
 ) -> TacheSortie:
+    if donnees.action != ACTION_PREREMPLISSAGE:
+        return service_ouverture_pc.creer_tache_ouverture_pc(
+            ctx.db,
+            donnees=donnees,
+            acteur_id=ctx.utilisateur.id,
+            cle_maitresse=cle_maitresse,
+        )
     return service_taches.creer_tache(
         ctx.db,
         donnees=donnees,
         acteur_id=ctx.utilisateur.id,
         parametres=parametres,
         cle_maitresse=cle_maitresse,
+    )
+
+
+@routeur.post("/reserver-suivante", response_model=ReservationTacheSortie)
+def reserver_suivante(
+    actions: list[str] | None = Query(default=None, max_length=10),
+    ctx: ContexteAgentLocal = Depends(obtenir_agent_local_requis),
+    parametres: Parametres = Depends(obtenir_parametres),
+    cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
+) -> ReservationTacheSortie:
+    """Réservation ATOMIQUE (compare-and-swap) de la plus ancienne tâche « Ouvrir sur mon PC » en
+    attente du bureau de l'agent. Deux agents ne reçoivent jamais la même tâche. Jeton agent obligatoire."""
+    tache = service_reservation.reserver_tache_suivante(
+        ctx.db,
+        agent=ctx.agent_local,
+        parametres=parametres,
+        cle_maitresse=cle_maitresse,
+        actions=actions,
+    )
+    return ReservationTacheSortie(tache=tache)
+
+
+@routeur.get("/{tache_id}/voeux-a-ajouter", response_model=VoeuxAAjouterSortie)
+def voeux_a_ajouter(
+    tache_id: uuid.UUID,
+    ctx: ContexteAgentLocal = Depends(obtenir_agent_local_requis),
+    cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
+) -> VoeuxAAjouterSortie:
+    """Ne sert QUE les vœux au statut `valide`, à l'agent qui détient la tâche `ajouter_voeux_panier`."""
+    return service_reservation.voeux_valides_pour_agent(
+        ctx.db, tache_id=tache_id, agent=ctx.agent_local, cle_maitresse=cle_maitresse
     )
 
 

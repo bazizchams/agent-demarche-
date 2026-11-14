@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 
 from app.interface.design.page import construire_page_base
 from app.interface.ecran_navigateur_serveur import assembler_navigateur_serveur
+from app.interface.ecran_revue_extractions import assembler_revue_extractions
 from app.interface.ecrans_coffre_validation import assembler_interface
 
 routeur_interface = APIRouter(tags=["interface web en français"])
@@ -23,7 +24,9 @@ _HTML_INTERFACE_BASE = construire_page_base()
 
 # Ajoute le coffre d'identifiants (Règle 3), les récapitulatifs à valider (Règle 1) et le
 # navigateur de l'agent.
-HTML_INTERFACE_FR = assembler_navigateur_serveur(assembler_interface(_HTML_INTERFACE_BASE))
+HTML_INTERFACE_FR = assembler_revue_extractions(
+    assembler_navigateur_serveur(assembler_interface(_HTML_INTERFACE_BASE))
+)
 
 
 @routeur_interface.get("/", response_class=HTMLResponse)

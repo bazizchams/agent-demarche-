@@ -15,7 +15,11 @@ from datetime import datetime
 from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, MixinHorodatage, MixinIdentifiant, MixinTenant
+from app.db.base import Base, MixinHorodatage, MixinIdentifiant, MixinTenant, maintenant_utc
+
+# Un agent qui sonde le serveur toutes les quelques secondes est « en ligne » tant que son dernier
+# signe de vie date de moins de ce délai.
+DELAI_AGENT_EN_LIGNE_SECONDES = 90
 
 
 class AgentLocal(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
@@ -30,6 +34,13 @@ class AgentLocal(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
         ForeignKey("utilisateurs.id", ondelete="SET NULL"), nullable=True
     )
     derniere_activite_le: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    @property
+    def en_ligne(self) -> bool:
+        if not self.actif or self.derniere_activite_le is None:
+            return False
+        ecart = maintenant_utc() - self.derniere_activite_le
+        return ecart.total_seconds() <= DELAI_AGENT_EN_LIGNE_SECONDES
 
     def __repr__(self) -> str:
         return f"<AgentLocal id={self.id} nom_machine={self.nom_machine!r} actif={self.actif}>"

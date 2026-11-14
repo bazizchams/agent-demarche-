@@ -10,10 +10,13 @@ donnée personnelle. Les dates ne sont volontairement pas masquées (échéances
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Iterable
 
+from app.core.erreurs import ServiceIndisponible
+
 if TYPE_CHECKING:  # évite l'import circulaire avec app.services.llm
-    from app.services.llm import ClientLLM, ReponseLLM
+    from app.services.llm import ClientLLM, ImageEntree, ReponseLLM
 
 _MOTIFS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"), "[email]"),
@@ -61,7 +64,13 @@ class ClientAnonymisant:
         message: str,
         outil: dict[str, Any] | None = None,
         max_tokens: int = 4096,
+        images: "Sequence[ImageEntree] | None" = None,
     ) -> ReponseLLM:
+        if images:  # l'anonymisation ne sait traiter que du texte : une image ne part jamais
+            raise ServiceIndisponible(
+                "Envoi d'image refusé : une image ne peut pas être anonymisée et contient des "
+                "données personnelles."
+            )
         return self._client.generer(
             systeme=anonymiser(systeme, self._termes),
             message=anonymiser(message, self._termes),

@@ -3,6 +3,7 @@ et le fichier serveur/.env. Aucun secret ne doit être écrit en dur dans le cod
 
 from __future__ import annotations
 
+import sys
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -83,6 +84,15 @@ class Parametres(BaseSettings):
     ia_cle: str | None = None
     ia_tentatives: int = Field(default=2, ge=1, le=5)
 
+    # Lecteur B des documents (modèle de vision, phase P1 « lecture des documents »).
+    # DÉSACTIVÉ par défaut. Une image de document contient des données personnelles : l'hôte
+    # doit être LOCAL (BE_VISION_URL_BASE, ex. http://127.0.0.1:11434/v1), sinon refus.
+    # Variables : BE_VISION_ACTIVE, BE_VISION_URL_BASE, BE_VISION_MODELE, BE_VISION_CLE.
+    vision_active: bool = False
+    vision_url_base: str | None = None
+    vision_modele: str | None = None
+    vision_cle: str | None = None
+
     # Inscription en libre-service des agences
     inscriptions_ouvertes: bool = True
     inscription_max_par_heure_par_ip: int = Field(default=5, ge=1, le=1000)
@@ -155,6 +165,14 @@ class Parametres(BaseSettings):
     def _verifier_coherence(self) -> "Parametres":
         if self.environnement is Environnement.PRODUCTION and not self.cookie_securise:
             raise ValueError("En production, BE_COOKIE_SECURISE doit valoir true (HTTPS obligatoire).")
+        if (
+            self.environnement is Environnement.PRODUCTION
+            and sys.platform != "win32"
+            and not (self.cle_maitresse_base64 or "").strip()
+        ):
+            # Hors Windows il n'y a pas de DPAPI : sans clé fournie, le démarrage planterait plus tard
+            # avec un message obscur. On refuse tout de suite, clairement.
+            raise ValueError("En production, BE_CLE_MAITRESSE_BASE64 est obligatoire (32 octets en base64).")
         self.url_base_donnees = _resoudre_chemin_sqlite(self.url_base_donnees)
         return self
 

@@ -10,6 +10,8 @@ uniquement à partir des tokens du système de design. Aucun antislash.
 
 from __future__ import annotations
 
+from app.interface.design.vues_ouverture_pc import HTML_OUVERTURE_PC
+
 CSS_DOSSIERS = """
     <style>
       /* Compléments locaux des écrans Étudiants, Pièces et Conseiller (tokens uniquement). */
@@ -208,6 +210,9 @@ HTML_ETUDIANTS = (
         </div>
       </section>
 
+"""
+    + HTML_OUVERTURE_PC
+    + """
       <details id="carte-nouvel-etudiant" class="carte">
         <summary>Nouvel étudiant</summary>
         <p class="aide">Seuls le nom et le prénom sont obligatoires. Ce que vous ne renseignez pas reste vide : l'agent n'invente jamais de valeur (règle 4).</p>

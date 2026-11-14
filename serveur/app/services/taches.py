@@ -33,11 +33,13 @@ from app.core.chiffrement import (
     dechiffrer_octets,
 )
 from app.core.config import Parametres
-from app.core.erreurs import Conflit, DonneesInvalides, NonTrouve
+from app.core.erreurs import AccesRefuse, Conflit, DonneesInvalides, NonTrouve
 from app.db.base import maintenant_utc
 from app.db.tenant import tenant_courant
 from app.modeles.journal_audit import ResultatAudit
 from app.modeles.tache import (
+    ACTION_PREREMPLISSAGE,
+    ACTIONS_OUVERTURE_PC,
     DecisionValidationHumaine,
     EtapeTache,
     MotifSuspensionTache,
@@ -135,6 +137,17 @@ def _obtenir_tache_orm(db: Session, tache_id: uuid.UUID) -> TacheDossier:
     if tache is None:
         raise NonTrouve("Tâche introuvable.")
     return tache
+
+
+def _exiger_detenteur_agent(tache: TacheDossier, agent_local_id: uuid.UUID | None) -> None:
+    """Tâche « Ouvrir sur mon PC » : seul l'agent qui l'a réservée peut agir dessus (jamais un autre
+    agent du même bureau). Un humain authentifié (`agent_local_id` nul) reste libre d'agir."""
+    if (
+        tache.action in ACTIONS_OUVERTURE_PC
+        and agent_local_id is not None
+        and tache.agent_local_id != agent_local_id
+    ):
+        raise AccesRefuse("Cette tâche est réservée par un autre agent local.")
 
 
 def _obtenir_verrou_actif(
@@ -285,6 +298,7 @@ def _serialiser_tache(
         id=tache.id,
         candidat_id=tache.candidat_id,
         code_demarche=tache.code_demarche,
+        action=tache.action,
         statut=tache.statut,
         motif_suspension=tache.motif_suspension,
         message_alerte=tache.message_alerte,
@@ -334,6 +348,7 @@ def creer_tache(
         select(TacheDossier.id).where(
             TacheDossier.candidat_id == candidat.id,
             TacheDossier.code_demarche == demarche.code,
+            TacheDossier.action == ACTION_PREREMPLISSAGE,
             TacheDossier.statut.in_(STATUTS_TACHE_OUVERTE),
         )
     )
@@ -496,6 +511,11 @@ def demarrer_tache(
     du dossier candidat et vérifié les prérequis (Règle 4)."""
     tid = _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    if tache.action in ACTIONS_OUVERTURE_PC:
+        raise Conflit(
+            "Cette tâche « Ouvrir sur mon PC » n'est prise en charge que par l'Agent Local "
+            "(réservation atomique) : elle ne se démarre pas à la main."
+        )
     _verifier_transition(tache.statut, StatutTache.EN_COURS)
 
     # Contrôle de sécurité Règle 4 juste avant le démarrage effectif
@@ -592,6 +612,7 @@ def renouveler_verrou_tache(
     """Battement de cœur (heartbeat) prolongeant le verrou exclusif d'une tâche `en_cours`."""
     tid = _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
     if tache.statut != StatutTache.EN_COURS:
         raise Conflit("Seule une tâche en cours peut renouveler son verrou.")
 
@@ -721,6 +742,7 @@ def suspendre_tache(
     introuvable), libère le verrou du dossier et conserve intactes les étapes déjà terminées."""
     _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
     _verifier_transition(tache.statut, StatutTache.SUSPENDUE)
 
     maintenant = maintenant_utc()
@@ -778,6 +800,7 @@ def signaler_erreur_tache(
     les étapes déjà validées pour diagnostic et reprise."""
     _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
     _verifier_transition(tache.statut, StatutTache.EN_ERREUR)
 
     tache.statut = StatutTache.EN_ERREUR
@@ -799,7 +822,7 @@ def signaler_erreur_tache(
     audit.journaliser(
         db,
         "tache.erreur",
-        ResultatAudit.ERREUR,
+        ResultatAudit.ECHEC,
         acteur_id=acteur_id,
         ressource_type="tache",
         ressource_id=tache.id,
@@ -825,6 +848,13 @@ def reprendre_tache(
     - Remet la tâche à `en_attente` et conserve toutes les étapes déjà `terminee`."""
     _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    if tache.action in ACTIONS_OUVERTURE_PC:
+        # Action « Ouvrir sur mon PC » : pas d'étapes YAML ni de prérequis de démarche.
+        from app.services.taches_ouverture_pc import reprendre_tache_ouverture_pc
+
+        return reprendre_tache_ouverture_pc(
+            db, tache=tache, acteur_id=acteur_id, cle_maitresse=cle_maitresse
+        )
     _verifier_transition(tache.statut, StatutTache.EN_ATTENTE)
 
     candidat = obtenir_candidat(
@@ -897,6 +927,7 @@ def deposer_capture_controle(
     prise par l'agent local juste avant le bouton d'envoi final."""
     tid = _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
     if tache.statut not in {StatutTache.EN_COURS, StatutTache.A_VALIDER}:
         raise Conflit(
             "La capture de contrôle ne peut être déposée que sur une tâche en cours ou en attente de validation."
@@ -983,6 +1014,7 @@ def soumettre_pour_validation_humaine(
     Exige que toutes les étapes de la tâche soient `terminee`."""
     tid = _exiger_tenant(db)
     tache = _obtenir_tache_orm(db, tache_id)
+    _exiger_detenteur_agent(tache, agent_local_id)
     _verifier_transition(tache.statut, StatutTache.A_VALIDER)
 
     etapes_non_terminees = [

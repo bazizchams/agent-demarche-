@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import base64
 import ipaddress
 import json
 import time
@@ -16,6 +17,7 @@ import uuid
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 import httpx
@@ -46,6 +48,21 @@ ACTION_AUDIT_APPEL_IA = "ia.appel"
 
 
 @dataclass(frozen=True)
+class ImageEntree:
+    """Image transmise à un modèle de vision. Elle contient des données personnelles : seul un
+    client LOCAL l'accepte (`ClientOpenAICompatible` vers un hôte local)."""
+
+    octets: bytes
+    type_mime: str
+
+
+MESSAGE_IMAGE_REFUSEE = (
+    "Envoi d'image refusé : une image contient des données personnelles et ne peut être "
+    "transmise qu'à un modèle de vision exécuté en local (hôte local ou réseau privé)."
+)
+
+
+@dataclass(frozen=True)
 class ReponseLLM:
     texte: str
     outil: dict[str, Any] | None = None
@@ -61,6 +78,7 @@ class ClientLLM(Protocol):
         message: str,
         outil: dict[str, Any] | None = None,
         max_tokens: int = 4096,
+        images: Sequence[ImageEntree] | None = None,
     ) -> ReponseLLM: ...
 
 
@@ -78,7 +96,10 @@ class ClientAnthropic:
         message: str,
         outil: dict[str, Any] | None = None,
         max_tokens: int = 4096,
+        images: Sequence[ImageEntree] | None = None,
     ) -> ReponseLLM:
+        if images:  # service hébergé chez un tiers : jamais d'image (données personnelles)
+            raise ServiceIndisponible(MESSAGE_IMAGE_REFUSEE)
         corps: dict[str, Any] = {
             "model": self._modele,
             "max_tokens": max_tokens,
@@ -205,13 +226,28 @@ class ClientOpenAICompatible:
         message: str,
         outil: dict[str, Any] | None = None,
         max_tokens: int = 4096,
+        images: Sequence[ImageEntree] | None = None,
     ) -> ReponseLLM:
+        contenu_utilisateur: str | list[dict[str, Any]] = message
+        if images:
+            if not hote_est_local(self._url):  # contrôle à la source, avant tout appel réseau
+                raise ServiceIndisponible(MESSAGE_IMAGE_REFUSEE)
+            contenu_utilisateur = [{"type": "text", "text": message}] + [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{img.type_mime};base64,"
+                        + base64.b64encode(img.octets).decode("ascii")
+                    },
+                }
+                for img in images
+            ]
         corps: dict[str, Any] = {
             "model": self._modele,
             "max_tokens": max_tokens,
             "messages": [
                 {"role": "system", "content": systeme},
-                {"role": "user", "content": message},
+                {"role": "user", "content": contenu_utilisateur},
             ],
         }
         if outil is not None:

@@ -39,7 +39,17 @@ class AgentLocalSortie(SchemaSortie):
     actif: bool
     cree_par_id: uuid.UUID | None
     derniere_activite_le: datetime | None
+    # Vrai si l'agent a donné signe de vie récemment (sondage ou battement de cœur).
+    en_ligne: bool = False
     cree_le: datetime
+
+
+class AgentLocalIdentiteSortie(SchemaSortie):
+    """Identité de l'agent appelant (jeton X-Agent-Token) : sert à nommer le profil navigateur du bureau."""
+
+    agent_id: uuid.UUID
+    bureau_id: uuid.UUID
+    nom_machine: str
 
 
 class AgentLocalEnroleSortie(SchemaSortie):
@@ -93,6 +103,8 @@ class DecisionValidationSortie(SchemaSortie):
 class TacheCreation(SchemaEntree):
     candidat_id: uuid.UUID
     code_demarche: str = Field(min_length=1, max_length=60)
+    # Défaut : pré-remplissage par étapes YAML. Sinon une action « Ouvrir sur mon PC ».
+    action: str = Field(default="preremplissage", min_length=1, max_length=40)
 
 
 class DemarrerTacheEntree(SchemaEntree):
@@ -139,6 +151,7 @@ class TacheSortie(SchemaSortie):
     id: uuid.UUID
     candidat_id: uuid.UUID
     code_demarche: str
+    action: str = "preremplissage"
     statut: StatutTache
     motif_suspension: MotifSuspensionTache | None
     message_alerte: str | None
@@ -175,3 +188,26 @@ class ContexteDossierExecutionSortie(SchemaSortie):
     tache: TacheSortie
     candidat: CandidatSortie
     documents: list[DocumentSortie]
+
+
+class ReservationTacheSortie(SchemaSortie):
+    """Réponse de la réservation atomique : `tache` vaut `None` quand rien n'attend cet agent."""
+
+    tache: TacheSortie | None = None
+
+
+class VoeuAAjouterSortie(SchemaSortie):
+    """Un vœu VALIDÉ servi à l'agent (jamais un brouillon). Ne contient aucun identifiant de portail."""
+
+    voeu_id: uuid.UUID
+    rang: int
+    intitule: str
+    etablissement: str
+    niveau: str
+    voie: str
+    motivation: str
+
+
+class VoeuxAAjouterSortie(SchemaSortie):
+    tache_id: uuid.UUID
+    voeux: list[VoeuAAjouterSortie]

@@ -6,11 +6,18 @@ import uuid
 
 from fastapi import APIRouter, Depends, status
 
-from app.api.dependances import ContexteAuth, exiger_roles, obtenir_contexte_auth
+from app.api.dependances import (
+    ContexteAgentLocal,
+    ContexteAuth,
+    exiger_roles,
+    obtenir_agent_local_requis,
+    obtenir_contexte_auth,
+)
 from app.modeles.utilisateur import Role
 from app.schemas.tache import (
     AgentLocalCreation,
     AgentLocalEnroleSortie,
+    AgentLocalIdentiteSortie,
     AgentLocalSortie,
 )
 from app.services import agents_locaux as service_agents
@@ -25,6 +32,18 @@ def lister(
     ctx: ContexteAuth = Depends(obtenir_contexte_auth),
 ) -> list[AgentLocalSortie]:
     return service_agents.lister_agents_locaux(ctx.db)
+
+
+@routeur.get("/moi", response_model=AgentLocalIdentiteSortie)
+def identite_agent(
+    ctx: ContexteAgentLocal = Depends(obtenir_agent_local_requis),
+) -> AgentLocalIdentiteSortie:
+    """Identité de l'agent appelant (jeton X-Agent-Token) : id, bureau, nom du poste."""
+    return AgentLocalIdentiteSortie(
+        agent_id=ctx.agent_local.id,
+        bureau_id=ctx.agent_local.tenant_id,
+        nom_machine=ctx.agent_local.nom_machine,
+    )
 
 
 @routeur.post(

@@ -63,6 +63,12 @@ class TypeDecisionValidation(str, enum.Enum):
     REJETEE = "rejetee"
 
 
+ACTION_PREREMPLISSAGE = "preremplissage"
+ACTION_AJOUTER_VOEUX_PANIER = "ajouter_voeux_panier"
+# Actions « Ouvrir sur mon PC » : exécutées dans la fenêtre visible de l'Agent Local (sans étapes YAML).
+ACTIONS_OUVERTURE_PC: frozenset[str] = frozenset({ACTION_AJOUTER_VOEUX_PANIER})
+
+
 def _valeurs(enum_cls: type[enum.Enum]) -> list[str]:
     return [m.value for m in enum_cls]
 
@@ -78,6 +84,13 @@ class TacheDossier(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
         ForeignKey("candidats.id", ondelete="CASCADE"), nullable=False, index=True
     )
     code_demarche: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    # `preremplissage` (étapes YAML) ou une action « Ouvrir sur mon PC » (`ACTIONS_OUVERTURE_PC`).
+    action: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default=ACTION_PREREMPLISSAGE,
+        server_default=ACTION_PREREMPLISSAGE,
+    )
 
     statut: Mapped[StatutTache] = mapped_column(
         Enum(

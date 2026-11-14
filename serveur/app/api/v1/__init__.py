@@ -12,9 +12,11 @@ from app.api.v1 import (
     auth,
     bureau,
     candidats,
+    catalogue_formations,
     coffre_identifiants,
     courriel,
     demarches,
+    extractions,
     ia,
     inscription,
     navigateur_serveur,
@@ -25,6 +27,7 @@ from app.api.v1 import (
     validation_recapitulatif,
     validations,
     voeux,
+    voeux_suggestions,
 )
 
 routeur_v1 = APIRouter(prefix="/api/v1")
@@ -34,7 +37,10 @@ routeur_v1.include_router(courriel.routeur)
 routeur_v1.include_router(utilisateurs.routeur)
 routeur_v1.include_router(bureau.routeur)
 routeur_v1.include_router(candidats.routeur)
+routeur_v1.include_router(extractions.routeur)
 routeur_v1.include_router(voeux.routeur)
+routeur_v1.include_router(voeux_suggestions.routeur)
+routeur_v1.include_router(catalogue_formations.routeur)
 routeur_v1.include_router(coffre_identifiants.routeur)
 routeur_v1.include_router(demarches.routeur)
 routeur_v1.include_router(ia.routeur)

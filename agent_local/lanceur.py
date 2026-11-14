@@ -6,6 +6,10 @@ Modes disponibles :
   boutons de soumission finale verrouillés Règle 1) et génère une capture PNG de diagnostic.
 - `--mode executer` (défaut) : exécute le module dédié (`ModulePortailCampusFrance` ou `ModulePortailIRCCCanada`)
   en mode « pré-remplissage + captures d'écran de contrôle + arrêt strict avant envoi ».
+- `--mode ecouter` (démon) : sonde le serveur avec le jeton agent, réserve atomiquement les tâches
+  « Ouvrir sur mon PC » de ce bureau et les exécute dans une fenêtre de navigateur VISIBLE (Chrome, sinon
+  Edge, sinon Chromium Playwright) avec profil persistant par bureau. S'arrête proprement (Ctrl+C).
+  Voir `docs/AGENT_LOCAL.md` et `lancer_agent.bat`.
 """
 
 from __future__ import annotations
@@ -43,9 +47,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     analyseur.add_argument(
         "--mode",
-        choices=["executer", "diagnostiquer"],
+        choices=["executer", "diagnostiquer", "ecouter"],
         default="executer",
-        help="Mode d'action : 'diagnostiquer' (lecture seule) ou 'executer' (pré-remplissage + arrêt avant envoi)",
+        help=(
+            "Mode d'action : 'ecouter' (démon, fenêtre visible), 'diagnostiquer' (lecture seule) "
+            "ou 'executer' (pré-remplissage + arrêt avant envoi)"
+        ),
     )
     analyseur.add_argument(
         "--url-serveur",
@@ -55,7 +62,10 @@ def main(argv: list[str] | None = None) -> int:
     analyseur.add_argument(
         "--jeton-agent",
         default="",
-        help="Jeton X-Agent-Token généré par l'administrateur (requis en mode executer)",
+        help=(
+            "Jeton X-Agent-Token généré par l'administrateur (requis en mode executer ; en mode ecouter "
+            "préférez la variable d'environnement BE_JETON_AGENT)"
+        ),
     )
     analyseur.add_argument(
         "--tache-id",
@@ -64,8 +74,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     analyseur.add_argument(
         "--config-portail",
-        required=True,
-        help="Chemin du fichier YAML du portail (ex: config/portails/campus_france_reel.yaml)",
+        default="",
+        help=(
+            "Chemin du fichier YAML du portail (ex: config/portails/campus_france_reel.yaml) ; "
+            "obligatoire sauf en mode ecouter"
+        ),
+    )
+    analyseur.add_argument(
+        "--canal-navigateur",
+        choices=["auto", "chrome", "msedge", "chromium"],
+        default="auto",
+        help="Mode ecouter : navigateur à ouvrir (auto = Chrome, sinon Edge, sinon Chromium Playwright)",
+    )
+    analyseur.add_argument(
+        "--intervalle-sondage",
+        type=float,
+        default=5.0,
+        help="Mode ecouter : secondes entre deux sondages du serveur",
     )
     analyseur.add_argument(
         "--url-base-portail",
@@ -93,6 +118,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Mode sans fenêtre (pour tests automatisés uniquement)",
     )
     args = analyseur.parse_args(argv)
+
+    if args.mode == "ecouter":
+        from app.agent_local.lanceur_ecoute import lancer_ecoute
+
+        return lancer_ecoute(
+            url_serveur=args.url_serveur,
+            jeton_agent=args.jeton_agent,
+            racine_profils=Path(args.profil_navigateur),
+            canal=args.canal_navigateur,
+            intervalle_sondage_s=args.intervalle_sondage,
+            headless=args.headless,
+        )
+    if not args.config_portail:
+        analyseur.error("--config-portail est obligatoire en mode 'executer' et 'diagnostiquer'.")
 
     config_portail = charger_config_portail(Path(args.config_portail))
     dossier_profil = Path(args.profil_navigateur)

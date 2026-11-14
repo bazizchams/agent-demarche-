@@ -16,6 +16,8 @@ from app.modeles.discussion_dossier import (
     MessageDiscussionDossier,
 )
 from app.modeles.document import DocumentCandidat
+from app.modeles.extraction_document import ExtractionDocument, StatutExtraction
+from app.modeles.fiche_formation import FicheFormation, StatutFiche
 from app.modeles.jeton_courriel import JetonCourriel, ObjetJetonCourriel
 from app.modeles.journal_audit import EntreeAudit, ResultatAudit
 from app.modeles.rappel_echeance import RappelEcheanceEnvoye
@@ -44,6 +46,8 @@ __all__ = [
     "DocumentCandidat",
     "EntreeAudit",
     "EtapeTache",
+    "ExtractionDocument",
+    "FicheFormation",
     "IdentifiantPortail",
     "JetonCourriel",
     "ObjetJetonCourriel",
@@ -58,7 +62,9 @@ __all__ = [
     "SessionUtilisateur",
     "SexeCandidat",
     "StatutCandidat",
+    "StatutFiche",
     "StatutEtapeTache",
+    "StatutExtraction",
     "StatutTache",
     "TacheDossier",
     "TypeDecisionValidation",

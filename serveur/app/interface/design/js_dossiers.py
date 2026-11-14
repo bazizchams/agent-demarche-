@@ -544,6 +544,7 @@ JS_DOSSIERS = """
       document.getElementById("bandeau-candidat-actif").textContent =
         `${c.nom} ${c.prenom} (Passeport : ${c.numero_passeport || "non renseigné"})`;
       afficherFicheDossierActif(c);
+      if (typeof ouvSurChangementCandidat === "function") ouvSurChangementCandidat(c);
       if (!silencieux) {
         notifier(`Dossier actif sélectionné : ${c.nom} ${c.prenom}`, true);
       }

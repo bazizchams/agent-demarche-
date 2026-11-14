@@ -268,3 +268,74 @@ def test_isolation_api_http_complete_entre_bureau_a_et_bureau_b(
         bureau_b_intact = db.get(type(donnees_b.bureau), donnees_b.bureau.id)
         assert bureau_b_intact is not None
         assert bureau_b_intact.nom == "Bureau Beta Fictif"
+
+
+def test_extractions_documents_isolees_entre_bureaux_orm(
+    fabrique_sessions: sessionmaker[Session],
+    deux_bureaux: tuple[DonneesBureauTest, DonneesBureauTest],
+    application: FastAPI,
+) -> None:
+    """Lecture des documents : une extraction du bureau A est invisible, non modifiable et non
+    supprimable depuis le bureau B ; une création pour un autre bureau est refusée."""
+    import uuid
+
+    from app.core.chiffrement import chiffrer_champ
+    from app.modeles.extraction_document import ExtractionDocument, StatutExtraction
+    from app.services.candidats import creer_candidat
+    from app.schemas.candidat import CandidatCreation
+    from app.services.documents import deposer_document
+    from tests import corpus_synthetique as corpus
+
+    donnees_a, donnees_b = deux_bureaux
+    cle = application.state.cle_maitresse
+    parametres = application.dependency_overrides[
+        __import__("app.core.config", fromlist=["obtenir_parametres"]).obtenir_parametres
+    ]()
+    with fabrique_sessions() as db_a:
+        definir_tenant(db_a, donnees_a.bureau.id)
+        cand = creer_candidat(
+            db_a, donnees=CandidatCreation(nom="Test", prenom="Isolation"),
+            acteur_id=donnees_a.admin.id, cle_maitresse=cle,
+        )
+        doc = deposer_document(
+            db_a, candidat_id=cand.id, type_piece="passeport", nom_fichier_origine="p.pdf",
+            contenu_clair=corpus.pdf_factice(["x"]), date_expiration=None,
+            acteur_id=donnees_a.admin.id, parametres=parametres, cle_maitresse=cle,
+        )
+        extraction = ExtractionDocument(
+            id=uuid.uuid4(), tenant_id=donnees_a.bureau.id, document_id=doc.id, candidat_id=cand.id,
+            champ="nom", valeur_chiffree=chiffrer_champ(cle, donnees_a.bureau.id, "extraction_valeur", "X") or "",
+            extrait_chiffre=chiffrer_champ(cle, donnees_a.bureau.id, "extraction_extrait", "X") or "",
+            source="A", confiance=0.5, statut=StatutExtraction.A_VERIFIER,
+        )
+        db_a.add(extraction)
+        db_a.commit()
+        extraction_id = extraction.id
+        assert db_a.scalar(select(ExtractionDocument.id)) == extraction_id
+
+    with fabrique_sessions() as db_b:
+        definir_tenant(db_b, donnees_b.bureau.id)
+        assert db_b.scalars(select(ExtractionDocument)).all() == []
+        assert db_b.get(ExtractionDocument, extraction_id) is None
+        res_upd = db_b.execute(
+            update(ExtractionDocument)
+            .where(ExtractionDocument.id == extraction_id)
+            .values(statut=StatutExtraction.VALIDE_HUMAIN)
+        )
+        assert res_upd.rowcount == 0
+        assert db_b.execute(delete(ExtractionDocument).where(ExtractionDocument.id == extraction_id)).rowcount == 0
+        with pytest.raises(ViolationTenant):
+            db_b.add(
+                ExtractionDocument(
+                    id=uuid.uuid4(), tenant_id=donnees_a.bureau.id, document_id=doc.id, candidat_id=cand.id,
+                    champ="prenom", valeur_chiffree="v1:x", extrait_chiffre="v1:x", source="A",
+                    confiance=0.1, statut=StatutExtraction.REJETE,
+                )
+            )
+            db_b.flush()
+        db_b.rollback()
+
+    with fabrique_sessions() as db_a2:
+        definir_tenant(db_a2, donnees_a.bureau.id)
+        intacte = db_a2.get(ExtractionDocument, extraction_id)
+        assert intacte is not None and intacte.statut is StatutExtraction.A_VERIFIER
