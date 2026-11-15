@@ -88,20 +88,38 @@ JS_DOSSIERS = """
         .replace(/"/g, "&quot;");
     }
 
+    // Deux régions persistantes (jamais retirées du DOM, rôle fixe) : #notif-statut (polite) et
+    // #notif-alerte (alert). On y insère un toast ; une erreur reste jusqu'à « Fermer ».
     let minuteurNotification = null;
     function notifier(msg, ok = true) {
-      const el = document.getElementById("zone-notification");
-      el.textContent = msg;
-      el.className = "notif " + (ok ? "notif-ok" : "notif-err");
-      el.setAttribute("role", ok ? "status" : "alert");
-      // Relance l'animation d'apparition à chaque nouveau message
-      el.style.animation = "none";
-      void el.offsetWidth;
-      el.style.animation = "";
-      clearTimeout(minuteurNotification);
-      // Un succès se retire seul ; une erreur reste jusqu'au prochain message
-      if (ok) minuteurNotification = setTimeout(() => el.classList.add("cache"), 6000);
+      const region = document.getElementById(ok ? "notif-statut" : "notif-alerte");
+      const toast = document.createElement("div");
+      toast.className = "toast " + (ok ? "toast-ok" : "toast-err");
+      const texte = document.createElement("span");
+      texte.className = "notif-texte";
+      texte.textContent = msg;
+      toast.appendChild(texte);
+      if (!ok) {
+        const fermer = document.createElement("button");
+        fermer.type = "button";
+        fermer.className = "btn btn-fantome btn-sm";
+        fermer.textContent = "Fermer";
+        fermer.addEventListener("click", () => toast.remove());
+        toast.appendChild(fermer);
+      }
+      region.replaceChildren(toast);
+      if (ok) {
+        clearTimeout(minuteurNotification);
+        minuteurNotification = setTimeout(() => toast.remove(), 6000);
+      }
     }
+
+    // Récapitulatif court pour lecteur d'écran (région #annonce-statut), à la place des grands aria-live.
+    function annoncer(msg) {
+      document.getElementById("annonce-statut").textContent = msg;
+    }
+
+    const TITRE_APPLICATION = "Agent Bureau d'Études";
 
     function allerVersVue(cible) {
       document.querySelectorAll("aside button.nav-btn").forEach((b) => {
@@ -114,7 +132,14 @@ JS_DOSSIERS = """
         s.classList.toggle("cache", s.id !== cible);
       });
       window.scrollTo(0, 0);
-      fermerMenuMobile();
+      fermerMenuMobile(false);
+      const vue = document.getElementById(cible);
+      const titreVue = vue ? vue.querySelector("h2") : null;
+      if (titreVue) {
+        titreVue.setAttribute("tabindex", "-1");
+        titreVue.focus({ preventScroll: true });
+        document.title = titreVue.textContent.trim() + " — " + TITRE_APPLICATION;
+      }
       if (cible === "vue-conseiller" || cible === "vue-documents") chargerListeDemarches();
       if (cible === "vue-conseiller" || cible === "vue-procedures") chargerStatutIA();
       if (cible === "vue-documents" && candidatActifId) {
@@ -811,9 +836,11 @@ JS_DOSSIERS = """
         const vide = dosEtatVide("Vérification impossible.", "Aucune démarche n'a répondu : vérifiez votre session puis réessayez.", "dossier");
         vide.classList.add("carte", "carte-sobre");
         zone.appendChild(vide);
+        annoncer("Vérification impossible : aucune démarche n'a répondu.");
         return;
       }
       zone.appendChild(grille);
+      annoncer("Vérification terminée : " + grille.children.length + (grille.children.length > 1 ? " démarches contrôlées." : " démarche contrôlée."));
     }
 
     // Zone de dépôt : nom du fichier choisi et surbrillance pendant le glisser-déposer.
@@ -1016,6 +1043,7 @@ JS_DOSSIERS = """
 
       if (data.avertissement) resultat.appendChild(dosNoeud("p", "note", data.avertissement));
       document.getElementById("zone-score-acceptation").replaceChildren(resultat);
+      annoncer("Score d'acceptation calculé.");
     }
 
     document.getElementById("btn-calculer-score").addEventListener("click", async () => {

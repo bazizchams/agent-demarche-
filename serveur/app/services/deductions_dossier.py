@@ -13,7 +13,6 @@ Garanties (règles 1, 4 et 5) :
 
 from __future__ import annotations
 
-import calendar
 import hashlib
 import re
 import unicodedata
@@ -40,20 +39,31 @@ from app.services.candidats import modifier_candidat, obtenir_candidat, obtenir_
 from app.services.extraction_champs import (
     CERTIFICAT_DATE,
     CERTIFICAT_TYPE,
+    DIPLOME_ANNEE,
+    DIPLOME_ETABLISSEMENT,
+    DIPLOME_INTITULE,
     IELTS_BANDE,
+    MENTION,
     MOYENNE_GENERALE,
     NIVEAU_ANGLAIS,
     NIVEAU_FRANCAIS,
+    RANG,
 )
-from app.services.extractions import _AAD_VALEUR
+from app.services.extractions import _AAD_VALEUR, MOTIF_CORRIGE_HUMAIN
+from app.services.validite_certificats import (
+    DATE_INCOHERENTE,
+    EXPIRE,
+    NON_VERIFIABLE_DATE_ABSENTE,
+    NON_VERIFIABLE_TYPE,
+    NON_VERIFIABLE_TYPE_ABSENT,
+    SANS_EXPIRATION,
+    VALIDITE_TCF_MOIS,
+    ajouter_mois,
+    evaluer_validite as _evaluer_validite_commune,
+)
 
 # Champs lus en plus de ceux des parseurs P1 actuels : tant qu'une lecture ne les produit pas
 # (relevé enrichi, saisie humaine corrigée), aucune déduction n'en est tirée.
-MENTION = "mention"
-RANG = "rang"
-DIPLOME_INTITULE = "diplome_intitule"
-DIPLOME_ANNEE = "diplome_annee"
-DIPLOME_ETABLISSEMENT = "diplome_etablissement"
 
 CATEGORIE_MOYENNE, CATEGORIE_RANG, CATEGORIE_LANGUE, CATEGORIE_PARCOURS = "moyenne", "rang", "langue", "parcours"
 
@@ -64,8 +74,7 @@ ALERTE_TYPE_ABSENT = "type_absent"
 ALERTE_NON_VERIFIABLE = "validite_non_verifiable"
 ALERTE_PREUVE_INVALIDEE = "preuve_invalidee"
 
-VALIDITE_TCF_MOIS = 24
-TYPES_SANS_EXPIRATION = frozenset({"DELF", "DALF"})
+TYPES_SANS_EXPIRATION = SANS_EXPIRATION  # alias conservé ; règle dans validite_certificats
 _MENTIONS = {
     "passable": "Passable",
     "assez bien": "Assez bien",
@@ -121,12 +130,6 @@ def _cle(*parties: object) -> str:
     return hashlib.sha256("|".join(str(p) for p in parties).encode("utf-8")).hexdigest()
 
 
-def ajouter_mois(depart: date, mois: int) -> date:
-    total = depart.month - 1 + mois
-    annee, m = depart.year + total // 12, total % 12 + 1
-    return date(annee, m, min(depart.day, calendar.monthrange(annee, m)[1]))
-
-
 def _date_fr(d: date) -> str:
     return d.strftime("%d/%m/%Y")
 
@@ -134,22 +137,21 @@ def _date_fr(d: date) -> str:
 def evaluer_validite(
     type_cert: str | None, date_passage: date | None, reference: date
 ) -> tuple[str, str | None]:
-    """(libellé de validité, code d'alerte). TCF : 24 mois ; DELF/DALF : sans expiration ;
-    tout autre type ou type absent : « validité non vérifiable » (jamais déduite)."""
-    if type_cert in TYPES_SANS_EXPIRATION:
-        return "sans date d'expiration", None
-    if type_cert is None:
-        return "validité non vérifiable (type de certificat non lu)", ALERTE_TYPE_ABSENT
-    if type_cert != "TCF":
-        return "validité non vérifiable", ALERTE_NON_VERIFIABLE
-    if date_passage is None:
-        return "validité non vérifiable (date de passation non lue)", ALERTE_DATE_ABSENTE
-    if date_passage > reference:
-        return "validité non vérifiable (date de passation postérieure à aujourd'hui)", ALERTE_DATE_INCOHERENTE
-    fin = ajouter_mois(date_passage, VALIDITE_TCF_MOIS)
-    if reference > fin:
-        return f"expiré depuis le {_date_fr(fin)}", ALERTE_EXPIRE
-    return f"valable jusqu'au {_date_fr(fin)}", None
+    """(libellé de validité, code d'alerte) ; règle dans `validite_certificats`. Jamais déduit si non vérifiable."""
+    v = _evaluer_validite_commune(type_cert, date_passage, reference)
+    if v.statut == EXPIRE and v.fin is not None:
+        return f"expiré depuis le {_date_fr(v.fin)}", ALERTE_EXPIRE
+    if v.fin is not None:
+        return f"valable jusqu'au {_date_fr(v.fin)}", None
+    return {
+        "sans_expiration": ("sans date d'expiration", None),
+        NON_VERIFIABLE_TYPE_ABSENT: ("validité non vérifiable (type de certificat non lu)", ALERTE_TYPE_ABSENT),
+        NON_VERIFIABLE_TYPE: ("validité non vérifiable", ALERTE_NON_VERIFIABLE),
+        NON_VERIFIABLE_DATE_ABSENTE: ("validité non vérifiable (date de passation non lue)", ALERTE_DATE_ABSENTE),
+        DATE_INCOHERENTE: (
+            "validité non vérifiable (date de passation postérieure à aujourd'hui)", ALERTE_DATE_INCOHERENTE
+        ),
+    }[v.statut]
 
 
 def _meilleure_alerte(alertes: list[str]) -> str | None:
@@ -312,6 +314,15 @@ def vers_sortie(p: PointFort, cle_maitresse: bytes) -> PointFortSortie:
     )
 
 
+def _extrait_cite(e: ExtractionDocument, cle: bytes) -> str:
+    """Preuve citée : l'extrait lu, sauf pour une valeur corrigée par l'opérateur (l'extrait OCR d'origine
+    ne dit plus la même chose) : on cite alors la correction."""
+    if e.motif == MOTIF_CORRIGE_HUMAIN:
+        valeur = dechiffrer_champ(cle, e.tenant_id, _AAD_VALEUR, e.valeur_chiffree) or ""
+        return f"Valeur corrigée par l'opérateur : {valeur}" if valeur else ""
+    return dechiffrer_champ(cle, e.tenant_id, "extraction_extrait", e.extrait_chiffre) or ""
+
+
 def _faits_confirmes(db: Session, candidat_id: uuid.UUID, cle: bytes) -> list[FaitConfirme]:
     lignes = db.scalars(
         select(ExtractionDocument)
@@ -324,7 +335,7 @@ def _faits_confirmes(db: Session, candidat_id: uuid.UUID, cle: bytes) -> list[Fa
             champ=e.champ,
             valeur=dechiffrer_champ(cle, e.tenant_id, _AAD_VALEUR, e.valeur_chiffree) or "",
             page=e.page,
-            extrait=dechiffrer_champ(cle, e.tenant_id, "extraction_extrait", e.extrait_chiffre) or "",
+            extrait=_extrait_cite(e, cle),
         )
         for e in lignes
         if e.statut in STATUTS_APPLICABLES
@@ -381,6 +392,7 @@ def calculer_points_forts(
                 dechiffrer_champ(cle_maitresse, tid, _AAD_TEXTE, courant.texte_chiffre) != d.texte
                 or dechiffrer_champ(cle_maitresse, tid, _AAD_EXTRAIT, courant.extrait_chiffre) != d.extrait
             )
+            modifie = change or courant.alerte != d.alerte or courant.page != d.page
             _renseigner(courant, d, tid, cle_maitresse)  # même fait : texte et alerte rafraîchis
             if courant.statut is StatutPointFort.CONFIRME and (change or d.alerte == ALERTE_EXPIRE):
                 # certificat expiré, texte ou extrait modifié : la confirmation ne vaut plus (jamais de
@@ -388,7 +400,9 @@ def calculer_points_forts(
                 courant.statut = StatutPointFort.A_VERIFIER
                 courant.decide_par_id = courant.decide_le = None
                 courant.applique_le = None
-            maj += 1
+                modifie = True
+            if modifie:
+                maj += 1
     for cle, p in existants.items():
         if cle in deduits:
             continue

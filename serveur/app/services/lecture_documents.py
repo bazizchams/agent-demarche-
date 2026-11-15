@@ -196,7 +196,8 @@ class LecteurDocumentLocal:
         return lecteur
 
     @staticmethod
-    def _images_de_page(page: Any) -> list[tuple[bytes, str]]:
+    def _images_de_page(page: Any, echec: list[bool] | None = None) -> list[tuple[bytes, str]]:
+        """Images intégrées de la page ; en cas d'échec d'accès, ajoute True à `echec` (sans détail)."""
         images: list[tuple[bytes, str]] = []
         try:
             for img in page.images:
@@ -205,7 +206,9 @@ class LecteurDocumentLocal:
                     images.append((img.data, mime))
                 if len(images) >= MAX_IMAGES_PAR_PAGE:
                     break  # plafond : on n'extrait pas (ni ne décode) les images suivantes
-        except Exception:  # image exotique ou flux invalide : on ignore, la page restera sans texte
+        except Exception:  # image exotique ou flux invalide : jamais de détail (peut citer un contenu)
+            if echec is not None:
+                echec.append(True)
             return []
         return images
 
@@ -223,17 +226,23 @@ class LecteurDocumentLocal:
                     f"Délai de lecture dépassé : seules les {numero - 1} premières pages ont été lues."
                 )
                 break
+            echec_texte = False
             try:
                 texte = (page.extract_text() or "").strip()
-            except Exception:
-                texte = ""
+            except Exception:  # le message d'une exception peut citer un contenu : on ne le recopie pas
+                texte, echec_texte = "", True
+                avertissements.append(f"Page {numero} : échec d'extraction de la couche texte.")
             if len("".join(texte.split())) >= SEUIL_COUCHE_TEXTE:
                 pages.append(PageTexte(numero, texte, ORIGINE_COUCHE_TEXTE, 1.0))
                 continue
-            images = self._images_de_page(page)
+            echec_images: list[bool] = []
+            images = self._images_de_page(page, echec_images)
+            if echec_images:
+                avertissements.append(f"Page {numero} : échec d'extraction des images.")
             if not images:
                 pages.append(PageTexte(numero, texte, ORIGINE_COUCHE_TEXTE, 1.0 if texte else 0.0))
-                avertissements.append(f"Page {numero} : aucun texte exploitable.")
+                if not echec_texte and not echec_images:
+                    avertissements.append(f"Page {numero} : aucun texte exploitable.")
                 continue
             lue = self._page_ocr(numero, images[0][0])
             pages.append(lue)

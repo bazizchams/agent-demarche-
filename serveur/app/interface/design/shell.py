@@ -86,7 +86,7 @@ def _groupe(identifiant: str, titre: str, contenu: str) -> str:
 
 
 def _navigation() -> str:
-    compteur = '<span id="nav-compteur-validation" class="nav-compteur cache" title="Dossiers à traiter"></span>'
+    compteur = '<span id="nav-compteur-validation" class="nav-compteur cache" role="img" aria-label="Dossiers à traiter" title="Dossiers à traiter"></span>'
     return (
         _groupe("accueil", "", "<!-- nav:flux -->" + bouton_nav("vue-tableau-bord", "Tableau de bord", "accueil", actif=True))
         + _groupe(
@@ -200,13 +200,15 @@ def html_debut() -> str:
   <style>{CSS_DESIGN}  </style>
 </head>
 <body class="hors-session">
+  <a class="sr-focus" href="#contenu">Aller au contenu</a>
   <header class="barre-haute">
-    <button id="btn-menu" class="btn btn-contour btn-icone" type="button" aria-controls="navigation-principale" aria-expanded="false" aria-label="Ouvrir le menu">[[i:menu]]</button>
+    <button id="btn-menu" class="btn btn-contour btn-icone" type="button" aria-controls="navigation-principale" aria-expanded="false" aria-label="Menu">[[i:menu]]</button>
     <div class="marque"><span class="marque-logo">[[i:dossier]]</span><span class="marque-nom">Agent Bureau d'Études</span></div>
     <button class="btn btn-fantome btn-icone bouton-theme-mobile" type="button" data-bascule-theme aria-label="Passer en thème sombre"><span class="icone-lune">[[i:lune]]</span><span class="icone-soleil">[[i:soleil]]</span></button>
   </header>
   <button id="scrim-menu" class="scrim" type="button" aria-label="Fermer le menu" tabindex="-1"></button>
   <aside id="navigation-principale" aria-label="Navigation principale">
+    <button id="btn-fermer-menu" class="btn btn-fantome btn-icone nav-fermer" type="button" aria-label="Fermer le menu">[[i:fermer]]</button>
     <div class="marque">
       <span class="marque-logo">[[i:dossier]]</span>
       <span class="marque-nom">Agent Bureau d'Études<span class="marque-sous">Plateforme Algérie</span></span>
@@ -230,7 +232,8 @@ def html_debut() -> str:
     </div>
   </aside>
 
-  <main id="contenu">
+  <main id="contenu" tabindex="-1">
+    <h1 class="sr-only">Agent Bureau d'Études — Dossiers Campus France et IRCC</h1>
     <div id="banniere-etat" role="region" aria-label="Contexte de travail">
       <span class="banniere-contexte">
         <span class="banniere-pastille">[[i:dossier]]</span>
@@ -244,7 +247,11 @@ def html_debut() -> str:
       <span>Confirmez votre adresse pour sécuriser votre compte et recevoir les messages de la plateforme.</span>
       <button id="btn-renvoyer-verification" class="btn btn-contour btn-sm" type="button">Renvoyer l'e-mail de vérification</button>
     </div>
-    <div id="zone-notification" class="notif cache" role="status" aria-live="polite"></div>
+    <div id="zone-notification">
+      <div id="notif-statut" role="status" aria-live="polite"></div>
+      <div id="notif-alerte" role="alert"></div>
+    </div>
+    <div id="annonce-statut" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 {_ECRAN_CONNEXION}""")
 
 
@@ -295,28 +302,65 @@ JS_COQUILLE = """
       }
     });
 
-    function fermerMenuMobile() {
+    // Tiroir mobile : ouvert, le reste de la page est inerte, Tab boucle dans le tiroir, Échap le ferme.
+    const MEDIA_TIROIR = window.matchMedia("(max-width: 900px)");
+
+    function majInertTiroir(ouvert) {
+      document.querySelector("main").inert = ouvert;
+      document.querySelector(".barre-haute").inert = ouvert;
+    }
+
+    function elementsFocalisablesTiroir() {
+      return Array.from(document.querySelectorAll("#navigation-principale button, #navigation-principale a[href]"))
+        .filter((el) => !el.disabled && el.offsetParent !== null);
+    }
+
+    function fermerMenuMobile(rendreFocus = true) {
       const etaitOuvert = document.body.classList.contains("nav-ouverte");
       document.body.classList.remove("nav-ouverte");
+      majInertTiroir(false);
       const bouton = document.getElementById("btn-menu");
       bouton.setAttribute("aria-expanded", "false");
-      bouton.setAttribute("aria-label", "Ouvrir le menu");
-      if (etaitOuvert) bouton.focus();
+      if (etaitOuvert && rendreFocus) bouton.focus();
+    }
+
+    function ouvrirMenuMobile() {
+      document.body.classList.add("nav-ouverte");
+      majInertTiroir(true);
+      document.getElementById("btn-menu").setAttribute("aria-expanded", "true");
+      const actif = document.querySelector("aside button.nav-btn.actif") || document.querySelector("aside button.nav-btn");
+      if (actif) actif.focus();
     }
 
     document.getElementById("btn-menu").addEventListener("click", () => {
-      const ouvert = document.body.classList.toggle("nav-ouverte");
-      const bouton = document.getElementById("btn-menu");
-      bouton.setAttribute("aria-expanded", ouvert ? "true" : "false");
-      bouton.setAttribute("aria-label", ouvert ? "Fermer le menu" : "Ouvrir le menu");
-      if (ouvert) {
-        const actif = document.querySelector("aside button.nav-btn.actif") || document.querySelector("aside button.nav-btn");
-        if (actif) actif.focus();
-      }
+      if (document.body.classList.contains("nav-ouverte")) fermerMenuMobile();
+      else ouvrirMenuMobile();
     });
-    document.getElementById("scrim-menu").addEventListener("click", fermerMenuMobile);
+    document.getElementById("btn-fermer-menu").addEventListener("click", () => fermerMenuMobile());
+    document.getElementById("scrim-menu").addEventListener("click", () => fermerMenuMobile());
+    MEDIA_TIROIR.addEventListener("change", (e) => {
+      if (!e.matches) fermerMenuMobile(false);
+    });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") fermerMenuMobile();
+      if (!document.body.classList.contains("nav-ouverte")) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        fermerMenuMobile();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focalisables = elementsFocalisablesTiroir();
+      if (focalisables.length === 0) return;
+      const premier = focalisables[0];
+      const dernier = focalisables[focalisables.length - 1];
+      const dedans = !!document.activeElement && !!document.activeElement.closest("#navigation-principale");
+      if (!dedans || (e.shiftKey && document.activeElement === premier)) {
+        e.preventDefault();
+        (e.shiftKey ? dernier : premier).focus();
+      } else if (!e.shiftKey && document.activeElement === dernier) {
+        e.preventDefault();
+        premier.focus();
+      }
     });
 
     // Raccourcis déclaratifs : data-aller-vers="vue-..." (et data-ouvrir="id d'un details" facultatif)

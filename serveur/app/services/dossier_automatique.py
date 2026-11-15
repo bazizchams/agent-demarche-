@@ -58,6 +58,7 @@ from app.services.pieces_requises import obtenir_demarche, verifier_completude_d
 CODE_DEMARCHE_DEFAUT = "campus_france"
 MAX_VOEUX_SUGGERES = 7
 LIMITE_PROJET_LETTRE = 800
+ACTION_LECTURE_ILLISIBLE = "dossier_automatique.lecture_illisible"
 ATTENTE = "En attente de l'étape précédente."
 
 _LIBELLES = {
@@ -102,6 +103,7 @@ class Incidents:
 class _Donnees:
     nb_documents: int = 0
     ids_non_lus: list[uuid.UUID] = field(default_factory=list)
+    ids_illisibles: list[uuid.UUID] = field(default_factory=list)
     pieces_manquantes: list[str] = field(default_factory=list)
     nb_champs_manquants: int = 0
     nb_pieces_requises: int = 0
@@ -186,6 +188,14 @@ def _collecter(
     d.nb_documents = len(documents)
     lus = _ids_documents_lus(db, candidat_id, documents)
     d.ids_non_lus = [x.id for x in documents if x.id not in lus]
+    echecs = set(
+        db.scalars(
+            select(EntreeAudit.ressource_id).where(
+                EntreeAudit.action == ACTION_LECTURE_ILLISIBLE, EntreeAudit.resultat == ResultatAudit.ECHEC
+            )
+        )
+    )
+    d.ids_illisibles = [i for i in d.ids_non_lus if i in echecs]
 
     demarche = obtenir_demarche(parametres.dossier_demarches, code_demarche, db)
     comp = verifier_completude_dossier(
@@ -240,12 +250,13 @@ def _pieces(d: _Donnees) -> EtapeDossierSortie:
 
 def _lecture(d: _Donnees, inc: Incidents) -> EtapeDossierSortie:
     lus = d.nb_documents - d.nb_non_lus
-    c = {"documents": d.nb_documents, "lus": lus, "a_lire": d.nb_non_lus, "illisibles": inc.illisibles}
+    illisibles = max(inc.illisibles, len(d.ids_illisibles))  # mémorisés : visibles aussi hors de `lancer`
+    c = {"documents": d.nb_documents, "lus": lus, "a_lire": d.nb_non_lus, "illisibles": illisibles}
     if d.nb_documents == 0:
         return _e("lecture", StatutEtape.BLOQUE, "Aucun document à lire.", "Déposer les documents du candidat", **c)
-    if inc.illisibles:
-        return _e("lecture", StatutEtape.BLOQUE, f"{inc.illisibles} document(s) illisible(s).",
-                  f"Remplacer {inc.illisibles} document(s) illisible(s)", **c)
+    if illisibles:
+        return _e("lecture", StatutEtape.BLOQUE, f"{illisibles} document(s) illisible(s).",
+                  f"Remplacer {illisibles} document(s) illisible(s)", **c)
     if d.nb_non_lus == 0:
         return _e("lecture", StatutEtape.TERMINE, f"{lus} document(s) lu(s).", **c)
     st = StatutEtape.EN_COURS if lus else StatutEtape.A_FAIRE
@@ -400,7 +411,9 @@ def calculer_etat(
 
 
 # ================================================================== exécution
-def _lire_documents(db: Session, candidat_id: uuid.UUID, ids: list[uuid.UUID], **kw) -> int:
+def _lire_documents(
+    db: Session, candidat_id: uuid.UUID, ids: list[uuid.UUID], deja_signales: set[uuid.UUID], **kw
+) -> int:
     illisibles = 0
     for doc_id in ids:
         try:
@@ -408,6 +421,12 @@ def _lire_documents(db: Session, candidat_id: uuid.UUID, ids: list[uuid.UUID], *
         except ErreurMetier:
             db.rollback()
             illisibles += 1
+            if doc_id not in deja_signales:  # mémorisé pour que l'état le montre encore après `lancer`
+                audit.journaliser(
+                    db, ACTION_LECTURE_ILLISIBLE, ResultatAudit.ECHEC, acteur_id=kw["acteur_id"],
+                    ressource_type="document", ressource_id=doc_id, details={},
+                )
+                db.commit()
     return illisibles
 
 
@@ -457,7 +476,7 @@ def lancer(
     d = relire()  # 404 hors bureau ou démarche inconnue
     a_lire = len(d.ids_non_lus)
     illisibles = _lire_documents(
-        db, candidat_id, d.ids_non_lus, acteur_id=acteur_id, parametres=parametres, cle_maitresse=cle,
+        db, candidat_id, d.ids_non_lus, set(d.ids_illisibles), acteur_id=acteur_id, parametres=parametres, cle_maitresse=cle,
         lecteur_document=lecteur, lecteur_vision=vision,
     )
     d = relire()

@@ -59,6 +59,7 @@ from app.services.lecture_vision import LecteurVision
 from app.services.pieces_requises import obtenir_demarche, verifier_completude_dossier
 
 MOTIF_DISCORDANCE_INTER_PIECES = "discordance_inter_pieces"
+MOTIF_CORRIGE_HUMAIN = "corrige_humain"
 _CODES_DISCORDANCE = frozenset({"nom_discordant", "prenom_discordant", "date_naissance_discordante"})
 _AAD_VALEUR, _AAD_ALTERNATIVE, _AAD_EXTRAIT = "extraction_valeur", "extraction_valeur_alternative", "extraction_extrait"
 
@@ -242,7 +243,9 @@ def lancer_extraction_document(
     lecteur_document: LecteurDocument,
     lecteur_vision: LecteurVision | None = None,
     date_reference: date | None = None,
+    recalculer_controles: bool = True,
 ) -> ResultatExtractionDocumentSortie:
+    """`recalculer_controles=False` : le lot recalcule les contrôles croisés une fois à la fin."""
     tid = _exiger_tenant(db)
     obtenir_candidat_orm(db, candidat_id)
     meta, contenu = lire_document_dechiffre(
@@ -273,7 +276,10 @@ def lancer_extraction_document(
         if doc is None:
             raise NonTrouve("Document introuvable.") from None
         _persister(db, doc, fusionnes, tid, cle_maitresse)
-    alertes = _recalculer_controles(db, candidat_id, cle_maitresse, date_reference or date.today())
+    alertes = (
+        _recalculer_controles(db, candidat_id, cle_maitresse, date_reference or date.today())
+        if recalculer_controles else []
+    )
     audit.journaliser(
         db,
         "extraction.lancer",
@@ -351,11 +357,29 @@ def lancer_extraction_lot(
                     lecteur_document=lecteur_document,
                     lecteur_vision=lecteur_vision,
                     date_reference=date_reference,
+                    recalculer_controles=False,
                 )
             )
-        except DonneesInvalides as exc:  # un fichier illisible n'arrête pas le lot
+        except (DonneesInvalides, ServiceIndisponible) as exc:
+            # fichier illisible ou OCR absent : l'erreur est rapportée pour ce document (message sans contenu)
+            # et le lot continue ; rien de partiel n'est conservé pour ce document.
+            db.rollback()
             erreurs.append(ErreurDocumentSortie(document_id=document_id, detail=exc.message))
-    alertes = resultats[-1].alertes if resultats else []
+    alertes: list[AlerteSortie] = []
+    if resultats:  # contrôles croisés une seule fois, sur tout le dossier lu
+        alertes = [_alerte_sortie(a) for a in _recalculer_controles(
+            db, candidat_id, cle_maitresse, date_reference or date.today()
+        )]
+        db.commit()
+        resultats = [  # statuts à jour après les contrôles croisés
+            r.model_copy(update={"extractions": [
+                vers_sortie(e, cle_maitresse) for e in db.scalars(
+                    select(ExtractionDocument).where(ExtractionDocument.document_id == r.document_id)
+                    .order_by(ExtractionDocument.champ)
+                )
+            ]})
+            for r in resultats
+        ]
     return ResultatLotSortie(
         completude=completude,
         dossier_complet=completude.pret_pour_prerequis if completude else None,
@@ -398,6 +422,12 @@ def _obtenir_extraction(db: Session, candidat_id: uuid.UUID, extraction_id: uuid
     return e
 
 
+def _a_des_points_forts(db: Session, candidat_id: uuid.UUID) -> bool:
+    from app.modeles.point_fort import PointFort  # noqa: PLC0415 - import tardif (évite un cycle de modèles)
+
+    return db.scalar(select(PointFort.id).where(PointFort.candidat_id == candidat_id).limit(1)) is not None
+
+
 def decider_extraction(
     db: Session,
     *,
@@ -417,7 +447,9 @@ def decider_extraction(
             raise DonneesInvalides(
                 "La valeur lue n'est pas valide pour ce champ : corrigez-la avant de la confirmer."
             )
-        e.statut, e.motif = StatutExtraction.VALIDE_HUMAIN, None
+        # une valeur corrigée par l'humain garde sa marque (la preuve citée n'est plus l'extrait d'origine)
+        e.statut = StatutExtraction.VALIDE_HUMAIN
+        e.motif = MOTIF_CORRIGE_HUMAIN if e.motif == MOTIF_CORRIGE_HUMAIN else None
     elif action == "rejeter":
         e.statut, e.motif = StatutExtraction.REJETE, "rejete_humain"
     elif action == "corriger":
@@ -425,7 +457,7 @@ def decider_extraction(
         if not valeur_valide(e.champ, nouvelle):
             raise DonneesInvalides("La valeur saisie n'est pas valide pour ce champ.")
         e.valeur_chiffree = chiffrer_champ(cle_maitresse, tid, _AAD_VALEUR, nouvelle) or ""
-        e.statut, e.motif = StatutExtraction.VALIDE_HUMAIN, "corrige_humain"
+        e.statut, e.motif = StatutExtraction.VALIDE_HUMAIN, MOTIF_CORRIGE_HUMAIN
         e.applique_le = None
     else:  # pragma: no cover - les routes n'appellent que les trois actions
         raise DonneesInvalides("Action inconnue.")
@@ -439,5 +471,11 @@ def decider_extraction(
         ressource_id=e.id,
         details={"candidat_id": str(candidat_id), "champ": e.champ},
     )
-    db.commit()
+    if action in ("rejeter", "corriger") and _a_des_points_forts(db, candidat_id):
+        # la preuve d'un point fort a pu changer : on resynchronise (un point confirmé sans preuve est rejeté)
+        from app.services.deductions_dossier import calculer_points_forts  # noqa: PLC0415 - évite un import circulaire
+
+        calculer_points_forts(db, candidat_id=candidat_id, acteur_id=acteur_id, cle_maitresse=cle_maitresse)
+    else:
+        db.commit()
     return vers_sortie(e, cle_maitresse)

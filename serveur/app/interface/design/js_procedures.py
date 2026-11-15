@@ -54,6 +54,7 @@ JS_PROCEDURES = """
 
     function retourProcedure(msg, ok) {
       const z = document.getElementById("zone-retour-procedure");
+      annoncer(msg);
       z.textContent = msg;
       z.style.borderColor = ok ? "var(--bon)" : "var(--critique)";
       z.classList.remove("cache");
@@ -432,6 +433,7 @@ JS_PROCEDURES = """
 
     function retourGenerationIA(msg, ok) {
       const z = document.getElementById("zone-retour-generation-ia");
+      annoncer(msg);
       z.textContent = msg;
       z.style.borderColor = ok ? "var(--bon)" : "var(--critique)";
       z.classList.remove("cache");

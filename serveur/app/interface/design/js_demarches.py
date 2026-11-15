@@ -183,6 +183,7 @@ JS_DEMARCHES = """
       if (rep.ok) {
         const res = await rep.json();
         zone.replaceChildren(formaterCompteRenduPilotageHtml(res));
+        annoncer("Compte rendu du pilotage disponible.");
         await rafraichirTableauDeBord();
         notifier(res.resume_francais, res.succes);
       } else {
@@ -596,6 +597,7 @@ JS_DEMARCHES = """
       if (rep.ok) {
         const tache = await rep.json();
         zone.replaceChildren(formaterTacheEnTexteHtml(tache, codeDemarche));
+        annoncer("Suivi de la tâche mis à jour.");
         await rafraichirTableauDeBord();
         const libStatut = LIBELLES_STATUT_TACHE_FR[tache.statut] || tache.statut;
         notifier(`Tâche créée : ${libStatut}`, true);

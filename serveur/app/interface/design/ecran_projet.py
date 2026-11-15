@@ -64,6 +64,13 @@ HTML_VUE = rendre_icones(
         <label class="champ" for="pp-texte">Texte du projet
           <textarea id="pp-texte" maxlength="6000"></textarea>
         </label>
+        <div id="pp-confirmation" class="pp-alerte cache" role="alertdialog" aria-labelledby="pp-confirmation-titre">
+          <p id="pp-confirmation-titre"></p>
+          <div class="pp-actions">
+            <button id="pp-btn-confirmer-remplacement" class="btn btn-danger" type="button">Remplacer le texte</button>
+            <button id="pp-btn-annuler-remplacement" class="btn btn-contour" type="button">Annuler</button>
+          </div>
+        </div>
         <div class="pp-actions">
           <button id="pp-btn-generer" class="btn btn-secondaire" type="button">Générer un brouillon</button>
           <button id="pp-btn-enregistrer" class="btn btn-contour" type="button">Enregistrer</button>
@@ -92,6 +99,8 @@ JS_PROJET = """
       preuve_invalidee: "La pièce n'est plus confirmée : point retiré."
     };
     let ppVersion = null;
+    let ppStatut = null;
+    let ppTexteCharge = "";
 
     function ppEcriture() {
       return roleActif === "administrateur" || roleActif === "employe";
@@ -169,11 +178,15 @@ JS_PROJET = """
       const statut = document.getElementById("pp-statut");
       if (!projet) {
         ppVersion = null;
+        ppStatut = null;
+        ppTexteCharge = "";
         texte.value = "";
         statut.textContent = "Aucun projet pour cet étudiant. Générez un brouillon.";
         return;
       }
       ppVersion = projet.version;
+      ppStatut = projet.statut;
+      ppTexteCharge = projet.texte;
       texte.value = projet.texte;
       statut.textContent = "Version " + projet.version + " : " + (projet.statut === "valide" ? "validé" : "brouillon") +
         " (" + projet.nb_points_forts_utilises + " point(s) fort(s) confirmé(s) utilisé(s)).";
@@ -202,8 +215,16 @@ JS_PROJET = """
         const liste = await repPoints.json();
         if (!liste.length) points.appendChild(ppEl("p", "note", "Aucun point fort. Confirmez des valeurs lues puis calculez."));
         liste.forEach((p) => points.appendChild(ppCarte(p)));
+      } else {
+        notifier((await ppDetail(repPoints)) || "Impossible de charger les points forts.", false);
       }
-      ppAfficherProjet(repProjet.ok ? await repProjet.json() : null);
+      if (repProjet.ok) {
+        ppAfficherProjet(await repProjet.json());
+      } else if (repProjet.status === 404) {
+        ppAfficherProjet(null);
+      } else {
+        notifier((await ppDetail(repProjet)) || "Impossible de charger le projet professionnel.", false);
+      }
     }
 
     function ppCorps(objet) {
@@ -213,18 +234,50 @@ JS_PROJET = """
       if (!candidatActifId) { notifier("Choisissez d'abord un étudiant.", false); return; }
       ppAction("/deductions/calculer", { method: "POST" }, "Points forts calculés : confirmez-les un par un.");
     });
+    function ppMasquerConfirmation() {
+      document.getElementById("pp-confirmation").classList.add("cache");
+    }
+    function ppGenerer(remplacerValide) {
+      ppMasquerConfirmation();
+      const existe = ppVersion !== null;
+      ppAction("/projet-professionnel/generer",
+        ppCorps({ remplacer: existe, remplacer_valide: remplacerValide }), "Brouillon généré : relisez-le.");
+    }
     document.getElementById("pp-btn-generer").addEventListener("click", () => {
       if (!candidatActifId) { notifier("Choisissez d'abord un étudiant.", false); return; }
-      ppAction("/projet-professionnel/generer", ppCorps({ remplacer: ppVersion !== null }), "Brouillon généré : relisez-le.");
+      if (ppVersion === null) { ppGenerer(false); return; }
+      const valide = ppStatut === "valide";
+      const edite = document.getElementById("pp-texte").value.trim() !== ppTexteCharge.trim();
+      const message = valide
+        ? "Ce projet est VALIDÉ. Générer un nouveau brouillon le remplace et annule la validation."
+        : edite
+          ? "Le texte contient des modifications non enregistrées. Générer un brouillon les écrase."
+          : "Générer un nouveau brouillon remplace le texte actuel.";
+      document.getElementById("pp-confirmation-titre").textContent = message;
+      document.getElementById("pp-btn-confirmer-remplacement").onclick = () => ppGenerer(valide);
+      document.getElementById("pp-confirmation").classList.remove("cache");
     });
+    document.getElementById("pp-btn-annuler-remplacement").addEventListener("click", ppMasquerConfirmation);
     document.getElementById("pp-btn-enregistrer").addEventListener("click", () => {
       const texte = document.getElementById("pp-texte").value.trim();
       if (!candidatActifId || ppVersion === null || !texte) { notifier("Rien à enregistrer.", false); return; }
       ppAction("/projet-professionnel", { method: "PUT", body: JSON.stringify({ texte: texte, version: ppVersion }) }, "Projet enregistré.");
     });
-    document.getElementById("pp-btn-valider").addEventListener("click", () => {
+    document.getElementById("pp-btn-valider").addEventListener("click", async () => {
       if (!candidatActifId || ppVersion === null) { notifier("Aucun projet à valider.", false); return; }
-      ppAction("/projet-professionnel/valider", ppCorps({ version: ppVersion }), "Projet validé.");
+      let version = ppVersion;
+      const texte = document.getElementById("pp-texte").value.trim();
+      if (texte !== ppTexteCharge.trim()) {
+        if (!texte) { notifier("Le texte est vide : rien à valider.", false); return; }
+        const rep = await appelApi(ppUrl("/projet-professionnel"), { method: "PUT", body: JSON.stringify({ texte: texte, version: version }) });
+        if (!rep.ok) {
+          notifier((await ppDetail(rep)) || "Enregistrement impossible : projet non validé.", false);
+          await ppActualiser();
+          return;
+        }
+        version = (await rep.json()).version;
+      }
+      ppAction("/projet-professionnel/valider", ppCorps({ version: version }), "Projet validé.");
     });
     const allerVersVuePrecedentePp = allerVersVue;
     allerVersVue = function (cible) {

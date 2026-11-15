@@ -87,7 +87,7 @@ class ChampAppliqueSortie(SchemaSortie):
 class ConflitApplicationSortie(SchemaSortie):
     champ: str
     extraction_id: uuid.UUID
-    raison: str  # code : fiche_deja_renseignee, passeport_deja_utilise, valeurs_multiples
+    raison: str  # code : fiche_deja_renseignee, passeport_deja_utilise, valeurs_multiples, ecriture_impossible
 
 
 class RapportApplicationSortie(SchemaSortie):

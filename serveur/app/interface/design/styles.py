@@ -29,6 +29,7 @@ TOKENS_CLAIR = """
       --surface-3: #e5e7f2;
       --bord: #e2e4ef;
       --bord-fort: #c9cde0;
+      --bord-champ: #7b82a3;
       --texte: #141831;
       --texte-doux: #454c6c;
       --texte-faible: #5d6386;
@@ -70,6 +71,7 @@ TOKENS_SOMBRE = """
       --surface-3: #262b50;
       --bord: #252a4b;
       --bord-fort: #3a406e;
+      --bord-champ: #7a80ad;
       --texte: #e9eaf8;
       --texte-doux: #b1b5d6;
       --texte-faible: #8f94ba;
@@ -156,7 +158,10 @@ CSS_BASE = """
     p { margin: 0 0 var(--e3); }
     small { font-size: var(--t-sm); color: var(--texte-doux); }
     .cache { display: none !important; }
-    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .sr-focus { position: absolute; left: -9999px; top: var(--e2); z-index: 100; padding: var(--e2) var(--e4); border-radius: var(--r-m); background: var(--accent-plein); color: var(--sur-accent); font-weight: 600; text-decoration: none; }
+    .sr-focus:focus, .sr-focus:focus-visible { position: fixed; left: var(--e4); top: var(--e4); }
+    main:focus, .vue-ecran h2[tabindex="-1"]:focus { outline: none; }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-s); }
     .ico { width: 1.15em; height: 1.15em; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
     .surtitre { display: block; font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--texte-faible); }
@@ -213,6 +218,7 @@ CSS_BASE = """
     main { min-width: 0; padding: var(--e5) var(--e6) var(--e8); max-width: var(--largeur-contenu); width: 100%; justify-self: center; }
     .barre-haute { display: none; }
     .scrim { display: none; }
+    aside#navigation-principale .nav-fermer { display: none; }
     #banniere-etat {
       display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2) var(--e4); margin: 0 0 var(--e5);
       padding: var(--e2) var(--e2) var(--e2) var(--e2); background: var(--surface); border: 1px solid var(--bord);
@@ -317,15 +323,20 @@ CSS_COMPOSANTS = """
     .notif { padding: var(--e3) var(--e4); border-radius: var(--r-m); margin-bottom: var(--e3); font-size: var(--t-sm); font-weight: 600; border: 1px solid var(--bord); background: var(--surface-2); }
     .notif-ok { background: var(--bon-doux); color: var(--bon-texte); border-color: transparent; }
     .notif-err { background: var(--critique-doux); color: var(--critique-texte); border-color: transparent; }
-    #zone-notification.notif, .toast {
+    #zone-notification { position: fixed; top: var(--e4); right: var(--e4); z-index: 80; display: flex; flex-direction: column; gap: var(--e2); max-width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+    #zone-notification > div { display: flex; flex-direction: column; gap: var(--e2); }
+    #zone-notification .toast { position: relative; inset: auto; max-width: none; pointer-events: auto; align-items: center; }
+    #zone-notification .toast .notif-texte { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    #zone-notification .toast .btn { margin: -4px 0; flex: none; }
+    .toast {
       position: fixed; top: var(--e4); right: var(--e4); z-index: 80; margin: 0; max-width: min(420px, calc(100vw - 32px));
       display: flex; align-items: flex-start; gap: var(--e3); padding: var(--e3) var(--e4) var(--e3) var(--e3);
       background: var(--surface); color: var(--texte); border: 1px solid var(--bord); border-radius: var(--r-l); box-shadow: var(--ombre-flottante);
       font-weight: 500; line-height: 1.45; animation: apparition var(--d3) var(--courbe) both;
     }
-    #zone-notification.notif::before, .toast::before { content: ""; width: 10px; height: 10px; margin-top: 5px; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-doux); }
-    #zone-notification.notif-ok::before, .toast-ok::before { background: var(--bon); box-shadow: 0 0 0 4px var(--bon-doux); }
-    #zone-notification.notif-err::before, .toast-err::before { background: var(--critique); box-shadow: 0 0 0 4px var(--critique-doux); border-radius: 2px; transform: rotate(45deg); }
+    .toast::before { content: ""; width: 10px; height: 10px; margin-top: 5px; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-doux); }
+    .toast-ok::before { background: var(--bon); box-shadow: 0 0 0 4px var(--bon-doux); }
+    .toast-err::before { background: var(--critique); box-shadow: 0 0 0 4px var(--critique-doux); border-radius: 2px; transform: rotate(45deg); }
     @keyframes apparition { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: none; } }
 
     /* ---------- Chiffres clés ---------- */
@@ -426,7 +437,7 @@ CSS_COMPOSANTS = """
     label.case input[type="checkbox"], .liste-cases input[type="checkbox"], .ligne-proc input[type="checkbox"], label.case input[type="radio"] { width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; padding: 0; flex: none; accent-color: var(--accent-plein); }
     input[type="checkbox"], input[type="radio"] { accent-color: var(--accent-plein); }
     input, select, textarea {
-      width: 100%; min-height: var(--h-ctrl); padding: 8px var(--e3); border: 1px solid var(--bord-fort); border-radius: var(--r-m);
+      width: 100%; min-height: var(--h-ctrl); padding: 8px var(--e3); border: 1px solid var(--bord-champ); border-radius: var(--r-m);
       background: var(--surface); color: var(--texte); font: inherit; font-size: var(--t-base); font-weight: 400;
       transition: border-color var(--d1) var(--courbe), box-shadow var(--d1) var(--courbe), background-color var(--d1) var(--courbe);
     }
@@ -434,10 +445,10 @@ CSS_COMPOSANTS = """
     select { cursor: pointer; }
     input::placeholder, textarea::placeholder { color: var(--texte-faible); opacity: 1; }
     input:hover, select:hover, textarea:hover { border-color: var(--texte-faible); }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--anneau); }
-    input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-m); }
     input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--critique); }
-    input[aria-invalid="true"]:focus, textarea[aria-invalid="true"]:focus { box-shadow: 0 0 0 3px var(--critique-doux); }
+    input[aria-invalid="true"]:focus-visible, select[aria-invalid="true"]:focus-visible, textarea[aria-invalid="true"]:focus-visible { outline-color: var(--critique); }
     input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--texte-faible); cursor: not-allowed; }
     input[type="file"] { padding: 6px var(--e2); }
     fieldset { border: 0; padding: 0; margin: 0 0 var(--e5); min-width: 0; }
@@ -657,13 +668,14 @@ CSS_ADAPTATIF = """
         transition: transform var(--d2) var(--courbe), visibility 0s linear var(--d2);
       }
       aside#navigation-principale .marque { display: none; }
+      aside#navigation-principale .nav-fermer { display: inline-flex; align-self: flex-end; margin: 0; }
       body.nav-ouverte { overflow: hidden; }
       body.nav-ouverte aside#navigation-principale { transform: none; visibility: visible; transition: transform var(--d2) var(--courbe), visibility 0s; }
       body.nav-ouverte .scrim { display: block; position: fixed; inset: 0; z-index: 50; background: var(--voile); border: 0; animation: fondu var(--d2) var(--courbe) both; }
       main { padding: var(--e4) max(16px, env(safe-area-inset-right, 0px)) var(--e7) max(16px, env(safe-area-inset-left, 0px)); }
       #banniere-etat { margin-bottom: var(--e4); }
       .banniere-regle-courte { margin-left: 0; }
-      #zone-notification.notif, .toast { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); top: auto; bottom: calc(var(--e4) + env(safe-area-inset-bottom, 0px)); max-width: none; }
+      #zone-notification { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); top: auto; bottom: calc(var(--e4) + env(safe-area-inset-bottom, 0px)); max-width: none; }
       .carte { padding: var(--e4); }
       h2 { font-size: var(--t-lg); }
       .stat .valeur, .kpi .valeur { font-size: var(--t-xl); }
@@ -689,6 +701,13 @@ CSS_ADAPTATIF = """
     }
     @media (max-width: 900px) and (pointer: coarse) {
       .btn-sm, .btn-sm.btn-icone { min-height: var(--h-ctrl); min-width: var(--h-ctrl); }
+    }
+    /* Cibles tactiles : 44 px au minimum quand le pointeur est grossier (doigt) */
+    @media (pointer: coarse) {
+      .btn, .btn-sm, .btn-lg, aside button.nav-btn, .onglet, .puce-cmd, .bouton-theme, input, select, textarea { min-height: 44px; }
+      .btn-icone, .btn-sm.btn-icone { min-width: 44px; }
+      .barre-chrome-direct .btn-nav-mini { min-width: 44px; height: auto; min-height: 44px; }
+      label.case, .liste-cases label { min-height: 44px; align-items: center; }
     }
     @media (min-width: 901px) {
       .barre-haute .bouton-theme-mobile { display: none; }

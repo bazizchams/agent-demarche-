@@ -110,6 +110,8 @@ JS_OUVERTURE_PC = """
     function ouvAfficherTache(tache) {
       ouvTacheId = tache.id;
       ouvAfficherEtat(tache.statut, tache.message_alerte);
+      if (typeof fdSynchroniserDiscussion === "function") fdSynchroniserDiscussion();
+      if (typeof fdCopierEtatPc === "function") fdCopierEtatPc();
       if (OUV_STATUTS_FINAUX.indexOf(tache.statut) !== -1) ouvArreterSuivi();
     }
 
@@ -137,6 +139,7 @@ JS_OUVERTURE_PC = """
       ouvArreterSuivi();
       ouvTacheId = null;
       ouvCandidat = c ? c.id : null;
+      if (typeof fdSynchroniserDiscussion === "function") fdSynchroniserDiscussion();
       const bouton = document.getElementById("btn-ouvrir-sur-pc");
       if (!ouvCandidat) {
         bouton.disabled = true;

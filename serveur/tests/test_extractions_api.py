@@ -180,7 +180,7 @@ def test_relecture_remplace_les_extractions_non_decidees_et_garde_les_decisions_
     second = _par_champ(_extraire(client, cid, did))
     assert second["moyenne_generale"]["id"] == premier["moyenne_generale"]["id"]
     assert second["moyenne_generale"]["statut"] == "valide_humain"
-    assert len(client.get(f"/api/v1/candidats/{cid}/extractions").json()) == 1
+    assert len(client.get(f"/api/v1/candidats/{cid}/extractions").json()) == len(second)  # le relevé enrichi produit aussi intitulé, session, établissement
 
 
 # ---------------------------------------------------------------------- revue humaine
@@ -293,7 +293,7 @@ def test_appliquer_ignore_a_verifier_et_rejete(contexte: dict) -> None:
     champs = _par_champ(_extraire(client, cid, did))
     assert champs["moyenne_generale"]["statut"] == "a_verifier"
     rapport = client.post(f"/api/v1/candidats/{cid}/extractions/appliquer").json()
-    assert rapport["appliques"] == [] and rapport["a_verifier_restants"] == 1
+    assert rapport["appliques"] == [] and rapport["a_verifier_restants"] == len(champs)
 
 
 def test_appliquer_niveau_de_langue_confirme(contexte: dict) -> None:

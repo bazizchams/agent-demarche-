@@ -175,9 +175,10 @@ HTML_ETUDIANTS = (
           <input id="rech-candidat" type="search" placeholder="Rechercher par nom, prénom, e-mail ou passeport" aria-label="Rechercher un étudiant" />
           <button id="btn-rechercher-candidat" class="btn btn-secondaire" type="button">Rechercher</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Tableau des dossiers du bureau">
           <table id="table-candidats" aria-busy="true">
-            <thead><tr><th>Étudiant</th><th>Passeport</th><th>Formation visée</th><th>Fiche</th><th>Consentement (loi 18-07)</th><th>Actions</th></tr></thead>
+            <caption class="sr-only">Dossiers du bureau : étudiant, passeport, formation visée, fiche, consentement et actions</caption>
+            <thead><tr><th scope="col">Étudiant</th><th scope="col">Passeport</th><th scope="col">Formation visée</th><th scope="col">Fiche</th><th scope="col">Consentement (loi 18-07)</th><th scope="col">Actions</th></tr></thead>
             <tbody>
               <tr class="sr-only"><td colspan="6">Chargement des dossiers</td></tr>
               """
@@ -317,7 +318,7 @@ HTML_DOCUMENTS = (
         </div>
         <button id="btn-verifier-completude" class="btn btn-secondaire btn-sm" type="button">[[i:actualiser]]Vérifier maintenant</button>
       </div>
-      <div id="zone-completude" aria-live="polite">
+      <div id="zone-completude">
         <div class="carte carte-sobre etat-vide">"""
     + _ILLU_DOSSIER
     + """<strong>Aucune vérification pour l'instant.</strong><span>Choisissez un dossier dans « Étudiants et fiches », puis cliquez sur « Vérifier maintenant ».</span></div>
@@ -329,9 +330,10 @@ HTML_DOCUMENTS = (
           <p>Fichiers chiffrés du dossier actif. Le téléchargement les déchiffre pour vous seul.</p>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Tableau des pièces déposées dans le dossier">
         <table id="table-documents-candidat">
-          <thead><tr><th>Pièce</th><th>Fichier d'origine</th><th>Expiration</th><th class="num">Taille</th><th>Actions</th></tr></thead>
+          <caption class="sr-only">Pièces déposées dans le dossier actif : pièce, fichier d'origine, expiration, taille et actions</caption>
+          <thead><tr><th scope="col">Pièce</th><th scope="col">Fichier d'origine</th><th scope="col">Expiration</th><th scope="col" class="num">Taille</th><th scope="col">Actions</th></tr></thead>
           <tbody><tr><td colspan="5" class="etat-vide-cellule"><div class="etat-vide">"""
     + _ILLU_DOSSIER
     + """<strong>Aucun dossier choisi.</strong><span>Choisissez un étudiant pour voir ses pièces déposées.</span></div></td></tr></tbody>
@@ -365,7 +367,7 @@ HTML_CONSEILLER = (
           </label>
           <button id="btn-calculer-score" class="btn btn-primaire" type="button">Calculer le score</button>
         </div>
-        <div id="zone-score-acceptation" class="score-zone" aria-live="polite">
+        <div id="zone-score-acceptation" class="score-zone">
           <div class="etat-vide">"""
     + _ILLU_JAUGE
     + """<strong>Pas encore de score.</strong><span>Cliquez sur « Calculer le score » : score sur 100, pièces manquantes, points forts et plan d'action.</span></div>
@@ -382,7 +384,7 @@ HTML_CONSEILLER = (
           <button class="puce-cmd" type="button" onclick="poserQuestionRapide('Comment déclarer un bac algérien en français (> 1000 heures) et remplir le dossier de scolarité (2 activités) ?')">Bac en français (+1000 h) et scolarité</button>
           <button class="puce-cmd" type="button" onclick="poserQuestionRapide('Comment fonctionne le dossier pré-consulaire en 4 étapes et la réduction visa CAPAGO de 50 % ?')">Dossier pré-consulaire et visa CAPAGO</button>
         </div>
-        <div id="fil-discussion" class="fil-discussion" aria-live="polite">
+        <div id="fil-discussion" class="fil-discussion" role="log">
           <div class="etat-vide"><strong>Aucune question pour l'instant.</strong><span>Posez une question ci-dessous ou choisissez une question rapide pour obtenir l'analyse du conseiller.</span></div>
         </div>
         <div class="barre-saisie">

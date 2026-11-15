@@ -22,6 +22,7 @@ import unicodedata
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -265,6 +266,26 @@ def lire_projet(db: Session, *, candidat_id: uuid.UUID, cle_maitresse: bytes) ->
     return _sortie(db, p, cle_maitresse)
 
 
+class _ClientEnregistre:
+    """Enveloppe d'un client IA : retient si l'appel a été tenté et la vraie réponse (tokens) pour la tracer."""
+
+    def __init__(self, client: ClientLLM) -> None:
+        self._client = client
+        self.appele = False
+        self.reponse: ReponseLLM | None = None
+
+    def generer(self, **kwargs: Any) -> ReponseLLM:
+        self.appele = True
+        self.reponse = self._client.generer(**kwargs)
+        return self.reponse
+
+
+def _tracer_appel(db: Session, acteur_id: uuid.UUID, enregistreur: _ClientEnregistre) -> None:
+    llm.tracer_appel(
+        db, acteur_id=acteur_id, fonction="projet_professionnel", reponse=enregistreur.reponse or ReponseLLM(texte="")
+    )
+
+
 def generer_projet(
     db: Session,
     client: ClientLLM | None,
@@ -273,20 +294,33 @@ def generer_projet(
     acteur_id: uuid.UUID,
     cle_maitresse: bytes,
     remplacer: bool = False,
+    remplacer_valide: bool = False,
 ) -> ProjetProfessionnelSortie:
     tid = _exiger_tenant(db)
     existant = _projet(db, candidat_id)
     if existant is not None and not remplacer:
         raise Conflit("Un projet professionnel existe déjà : demandez explicitement son remplacement.")
+    if existant is not None and existant.statut is StatutProjet.VALIDE and not remplacer_valide:
+        raise Conflit(
+            "Ce projet est validé : son remplacement annule la validation et doit être demandé explicitement "
+            "(remplacer_valide)."
+        )
     if client is not None:
         llm.verifier_quota(db)
     faits, programme, _, _ = construire_faits(db, candidat_id, cle_maitresse)
     fiche = obtenir_candidat(db, candidat_id=candidat_id, cle_maitresse=cle_maitresse)
-    genere = generer_texte(
-        client, faits=faits, programme=programme, termes_identite=(fiche.nom, fiche.prenom)
-    )
-    if client is not None:
-        llm.tracer_appel(db, acteur_id=acteur_id, fonction="projet_professionnel", reponse=ReponseLLM(texte=""))
+    enregistreur = _ClientEnregistre(client) if client is not None else None
+    try:
+        genere = generer_texte(
+            enregistreur, faits=faits, programme=programme, termes_identite=(fiche.nom, fiche.prenom)
+        )
+    except Exception:
+        if enregistreur is not None and enregistreur.appele:  # échec du client : le quota est consommé, on le trace
+            _tracer_appel(db, acteur_id, enregistreur)
+            db.commit()
+        raise
+    if enregistreur is not None:
+        _tracer_appel(db, acteur_id, enregistreur)
     chiffre = chiffrer_champ(cle_maitresse, tid, _AAD_TEXTE, genere.texte) or ""
     if existant is None:
         p = ProjetProfessionnel(

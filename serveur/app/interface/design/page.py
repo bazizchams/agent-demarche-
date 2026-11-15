@@ -25,8 +25,27 @@ from app.interface.design.vues_demarches import (
 from app.interface.design.vues_dossiers import HTML_CONSEILLER, HTML_DOCUMENTS, HTML_ETUDIANTS
 
 JS_DEMARRAGE = """    // Connexion automatique dès l'ouverture de l'interface pour une prise en main immédiate
-    window.addEventListener("DOMContentLoaded", () => {
-      connecterOperateur(true);
+    // Un rechargement de la page garde la session : on la reprend (cookie valide) au lieu de redemander la connexion.
+    async function reprendreSessionOuverte() {
+      let data = null;
+      try {
+        const rep = await appelApi("/api/v1/auth/moi");
+        data = rep.ok ? await rep.json() : null;
+      } catch (e) { data = null; }
+      if (!data || !data.utilisateur || !data.jeton_csrf) return false;
+      jetonCsrf = data.jeton_csrf;
+      roleActif = data.utilisateur.role;
+      const roleFr = data.utilisateur.role === "administrateur" ? "Administrateur du bureau" : "Employé";
+      document.getElementById("etat-utilisateur").textContent = data.utilisateur.nom_affiche + " (" + roleFr + ")";
+      document.getElementById("btn-se-deconnecter").classList.remove("cache");
+      majBandeauVerification(data.utilisateur);
+      await chargerCandidats();
+      await rafraichirTableauDeBord();
+      return true;
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      if (!(await reprendreSessionOuverte())) connecterOperateur(true);
     });
 """
 

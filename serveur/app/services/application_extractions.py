@@ -145,7 +145,14 @@ def appliquer_extractions_a_fiche(
         conflits.append(ConflitApplicationSortie(champ=NUMERO_PASSEPORT, extraction_id=ecarte.id, raison="passeport_deja_utilise"))
         appliques = [a for a in appliques if a[0] != NUMERO_PASSEPORT]
         champs_a_ecrire.pop(NUMERO_PASSEPORT, None)
-        _appliquer_modification(db, candidat_id=candidat_id, champs=champs_a_ecrire, acteur_id=acteur_id, cle=cle_maitresse)
+        if not _appliquer_modification(
+            db, candidat_id=candidat_id, champs=champs_a_ecrire, acteur_id=acteur_id, cle=cle_maitresse
+        ):
+            # Second refus : rien n'a été écrit, on ne déclare donc aucune valeur appliquée.
+            conflits += [
+                ConflitApplicationSortie(champ=c, extraction_id=e.id, raison="ecriture_impossible") for c, e, _ in appliques
+            ]
+            appliques = []
 
     maintenant = maintenant_utc()
     for champ, extraction, _ in appliques:

@@ -14,7 +14,6 @@ Règles :
 
 from __future__ import annotations
 
-import calendar
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -47,11 +46,14 @@ from app.services.fiche_formation import (
     normaliser,
 )
 from app.services.prerequis_formation import NIVEAUX_CECRL
+from app.services.validite_certificats import (
+    EXPIRE,
+    SANS_EXPIRATION_STATUT,
+    VALIDE,
+    VALIDITE_TCF_MOIS,
+    evaluer_validite,
+)
 
-# Source : config/demarches/campus_france.yaml (« validité TCF : 2 ans »).
-VALIDITE_TCF_MOIS = 24
-# Source : docs/ecoles_privees_france.md §1.4 (DELF et DALF acquis à vie).
-CERTIFICATS_SANS_EXPIRATION = frozenset({"DELF", "DALF"})
 # Écart de langue toléré comme « ambitieux » (au-delà : exclu) et marges « sûr » (réglages de classement,
 # pas des exigences officielles).
 ECART_LANGUE_AMBITIEUX_MAX = 1
@@ -74,12 +76,6 @@ class Critere:
     donnee: str
     detail: str
     marge: float | None = None
-
-
-def _ajouter_mois(depart: date, mois: int) -> date:
-    total = depart.month - 1 + mois
-    annee, mois_cible = depart.year + total // 12, total % 12 + 1
-    return date(annee, mois_cible, min(depart.day, calendar.monthrange(annee, mois_cible)[1]))
 
 
 def _fmt(valeur: float) -> str:
@@ -136,17 +132,15 @@ def _motif_certificat_insuffisant(
         return f"Date du certificat de {libelle.lower()} absente."
     if certificat.date_obtention > aujourd_hui:
         return f"Date du certificat de {libelle.lower()} postérieure à aujourd'hui : incohérente."
-    if certificat.type in CERTIFICATS_SANS_EXPIRATION:
+    reference = date_rentree or aujourd_hui
+    validite = evaluer_validite(certificat.type, certificat.date_obtention, reference)
+    if validite.statut == SANS_EXPIRATION_STATUT or validite.statut == VALIDE:
         return None
-    if certificat.type == "TCF":
-        expiration = _ajouter_mois(certificat.date_obtention, VALIDITE_TCF_MOIS)
-        reference = date_rentree or aujourd_hui
-        if expiration < reference:
-            return (
-                f"TCF du {certificat.date_obtention.isoformat()} expiré le {expiration.isoformat()} "
-                f"(validité {VALIDITE_TCF_MOIS // 12} ans) avant le {reference.isoformat()} : à renouveler."
-            )
-        return None
+    if validite.statut == EXPIRE and validite.fin is not None:
+        return (
+            f"TCF du {certificat.date_obtention.isoformat()} expiré le {validite.fin.isoformat()} "
+            f"(validité {VALIDITE_TCF_MOIS // 12} ans) avant le {reference.isoformat()} : à renouveler."
+        )
     return f"Validité du certificat {certificat.type} non vérifiable : à contrôler."
 
 

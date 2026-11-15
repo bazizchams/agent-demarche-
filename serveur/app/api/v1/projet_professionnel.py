@@ -36,6 +36,7 @@ def generer(
     return service.generer_projet(
         ctx.db, client, candidat_id=candidat_id, acteur_id=ctx.utilisateur.id, cle_maitresse=cle_maitresse,
         remplacer=bool(donnees and donnees.remplacer),
+        remplacer_valide=bool(donnees and donnees.remplacer_valide),
     )
 
 

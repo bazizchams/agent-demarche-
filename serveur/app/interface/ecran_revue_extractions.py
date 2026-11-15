@@ -170,7 +170,7 @@ JS_REVUE = """
       }
       const img = rxEl("img", "rx-image");
       img.src = rxImagesDocuments[doc.id];
-      img.alt = "Image du document source";
+      img.alt = "Aperçu du document : " + (doc.nom_fichier_origine || "pièce du dossier");
       conteneur.appendChild(img);
     }
 
@@ -178,7 +178,34 @@ JS_REVUE = """
       return motif ? (RX_MOTIFS[motif] || "Motif : " + motif) : "";
     }
 
+    // Focus conservé : après Confirmer/Rejeter la liste est reconstruite ; on refocalise le bouton de la même
+    // valeur (même action, sinon un autre bouton de la carte), sinon celui de la valeur suivante.
+    let rxFocus = null;
+    function rxBoutonsDecision() {
+      return Array.from(document.querySelectorAll("#rx-liste button[data-rx-extraction]"));
+    }
+    function rxMemoriserFocus(extraction, action) {
+      const ids = [];
+      rxBoutonsDecision().forEach((b) => {
+        const id = b.getAttribute("data-rx-extraction");
+        if (ids.indexOf(id) < 0) ids.push(id);
+      });
+      const rang = ids.indexOf(extraction.id);
+      rxFocus = { id: extraction.id, action: action, suivant: rang >= 0 && rang + 1 < ids.length ? ids[rang + 1] : null };
+    }
+    function rxRefocaliser() {
+      if (!rxFocus) return;
+      const cible = rxFocus;
+      rxFocus = null;
+      const boutons = rxBoutonsDecision();
+      const deCarte = boutons.filter((b) => b.getAttribute("data-rx-extraction") === cible.id);
+      const trouve = deCarte.find((b) => b.getAttribute("data-rx-action") === cible.action) || deCarte[0] ||
+        boutons.find((b) => b.getAttribute("data-rx-extraction") === cible.suivant) || boutons[0];
+      if (trouve) trouve.focus();
+    }
+
     async function rxDecider(extraction, action, valeur) {
+      rxMemoriserFocus(extraction, action);
       const options = { method: "POST" };
       if (action === "corriger") options.body = JSON.stringify({ valeur: valeur });
       const rep = await appelApi(rxUrlCandidat("/extractions/" + encodeURIComponent(extraction.id) + "/" + action), options);
@@ -188,11 +215,16 @@ JS_REVUE = """
         notifier((await rxLireDetail(rep)) || "Action impossible sur cette valeur.", false);
       }
       await rxActualiser();
+      rxRefocaliser();
     }
 
-    function rxBoutonAction(texte, classe, auClic) {
+    function rxBoutonAction(texte, classe, auClic, extraction, action) {
       const b = rxEl("button", "btn btn-sm " + classe, texte);
       b.type = "button";
+      if (extraction) {
+        b.setAttribute("data-rx-extraction", extraction.id);
+        b.setAttribute("data-rx-action", action);
+      }
       b.addEventListener("click", auClic);
       return b;
     }
@@ -241,11 +273,11 @@ JS_REVUE = """
       if (rxEcriture()) {
         const actions = rxEl("div", "rx-actions");
         if (extraction.statut !== "valide_humain") {
-          actions.appendChild(rxBoutonAction("Confirmer", "btn-primaire", () => rxDecider(extraction, "valider")));
+          actions.appendChild(rxBoutonAction("Confirmer", "btn-primaire", () => rxDecider(extraction, "valider"), extraction, "valider"));
         }
-        actions.appendChild(rxBoutonAction("Corriger", "btn-contour", () => rxAfficherCorrection(zoneCorrection, extraction)));
+        actions.appendChild(rxBoutonAction("Corriger", "btn-contour", () => rxAfficherCorrection(zoneCorrection, extraction), extraction, "corriger"));
         if (extraction.statut !== "rejete") {
-          actions.appendChild(rxBoutonAction("Rejeter", "btn-danger", () => rxDecider(extraction, "rejeter")));
+          actions.appendChild(rxBoutonAction("Rejeter", "btn-danger", () => rxDecider(extraction, "rejeter"), extraction, "rejeter"));
         }
         proposition.appendChild(actions);
         proposition.appendChild(zoneCorrection);

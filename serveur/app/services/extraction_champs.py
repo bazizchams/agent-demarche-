@@ -31,6 +31,43 @@ CERTIFICAT_DATE = "certificat_langue_date"
 NIVEAU_FRANCAIS = "niveau_francais"
 NIVEAU_ANGLAIS = "niveau_anglais"
 IELTS_BANDE = "ielts_bande"
+# --- Relevés de notes et diplômes (lus par `extraction_releves`) ---
+LIEU_NAISSANCE = "lieu_naissance"
+MOYENNE_ANNUELLE = "moyenne_annuelle"
+MENTION = "mention"
+RANG = "rang"
+DIPLOME_INTITULE = "diplome_intitule"
+DIPLOME_FILIERE = "diplome_filiere"
+DIPLOME_SPECIALITE = "diplome_specialite"
+DIPLOME_ETABLISSEMENT = "diplome_etablissement"
+DIPLOME_ANNEE = "diplome_annee"
+ANNEE_UNIVERSITAIRE = "annee_universitaire"
+SESSION = "session"
+DECISION_JURY = "decision_jury"
+NUMERO_BAC = "numero_bac"
+BAC_SERIE = "bac_serie"
+SEMESTRES_MAX = 10
+PREFIXE_MOYENNE_SEMESTRE = "moyenne_semestre_"
+PREFIXE_CREDITS_SEMESTRE = "credits_semestre_"
+CHAMPS_MOYENNE_SEMESTRE = tuple(f"{PREFIXE_MOYENNE_SEMESTRE}{n}" for n in range(1, SEMESTRES_MAX + 1))
+CHAMPS_CREDITS_SEMESTRE = tuple(f"{PREFIXE_CREDITS_SEMESTRE}{n}" for n in range(1, SEMESTRES_MAX + 1))
+CHAMPS_MOYENNES = frozenset({MOYENNE_GENERALE, MOYENNE_ANNUELLE, *CHAMPS_MOYENNE_SEMESTRE})
+MENTIONS = {
+    "passable": "Passable",
+    "assez bien": "Assez bien",
+    "bien": "Bien",
+    "tres bien": "Très bien",
+    "excellent": "Excellent",
+}
+_CHAMPS_TEXTE_RELEVE = frozenset(
+    {LIEU_NAISSANCE, DIPLOME_INTITULE, DIPLOME_FILIERE, DIPLOME_SPECIALITE, DIPLOME_ETABLISSEMENT,
+     SESSION, DECISION_JURY, BAC_SERIE}
+)
+CHAMPS_RELEVES = frozenset(
+    {LIEU_NAISSANCE, MOYENNE_ANNUELLE, MENTION, RANG, DIPLOME_INTITULE, DIPLOME_FILIERE, DIPLOME_SPECIALITE,
+     DIPLOME_ETABLISSEMENT, DIPLOME_ANNEE, ANNEE_UNIVERSITAIRE, SESSION, DECISION_JURY, NUMERO_BAC, BAC_SERIE,
+     *CHAMPS_MOYENNE_SEMESTRE, *CHAMPS_CREDITS_SEMESTRE}
+)
 
 CHAMPS_CONNUS = frozenset(
     {
@@ -38,7 +75,7 @@ CHAMPS_CONNUS = frozenset(
         DATE_EXPIRATION_PASSEPORT, MOYENNE_GENERALE, CERTIFICAT_TYPE, CERTIFICAT_DATE,
         NIVEAU_FRANCAIS, NIVEAU_ANGLAIS, IELTS_BANDE,
     }
-)
+) | CHAMPS_RELEVES
 CHAMPS_DATES = frozenset({DATE_NAISSANCE, DATE_EXPIRATION_PASSEPORT, CERTIFICAT_DATE})
 NIVEAUX_CECRL = ("A1", "A2", "B1", "B2", "C1", "C2")
 TYPES_CERTIFICAT = ("TCF", "DELF", "DALF", "IELTS")
@@ -147,9 +184,17 @@ def normaliser_valeur(champ: str, valeur: str) -> str:
     if champ in CHAMPS_DATES:
         d = analyser_date(brut)
         return d.isoformat() if d else brut
-    if champ in (MOYENNE_GENERALE, IELTS_BANDE):
+    if champ in (IELTS_BANDE, *CHAMPS_MOYENNES):
         d = _decimal(brut)
         return _forme_decimale(d) if d is not None else brut
+    if champ == MENTION:
+        return MENTIONS.get(_sans_accents(brut).lower(), brut)
+    if champ == RANG:
+        return re.sub(r"\s*(?:/|sur)\s*", "/", brut, flags=re.IGNORECASE)
+    if champ == ANNEE_UNIVERSITAIRE:
+        return re.sub(r"\s*[-/]\s*", "/", brut)
+    if champ == NUMERO_BAC:
+        return brut.replace(" ", "").upper()
     if champ == NUMERO_PASSEPORT:
         return brut.replace(" ", "").upper()
     if champ in (SEXE, NATIONALITE_CODE, NIVEAU_FRANCAIS, NIVEAU_ANGLAIS, CERTIFICAT_TYPE):
@@ -170,9 +215,11 @@ def valeur_valide(champ: str, valeur: str) -> bool:
         return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", v))
     if champ == SEXE:
         return v in ("M", "F")
-    if champ == MOYENNE_GENERALE:
+    if champ in CHAMPS_MOYENNES:
         d = _decimal(v)
         return d is not None and Decimal(0) <= d <= Decimal(20)
+    if champ in CHAMPS_RELEVES:
+        return _valeur_releve_valide(champ, v)
     if champ == IELTS_BANDE:
         d = _decimal(v)
         return d is not None and Decimal(0) <= d <= Decimal(9) and (d * 2) % 1 == 0
@@ -185,6 +232,33 @@ def valeur_valide(champ: str, valeur: str) -> bool:
     if champ == NUMERO_PASSEPORT:
         return bool(re.fullmatch(r"[A-Za-z0-9]{4,20}", v.replace(" ", "")))
     return len(v) <= 120  # nom, prénom
+
+
+def _valeur_releve_valide(champ: str, v: str) -> bool:
+    """Validité des champs de relevés/diplômes (forme canonique attendue ; texte libre ≤ 120)."""
+    annee_max = date.today().year
+    if champ == MENTION:
+        return v in MENTIONS.values()
+    if champ == RANG:
+        m = re.fullmatch(r"(\d{1,4})(?:/(\d{1,4}))?", v)
+        return bool(m) and int(m.group(1)) >= 1 and (m.group(2) is None or int(m.group(1)) <= int(m.group(2)))
+    if champ in CHAMPS_CREDITS_SEMESTRE:
+        return bool(re.fullmatch(r"\d{1,3}", v)) and int(v) <= 400
+    if champ == DIPLOME_ANNEE:
+        return bool(re.fullmatch(r"\d{4}", v)) and 1950 <= int(v) <= annee_max
+    if champ == ANNEE_UNIVERSITAIRE:
+        m = re.fullmatch(r"(\d{4})/(\d{4})", v)
+        return bool(m) and int(m.group(2)) == int(m.group(1)) + 1 and 1950 <= int(m.group(1)) <= annee_max
+    if champ == SESSION:
+        m = re.fullmatch(r"(?:[A-Za-zÀ-ÿ]+ )?(\d{4})", v)
+        return bool(m) and 1950 <= int(m.group(1)) <= annee_max
+    if champ == NUMERO_BAC:
+        return bool(re.fullmatch(r"[A-Za-z0-9]{5,15}", v))
+    if champ == DECISION_JURY:
+        return bool(re.match(r"(?:admis|ajourn|redoubl|rattrap|exclu)", _sans_accents(v).lower())) and len(v) <= 120
+    if champ == LIEU_NAISSANCE:
+        return bool(re.fullmatch(r"[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ '’\-./()]{1,79}", v))
+    return len(v) <= 120
 
 
 # ================================================================== MRZ (OACI 9303, TD3)
@@ -302,7 +376,7 @@ def analyser_mrz(texte: str, page: int = 1, *, annee_pivot: int | None = None) -
 # ================================================================== moyennes
 _RE_MOYENNE = re.compile(
     r"(?:moyenne|moy\.?)\s*(?:generale|annuelle|finale|(?:au|du)\s+bac\w*|bac\w*)"
-    r"[\s:=\-]*(\d{1,3}(?:[.,]\d{1,2})?)(?:\s*/\s*(\d{1,3}))?",
+    r"[\s:=\-]*(\d{1,3}(?:[.,]\d{1,3})?)(?![.,]?[0-9A-Za-z])(?:\s*/\s*(\d{1,3})(?![0-9A-Za-z])|(?!\s*/))",
     re.IGNORECASE,
 )
 
@@ -417,9 +491,15 @@ def analyser_certificat_langue(texte: str, page: int = 1) -> list[ChampLu]:
 # ================================================================== orchestration par famille
 _PARSEURS: dict[str, Callable[[str, int], list[ChampLu]]] = {
     FAMILLE_PASSEPORT: lambda t, p: analyser_mrz(t, p),
-    FAMILLE_RELEVE: analyser_moyenne,
+    FAMILLE_RELEVE: lambda t, p: _analyser_releve(t, p),
     FAMILLE_CERTIFICAT: analyser_certificat_langue,
 }
+
+
+def _analyser_releve(texte: str, page: int) -> list[ChampLu]:
+    from app.services.extraction_releves import analyser_releve  # import tardif : évite le cycle
+
+    return analyser_releve(texte, page)
 
 
 def extraire_champs(famille: str, pages: Sequence[tuple[int, str]]) -> list[ChampLu]:

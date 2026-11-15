@@ -329,6 +329,7 @@ JS_ACCUEIL = """
       const compteur = document.getElementById("nav-compteur-validation");
       const total = synthese ? (synthese.total_a_valider || 0) + (synthese.total_suspendues || 0) : 0;
       compteur.textContent = String(total);
+      compteur.setAttribute("aria-label", total + (total > 1 ? " dossiers à traiter" : " dossier à traiter"));
       compteur.classList.toggle("cache", total === 0);
     }
 

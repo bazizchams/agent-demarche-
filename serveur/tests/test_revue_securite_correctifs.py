@@ -260,8 +260,10 @@ def test_m2_page_d_arrivee_inattendue_aucune_interaction(arrivee: str) -> None:
 def test_m2_page_d_arrivee_attendue_acceptee() -> None:
     page = _PageStricte(URL_SERVEUR + "/demo/campus-france")
     action_voeux_demo._ouvrir_page_demo(_contexte(page))  # noqa: SLF001
+    assert page.url == URL_SERVEUR + "/demo/campus-france"
     page.url = URL_SERVEUR + "/demo/campus-france/"  # barre finale tolérée
-    action_voeux_demo._verifier_page_attendue(page, URL_SERVEUR)  # noqa: SLF001
+    action_voeux_demo._verifier_page_attendue(page, URL_SERVEUR)  # noqa: SLF001 - ne lève pas
+    assert page.interactions == []  # aucune interaction autre que la navigation
 
 
 # ===================================================================== M3 : profil navigateur par candidat

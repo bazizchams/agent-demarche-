@@ -48,6 +48,7 @@ class ApplicationNiveauSortie(SchemaSortie):
 
 class ProjetGenereEntree(SchemaEntree):
     remplacer: bool = False
+    remplacer_valide: bool = False  # remplacer un projet déjà VALIDÉ (annule la validation)
 
 
 class ProjetModificationEntree(SchemaEntree):

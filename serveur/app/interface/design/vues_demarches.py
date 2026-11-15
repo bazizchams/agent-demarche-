@@ -147,7 +147,7 @@ _CADRE_NAVIGATEUR = """
               <iframe id="{P}-iframe-direct" class="iframe-navigateur-direct" src="{S}" title="{T}"></iframe>
             </div>
             <div id="{P}-vue-capture" class="corps-navigateur-direct cache">
-              <p id="{P}-capture-message" class="aide" aria-live="polite">Capture de la page ouverte dans le navigateur du bureau.</p>
+              <p id="{P}-capture-message" class="aide">Capture de la page ouverte dans le navigateur du bureau.</p>
               <img id="{P}-capture-direct" class="capture-apercu cache" alt="Capture de la page ouverte dans le navigateur du bureau" />
             </div>
             <div id="{P}-panneau-dom-live" class="corps-navigateur-direct">
@@ -274,7 +274,7 @@ HTML_CAMPUS_FRANCE = (
           </div>
         </div>
 
-        <div id="liste-voeux" class="liste-voeux" aria-live="polite">
+        <div id="liste-voeux" class="liste-voeux">
           <div class="etat-vide">"""
     + _ILLU_DOSSIER
     + """<strong>Aucun dossier choisi.</strong><span>Choisissez un dossier dans « Étudiants et fiches » pour gérer ses vœux.</span></div>
@@ -356,7 +356,7 @@ HTML_CAMPUS_FRANCE = (
                 <button class="puce-cmd" type="button" onclick="envoyerConsigneRapideCopilote('campus_france', 'Quels sont les frais en DZD et les dates limites 2026-2027 ?')">Frais et dates limites</button>
               </div>
             </div>
-            <div id="fil-copilote-cf" class="fil-copilote" aria-live="polite">
+            <div id="fil-copilote-cf" class="fil-copilote" role="log">
               <div class="bulle-copilote-ia">
                 <strong>Co-pilote prêt.</strong> Dites-moi en français ce que je dois faire dans votre navigateur (par exemple <em>« remplis mon identité »</em>, <em>« clique sur Se connecter »</em>, <em>« descends en bas de la page »</em> ou <em>« remplis tout sans soumettre »</em>).
               </div>
@@ -366,7 +366,7 @@ HTML_CAMPUS_FRANCE = (
               <button id="btn-dictee-cf" class="btn btn-secondaire btn-icone" type="button" style="margin:0;" onclick="demarrerDicteeVocale('campus_france')" title="Dicter la consigne à la voix" aria-label="Dicter la consigne à la voix">[[i:micro]]</button>
               <button id="btn-piloter-cf-instruction" class="btn btn-primaire" type="button" style="margin:0;">Exécuter</button>
             </div>
-            <div id="zone-retour-cf" class="panneau-texte zone-retour-demarche" aria-live="polite">
+            <div id="zone-retour-cf" class="panneau-texte zone-retour-demarche">
               <p class="note">Choisissez un dossier, puis donnez une consigne ci-dessus ou lancez une étape en un clic. Le compte rendu et le suivi de la tâche s'affichent ici.</p>
             </div>
           </div>
@@ -487,7 +487,7 @@ HTML_IRCC = (
                 <button class="puce-cmd" type="button" onclick="envoyerConsigneRapideCopilote('ircc_permis_etudes', 'Remplis tout le formulaire IRCC et téléverse les pièces sans transmettre')">Tout remplir sans transmettre</button>
               </div>
             </div>
-            <div id="fil-copilote-ircc" class="fil-copilote" aria-live="polite">
+            <div id="fil-copilote-ircc" class="fil-copilote" role="log">
               <div class="bulle-copilote-ia">
                 <strong>Co-pilote IRCC prêt.</strong> Demandez-moi une action en français (par exemple <em>« remplis mon identité et le DLI »</em>, <em>« mets 19000 euros comme fonds »</em> ou <em>« quelles sont les règles PAL/CAQ ? »</em>).
               </div>
@@ -497,7 +497,7 @@ HTML_IRCC = (
               <button id="btn-dictee-ircc" class="btn btn-secondaire btn-icone" type="button" style="margin:0;" onclick="demarrerDicteeVocale('ircc_permis_etudes')" title="Dicter la consigne à la voix" aria-label="Dicter la consigne à la voix">[[i:micro]]</button>
               <button id="btn-piloter-ircc-instruction" class="btn btn-primaire" type="button" style="margin:0;">Exécuter</button>
             </div>
-            <div id="zone-retour-ircc" class="panneau-texte zone-retour-demarche" aria-live="polite">
+            <div id="zone-retour-ircc" class="panneau-texte zone-retour-demarche">
               <p class="note">Choisissez un dossier, puis donnez une consigne ci-dessus ou lancez une étape en un clic. Le compte rendu et le suivi de la tâche s'affichent ici.</p>
             </div>
           </div>
@@ -536,9 +536,10 @@ HTML_AUDIT = """
           <button id="btn-rafraichir-audit" class="btn btn-secondaire" type="button">[[i:actualiser]]Actualiser</button>
         </div>
       </header>
-      <div class="table-wrap">
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Tableau du journal d'audit">
         <table id="table-audit">
-          <thead><tr><th>Date et heure (UTC)</th><th>Opération</th><th>Résultat</th><th>Ressource</th><th>Résumé</th></tr></thead>
+          <caption class="sr-only">Journal d'audit : date et heure, opération, résultat, ressource et résumé</caption>
+          <thead><tr><th scope="col">Date et heure (UTC)</th><th scope="col">Opération</th><th scope="col">Résultat</th><th scope="col">Ressource</th><th scope="col">Résumé</th></tr></thead>
           <tbody><tr><td colspan="5" class="etat-vide">Cliquez sur « Actualiser » pour charger le journal.</td></tr></tbody>
         </table>
       </div>
@@ -605,7 +606,7 @@ HTML_PROCEDURES = (
         <div class="pile-actions">
           <button id="btn-generer-procedure-ia" class="btn btn-primaire" type="button">Générer un brouillon</button>
         </div>
-        <div id="zone-retour-generation-ia" class="panneau-texte cache" style="margin-top:12px;" aria-live="polite"></div>
+        <div id="zone-retour-generation-ia" class="panneau-texte cache" style="margin-top:12px;"></div>
       </section>
 
       <section class="carte" aria-labelledby="titre-liste-procedures">
@@ -616,9 +617,10 @@ HTML_PROCEDURES = (
           </div>
           <button id="btn-rafraichir-procedures" class="btn btn-fantome btn-sm" type="button">[[i:actualiser]]Actualiser</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Tableau des procédures disponibles">
           <table id="table-procedures">
-            <thead><tr><th>Procédure</th><th>Origine</th><th class="num">Version</th><th>Actions</th></tr></thead>
+            <caption class="sr-only">Procédures disponibles : procédure, origine, version et actions</caption>
+            <thead><tr><th scope="col">Procédure</th><th scope="col">Origine</th><th scope="col" class="num">Version</th><th scope="col">Actions</th></tr></thead>
             <tbody aria-busy="true"><tr class="sr-only"><td colspan="4">Chargement des procédures</td></tr>"""
     + _LIGNE_SQUELETTE_PROC * 3
     + """</tbody>
@@ -689,7 +691,7 @@ HTML_PROCEDURES = (
           <button id="btn-enregistrer-procedure" class="btn btn-primaire" type="button">Enregistrer la procédure</button>
           <button id="btn-fermer-editeur-procedure" class="btn btn-contour" type="button">Fermer l'éditeur</button>
         </div>
-        <div id="zone-retour-procedure" class="panneau-texte cache" style="margin-top:12px;" aria-live="polite"></div>
+        <div id="zone-retour-procedure" class="panneau-texte cache" style="margin-top:12px;"></div>
       </section>
     </section>
 """

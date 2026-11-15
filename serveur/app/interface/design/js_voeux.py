@@ -82,6 +82,7 @@ JS_VOEUX = """
       }
       const liste = await rep.json();
       majCompteurVoeux(liste.length);
+      annoncer(liste.length + (liste.length > 1 ? " vœux dans le panier." : " vœu dans le panier."));
       document.getElementById("btn-ajouter-voeu").disabled = liste.length >= MAX_VOEUX_PANIER;
       if (liste.length === 0) {
         zone.replaceChildren(demEtatVide("Aucun vœu pour le moment.", "Ajoutez une première formation ci-dessus : sa lettre de motivation se rédige ensuite ici.", "dossier"));

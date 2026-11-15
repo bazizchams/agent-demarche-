@@ -21,6 +21,7 @@ JS_FLUX_DOSSIER = """
     // =======================================================================
     const FD_INTERVALLE_MS = 3000;
     const FD_ECHECS_MAX = 5;
+    const FD_SUIVIS_MAX = 20;
     const FD_VUE = "vue-flux-dossier";
     const FD_ETAPES_PREVUES = [
       ["pieces", "Pièces reçues"],
@@ -71,6 +72,7 @@ JS_FLUX_DOSSIER = """
     let fdCandidat = null;
     let fdEtat = null;
     let fdEchecs = 0;
+    let fdSuivis = 0;
     let fdEnRequete = false;
     let fdFichiers = [];
     let fdSequence = 0;
@@ -147,7 +149,9 @@ JS_FLUX_DOSSIER = """
       fdFichiers = [];
       fdEtat = null;
       fdEchecs = 0;
+      fdSuivis = 0;
       fdCandidat = id || null;
+      fdSynchroniserDiscussion();
       fdCacherErreur();
       if (id && dictionnaireCandidats[id]) selectionnerCandidat(dictionnaireCandidats[id], true);
       fdAfficherSelection();
@@ -396,7 +400,19 @@ JS_FLUX_DOSSIER = """
       return FD_LIENS_ECRANS[cle] || null;
     }
 
+    const FD_LIBELLES_COMPTEURS = {
+      documents: "Documents", pieces_requises: "Pièces requises", pieces_manquantes: "Pièces manquantes",
+      champs_fiche_manquants: "Champs de la fiche manquants", champs_manquants: "Champs manquants",
+      lus: "Lus", a_lire: "À lire", illisibles: "Illisibles", auto: "Lues automatiquement",
+      a_verifier: "À vérifier", a_confirmer: "À confirmer", confirmees: "Confirmées", rejetees: "Rejetées",
+      confirmes: "Confirmés", rejetes: "Rejetés", valeurs_a_reporter: "Valeurs à reporter", conflits: "Conflits",
+      points_forts_confirmes: "Points forts confirmés", version: "Version", elements_a_verifier: "Éléments à vérifier",
+      voeux: "Vœux", propositions: "Propositions", sans_lettre: "Sans lettre", brouillons: "Brouillons",
+      validees: "Validées", voeux_ajoutes: "Vœux ajoutés"
+    };
+
     function fdLibelleCompteur(cle) {
+      if (FD_LIBELLES_COMPTEURS[cle]) return FD_LIBELLES_COMPTEURS[cle];
       const texte = String(cle).split("_").join(" ");
       return texte.charAt(0).toUpperCase() + texte.slice(1);
     }
@@ -448,6 +464,31 @@ JS_FLUX_DOSSIER = """
       }
       await ouvDemanderOuverture();
       fdCopierEtatPc();
+      fdSynchroniserDiscussion();
+    }
+
+    // Discussion en direct : montée dès qu'une tâche « Ouvrir sur mon PC » existe pour l'étudiant affiché
+    // (identifiant réutilisé depuis js_ouverture_pc), démontée quand il n'y en a plus.
+    let fdDiscussion = null;
+    let fdDiscussionTache = null;
+
+    function fdSynchroniserDiscussion() {
+      const carte = document.getElementById("fd-carte-discussion");
+      const conteneur = document.getElementById("fd-discussion");
+      if (!carte || !conteneur || typeof monterDiscussionAgent !== "function") return;
+      const tacheId = (typeof ouvTacheId !== "undefined" && ouvCandidat === fdCandidat) ? ouvTacheId : null;
+      if (!tacheId || !fdCandidat) {
+        if (fdDiscussion) fdDiscussion.demonter();
+        fdDiscussion = null;
+        fdDiscussionTache = null;
+        conteneur.replaceChildren();
+        carte.classList.add("cache");
+        return;
+      }
+      carte.classList.remove("cache");
+      if (fdDiscussionTache === tacheId) return;
+      fdDiscussionTache = tacheId;
+      fdDiscussion = monterDiscussionAgent(conteneur, tacheId);
     }
 
     function fdCopierEtatPc() {
@@ -505,7 +546,7 @@ JS_FLUX_DOSSIER = """
       const enCours = etapes.filter((e) => e.statut === "en_cours");
       const attente = etapes.filter((e) => e.statut === "a_verifier");
       const bloquees = etapes.filter((e) => e.statut === "bloque");
-      if (enCours.length) return "Analyse en cours : " + (enCours[0].libelle || enCours[0].code) + ". " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
+      if (enCours.length) return (fdLancement ? "Analyse en cours : " : "Étape en cours : ") + (enCours[0].libelle || enCours[0].code) + ". " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
       if (bloquees.length) return "L'analyse est bloquée à l'étape « " + (bloquees[0].libelle || bloquees[0].code) + " ». " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
       if (attente.length) return "À vous de jouer : « " + (attente[0].libelle || attente[0].code) + " » attend votre vérification. " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
       if (faites === etapes.length && etapes.length) return "Toutes les étapes sont terminées. Le dossier est prêt pour votre validation.";
@@ -570,10 +611,12 @@ JS_FLUX_DOSSIER = """
         zone.replaceChildren(ol);
       }
       fdRendrePiecesManquantes();
+      fdSynchroniserDiscussion();
       const enCours = etapes.some((e) => e.statut === "en_cours");
       const bouton = fdEl("fd-btn-lancer");
-      bouton.disabled = !fdCandidat || !fdEcriture() || fdLancement || enCours;
-      bouton.lastChild.textContent = enCours ? "Analyse en cours…" : (progression > 0 ? "Relancer l'analyse" : "Lancer l'analyse");
+      // L'analyse est synchrone côté serveur : « en cours » (étape partielle) ne doit jamais bloquer la relance.
+      bouton.disabled = !fdCandidat || !fdEcriture() || fdLancement;
+      bouton.lastChild.textContent = fdLancement ? "Analyse en cours…" : (progression > 0 ? "Relancer l'analyse" : "Lancer l'analyse");
     }
 
     function fdArreterSuivi() {
@@ -586,7 +629,8 @@ JS_FLUX_DOSSIER = """
     function fdProgrammerSuivi() {
       fdArreterSuivi();
       const enCours = fdEtat && fdEtat.etapes && fdEtat.etapes.some((e) => e.statut === "en_cours");
-      if (enCours && fdEchecs < FD_ECHECS_MAX && fdVisible()) {
+      fdSuivis += 1;
+      if (enCours && fdEchecs < FD_ECHECS_MAX && fdSuivis <= FD_SUIVIS_MAX && fdVisible()) {
         fdMinuteur = setTimeout(() => fdActualiser(false), FD_INTERVALLE_MS);
       }
     }
@@ -647,6 +691,7 @@ JS_FLUX_DOSSIER = """
         fdLancement = false;
       }
       fdEchecs = 0;
+      fdSuivis = 0;
       fdEnRequete = false;
       await fdActualiser(false);
     }
@@ -668,7 +713,7 @@ JS_FLUX_DOSSIER = """
     fdEl("fd-btn-creer").addEventListener("click", fdCreerEtudiant);
     fdEl("fd-btn-envoyer").addEventListener("click", fdEnvoyerTout);
     fdEl("fd-btn-lancer").addEventListener("click", fdLancer);
-    fdEl("fd-btn-actualiser").addEventListener("click", () => { fdEchecs = 0; fdActualiser(false); });
+    fdEl("fd-btn-actualiser").addEventListener("click", () => { fdEchecs = 0; fdSuivis = 0; fdActualiser(false); });
     fdEl("fd-btn-reessayer").addEventListener("click", () => {
       fdEchecs = 0;
       fdCacherErreur();

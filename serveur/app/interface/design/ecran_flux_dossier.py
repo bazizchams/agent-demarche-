@@ -189,6 +189,10 @@ HTML_VUE = rendre_icones(
             </div>
             <p class="note fd-regle">L'agent s'arrête avant l'envoi officiel : rien n'part sans votre validation (règle 1).</p>
           </section>
+          <section id="fd-carte-discussion" class="carte cache" aria-labelledby="fd-titre-discussion">
+            <div class="carte-entete"><h3 id="fd-titre-discussion">Discussion en direct avec l'agent</h3></div>
+            <div id="fd-discussion"></div>
+          </section>
           <section class="carte" aria-labelledby="fd-titre-etapes">
             <div class="carte-entete"><h3 id="fd-titre-etapes">Les 9 étapes</h3></div>
             <div id="fd-etapes-zone" aria-live="off"></div>

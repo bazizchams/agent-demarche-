@@ -56,7 +56,11 @@ def _score_passeport(texte: str, bas: str) -> tuple[int, list[str]]:
 
 
 def _score_releve(bas: str) -> tuple[int, list[str]]:
-    if not re.search(r"releve de notes|bulletin", bas):
+    if not re.search(
+        r"releve de notes|bulletin|diplome de (?:licence|master)|diplome d.etudes universitaires appliquees"
+        r"|diplome du baccalaureat|attestation de reussite",
+        bas,
+    ):
         return 0, []
     score, indices = 50, ["releve_de_notes"]
     if "moyenne" in bas:

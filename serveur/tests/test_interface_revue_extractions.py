@@ -55,3 +55,17 @@ def test_boutons_de_revue_presents_et_ecriture_reservee_aux_humains() -> None:
     for libelle in ("Confirmer", "Corriger", "Rejeter"):
         assert f'"{libelle}"' in js
     assert 'roleActif === "administrateur" || roleActif === "employe"' in js
+
+
+def test_focus_conserve_apres_confirmer_ou_rejeter() -> None:
+    js = ecran.JS_REVUE
+    # la valeur décidée est mémorisée AVANT la requête, puis le focus est rendu APRÈS le rechargement de la liste
+    decider = js[js.index("async function rxDecider"):js.index("function rxBoutonAction")]
+    assert decider.index("rxMemoriserFocus(") < decider.index("appelApi(")
+    assert decider.index("await rxActualiser()") < decider.index("rxRefocaliser()")
+    # chaque bouton de décision porte l'identifiant de sa valeur et son action ; repli : même carte puis suivante
+    assert 'data-rx-extraction' in js and 'data-rx-action' in js
+    assert ".focus()" in js[js.index("function rxRefocaliser"):js.index("async function rxDecider")]
+    for action in ("valider", "corriger", "rejeter"):
+        assert f'extraction, "{action}"));' in js
+    assert "\\" not in js
