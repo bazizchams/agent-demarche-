@@ -306,7 +306,7 @@ JS_NAVIGATEUR = """
           resolve();
         };
         nsCompteur += 1;
-        img.src = NS_ROUTE + "capture?jeton=" + Date.now() + "-" + nsCompteur;
+        img.src = NS_ROUTE + "capture?t=" + Date.now() + "-" + nsCompteur;
       });
     }
 

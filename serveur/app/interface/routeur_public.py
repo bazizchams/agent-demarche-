@@ -407,17 +407,25 @@ form.addEventListener('submit',function(ev){
    zone.appendChild(document.createTextNode((x.j.message||'Bureau créé.')+' '));
    var a=document.createElement('a');a.href='/';a.textContent='Aller à la connexion';
    zone.appendChild(a);zone.focus();return;}
+  var champEnCause=null;
   var m={403:'Les inscriptions sont fermées pour le moment.',
    409:(x.j.detail||'Impossible de créer le compte avec ces informations.'),
    429:'Trop de tentatives. Réessayez plus tard.'}[x.s];
   if(!m&&x.s===422){
-   var champs=(x.j.champs||[]).map(function(c){return c.champ;}).join(' ');
-   m=x.j.detail||'Données invalides.';
-   if(champs.indexOf('accepte_cgu')>=0)m='Vous devez accepter les CGU.';
-   else if(champs.indexOf('email_admin')>=0)m='Adresse e-mail invalide.';
-   else if(!x.j.champs)m=x.j.detail;
+   var MSG={nom_bureau:'Nom du bureau : 2 à 120 caractères attendus.',
+    nom_admin:'Votre nom : champ obligatoire, 120 caractères au maximum.',
+    email_admin:'Adresse e-mail : format invalide (exemple : prenom.nom@votre-bureau.dz).',
+    mot_de_passe:'Mot de passe : 12 caractères minimum, avec au moins 3 types parmi minuscules, majuscules, chiffres, symboles.',
+    forfait:'Forfait : choisissez un forfait de la liste.',
+    accepte_cgu:'Vous devez accepter les CGU.'};
+   var noms=(x.j.champs||[]).map(function(c){return String(c.champ||'').split('.').pop();});
+   var fautif=Object.keys(MSG).filter(function(k){return noms.indexOf(k)>=0;})[0];
+   if(fautif){m=MSG[fautif];
+    champEnCause=form.elements[fautif];}
+   else m=x.j.detail||'Données invalides : vérifiez les champs du formulaire.';
   }
   afficher(m||'Une erreur est survenue. Réessayez.','erreur');
+  if(champEnCause&&champEnCause.focus)champEnCause.focus();
  }).catch(function(){bouton.disabled=false;
   afficher('Connexion au serveur impossible. Réessayez.','erreur');});
 });

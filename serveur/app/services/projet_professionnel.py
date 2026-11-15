@@ -93,6 +93,23 @@ def _nombres(texte: str) -> set[str]:
     return sortie
 
 
+_LIBELLES_DIPLOME = {"diplome d'ingenieur": "diplôme d'ingénieur", "cycle ingenieur": "cycle ingénieur"}
+
+
+def _message_diplome(d: str) -> str:
+    if d == "bac":
+        return (
+            "Le projet cite le baccalauréat mais aucune pièce de baccalauréat n'est confirmée : "
+            "confirmez le relevé du bac ou retirez la mention."
+        )
+    article = "la" if d == "licence" else "le"
+    libelle = _LIBELLES_DIPLOME.get(d, d)
+    return (
+        f"Le projet cite {article} {libelle} mais aucune pièce de {libelle} n'est confirmée : "
+        "confirmez le relevé ou retirez la mention."
+    )
+
+
 def controler_texte(texte: str, faits_texte: str) -> list[str]:
     """Éléments à vérifier : marqueurs restants, puis chiffres, niveaux, certificats et diplômes
     cités mais absents des faits fournis. Liste vide = rien d'inventé détecté."""
@@ -102,22 +119,30 @@ def controler_texte(texte: str, faits_texte: str) -> list[str]:
     cite = _normaliser(_RE_MARQUEUR.sub(" ", texte))
     faits = _normaliser(faits_texte)
     absents = sorted(_nombres(cite) - _nombres(faits_texte))
-    elements += [f"Chiffre « {n} » absent des faits fournis." for n in absents]
     elements += [
-        f"Niveau de langue « {n.upper()} » absent des faits fournis."
+        f"Le projet cite le chiffre « {n} » mais il ne figure dans aucun fait confirmé : vérifiez-le ou retirez-le."
+        for n in absents
+    ]
+    elements += [
+        f"Le projet cite le niveau de langue « {n.upper()} » mais aucune attestation de ce niveau n'est confirmée : "
+        "confirmez-le ou retirez la mention."
         for n in sorted(set(_RE_NIVEAU.findall(cite)) - set(_RE_NIVEAU.findall(faits)))
     ]
     elements += [
-        f"Certificat « {c.upper()} » absent des faits fournis."
+        f"Le projet cite le certificat « {c.upper()} » mais aucune attestation {c.upper()} n'est confirmée : "
+        "confirmez l'attestation ou retirez la mention."
         for c in sorted(set(_RE_CERTIFICAT.findall(cite)) - set(_RE_CERTIFICAT.findall(faits)))
     ]
     mots_faits = set(_RE_DIPLOME.findall(faits))
     paires_faits = set(_RE_DIPLOME_LIBRE.findall(faits))
     for d in sorted(set(_RE_DIPLOME.findall(cite)) - mots_faits):
-        elements.append(f"Diplôme « {d} » absent des faits fournis.")
+        elements.append(_message_diplome(d))
     for d, mot in sorted(set(_RE_DIPLOME_PRECISE.findall(cite))):
         if d in mots_faits and (d, mot) not in paires_faits:
-            elements.append(f"Intitulé « {d} {mot} » absent des faits fournis.")
+            elements.append(
+                f"Le projet cite l'intitulé « {d} {mot} » mais il ne figure dans aucun fait confirmé : "
+                "vérifiez-le ou retirez-le."
+            )
     return elements
 
 

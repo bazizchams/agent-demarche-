@@ -249,3 +249,19 @@ def test_diplome_sans_releve_de_notes_est_propose_comme_releve() -> None:
         c = deviner_type_piece([(1, base.par_nom(nom).texte)])
         assert c.famille == "releve_notes", nom
         assert c.confirmation_humaine_requise or c.confiance >= 0.9
+
+
+def test_moyenne_sans_qualificatif_en_debut_de_ligne_est_lue() -> None:
+    """Recette : « Moyenne 13,10/20 » sur un relevé de licence donnait seulement « Licence »."""
+    lus = _valides("RELEVÉ DE NOTES\nLicence en informatique\nMoyenne 13,10/20")
+    assert lus.get("moyenne_generale") == "13.1"
+    assert lus.get("diplome_intitule") == "Licence"
+
+
+def test_moyenne_sans_qualificatif_jamais_inventee() -> None:
+    # En-tête de tableau, moyenne de semestre, barème différent, ligne de module : jamais une moyenne générale.
+    assert "moyenne_generale" not in _valides("Licence\nUnité | Module | Coef | Crédits | Moyenne |")
+    assert "moyenne_generale" not in _valides("Licence\nMoyenne du semestre 3 : 12,85")
+    assert "moyenne_generale" not in _valides("Licence\nAlgorithmique  Moyenne 13,10/20")
+    assert "moyenne_generale" not in _valides("Licence\nMoyenne 13,10/40")
+    assert "moyenne_generale" not in _valides("Licence\nSans moyenne")

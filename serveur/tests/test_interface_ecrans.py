@@ -117,3 +117,11 @@ def test_chargement_headless_sans_erreur_js_et_onglet_procedures(application: Fa
             navigateur.close()
 
     assert erreurs == []
+
+
+def test_bouton_changer_de_dossier_a_un_style_de_bouton_visible() -> None:
+    """Recette 375 px : le bouton était en `btn-fantome` (sans bord ni fond) et paraissait sans style."""
+    m = re.search(r'<button class="([^"]*)"[^>]*data-aller-vers="vue-etudiants">Changer de dossier', HTML_INTERFACE_FR)
+    assert m is not None
+    classes = m.group(1).split()
+    assert "btn" in classes and "btn-contour" in classes and "btn-fantome" not in classes

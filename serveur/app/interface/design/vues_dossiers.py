@@ -220,36 +220,36 @@ HTML_ETUDIANTS = (
         <fieldset>
           <legend>Identité</legend>
           <div class="grille-form">
-            <label class="champ">Nom de famille <span class="requis" aria-hidden="true">*</span><input id="cand-nom" type="text" value="BELAID" required aria-required="true" aria-describedby="cand-nom-err" autocomplete="off" /><span class="champ-aide">Comme sur le passeport.</span><span id="cand-nom-err" class="champ-erreur cache">Le nom de famille est obligatoire.</span></label>
-            <label class="champ">Prénom <span class="requis" aria-hidden="true">*</span><input id="cand-prenom" type="text" value="Amine" required aria-required="true" aria-describedby="cand-prenom-err" autocomplete="off" /><span id="cand-prenom-err" class="champ-erreur cache">Le prénom est obligatoire.</span></label>
-            <label class="champ">Sexe <select id="cand-sexe"><option value="M" selected>Masculin</option><option value="F">Féminin</option><option value="">Non renseigné</option></select></label>
-            <label class="champ">Date de naissance <input id="cand-dn" type="date" value="2002-06-15" /></label>
-            <label class="champ">Lieu de naissance <input id="cand-lieu" type="text" value="Alger" /><span class="champ-aide">Wilaya ou ville.</span></label>
-            <label class="champ">Nationalité <input id="cand-nat" type="text" value="Algérienne" /></label>
+            <label class="champ">Nom de famille <span class="requis" aria-hidden="true">*</span><input id="cand-nom" type="text" placeholder="Nom de famille" required aria-required="true" aria-describedby="cand-nom-err" autocomplete="off" /><span class="champ-aide">Comme sur le passeport.</span><span id="cand-nom-err" class="champ-erreur cache">Le nom de famille est obligatoire.</span></label>
+            <label class="champ">Prénom <span class="requis" aria-hidden="true">*</span><input id="cand-prenom" type="text" placeholder="Prénom" required aria-required="true" aria-describedby="cand-prenom-err" autocomplete="off" /><span id="cand-prenom-err" class="champ-erreur cache">Le prénom est obligatoire.</span></label>
+            <label class="champ">Sexe <select id="cand-sexe"><option value="">Non renseigné</option><option value="M">Masculin</option><option value="F">Féminin</option></select></label>
+            <label class="champ">Date de naissance <input id="cand-dn" type="date" /></label>
+            <label class="champ">Lieu de naissance <input id="cand-lieu" type="text" placeholder="Ville ou wilaya" /><span class="champ-aide">Wilaya ou ville.</span></label>
+            <label class="champ">Nationalité <input id="cand-nat" type="text" placeholder="Nationalité" /></label>
           </div>
         </fieldset>
         <fieldset>
           <legend>Coordonnées</legend>
           <div class="grille-form">
-            <label class="champ">Pays de résidence <input id="cand-pays" type="text" value="Algérie" /></label>
-            <label class="champ">Adresse e-mail <input id="cand-email" type="email" value="amine.belaid@exemple.dz" autocomplete="off" /></label>
-            <label class="champ">Téléphone <input id="cand-tel" type="text" value="+213555123456" autocomplete="off" /><span class="champ-aide">Format international, par exemple +213…</span></label>
+            <label class="champ">Pays de résidence <input id="cand-pays" type="text" placeholder="Pays de résidence" /></label>
+            <label class="champ">Adresse e-mail <input id="cand-email" type="email" placeholder="Adresse e-mail" autocomplete="off" /></label>
+            <label class="champ">Téléphone <input id="cand-tel" type="text" placeholder="Numéro de téléphone" autocomplete="off" /><span class="champ-aide">Format international, avec l'indicatif du pays.</span></label>
           </div>
         </fieldset>
         <fieldset>
           <legend>Passeport</legend>
           <div class="grille-form">
-            <label class="champ">Numéro de passeport <input id="cand-pass" type="text" value="DZ9900112" autocomplete="off" /></label>
-            <label class="champ">Date d'expiration du passeport <input id="cand-exp-pass" type="date" value="2031-05-20" /><span class="champ-aide">Les démarches exigent souvent 6 mois de validité restante.</span></label>
+            <label class="champ">Numéro de passeport <input id="cand-pass" type="text" placeholder="Numéro de passeport" autocomplete="off" /></label>
+            <label class="champ">Date d'expiration du passeport <input id="cand-exp-pass" type="date" /><span class="champ-aide">Les démarches exigent souvent 6 mois de validité restante.</span></label>
           </div>
         </fieldset>
         <fieldset>
           <legend>Projet d'études</legend>
           <div class="grille-form">
-            <label class="champ">Niveau d'études actuel <input id="cand-niveau" type="text" value="Licence 3 Informatique" /></label>
-            <label class="champ">Formation ou programme visé <input id="cand-prog" type="text" value="Master 1 Informatique et Intelligence Artificielle" /></label>
-            <label class="champ">Établissement visé <input id="cand-etab" type="text" value="Université Paris-Saclay" /></label>
-            <label class="champ">Ressources financières disponibles (EUR) <input id="cand-fonds" type="number" min="0" value="15000" /><span class="champ-aide">Montant en euros, sans espace.</span></label>
+            <label class="champ">Niveau d'études actuel <input id="cand-niveau" type="text" placeholder="Niveau d'études" /></label>
+            <label class="champ">Formation ou programme visé <input id="cand-prog" type="text" placeholder="Formation ou programme" /></label>
+            <label class="champ">Établissement visé <input id="cand-etab" type="text" placeholder="Établissement" /></label>
+            <label class="champ">Ressources financières disponibles (EUR) <input id="cand-fonds" type="number" min="0" placeholder="Montant en euros" /><span class="champ-aide">Montant en euros, sans espace.</span></label>
           </div>
         </fieldset>
         <div class="formulaire-pied">

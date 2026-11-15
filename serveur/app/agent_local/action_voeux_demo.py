@@ -42,6 +42,22 @@ SELECTEUR_SESSION_FERMEE = "#alerte-session-non-connectee"
 STATUTS_REUSSIS = {STATUT_AJOUTE, STATUT_DEJA_PRESENT}
 
 
+def message_voeux_non_ajoutes(statuts: list[str]) -> str:
+    """Message d'alerte quand des vœux n'ont pas été ajoutés ; dit pourquoi un vœu est « introuvable »."""
+    echecs = sum(1 for st in statuts if st not in STATUTS_REUSSIS)
+    message = (
+        f"{echecs} vœu(x) sur {len(statuts)} n'ont pas pu être ajoutés "
+        "(introuvable, ambigu ou refusé) : contrôlez la fenêtre ouverte sur votre PC avant de valider."
+    )
+    if "introuvable" in statuts:
+        message += (
+            " Un vœu « introuvable » n'est pas forcément une erreur : la page de démonstration ne connaît "
+            "que son propre catalogue fictif, pas le catalogue réel d'Études en France ; un vœu absent de "
+            "ce catalogue de démonstration ne peut donc pas y être ajouté."
+        )
+    return message
+
+
 def _suspension(motif: MotifSuspensionTache, message: str) -> SuspensionRequiseParGardeFou:
     return SuspensionRequiseParGardeFou(motif=motif, message_alerte=message, code_etape=CODE_ETAPE)
 
@@ -181,10 +197,7 @@ def _executer(ctx: ContexteExecution, jr: JournalAgent) -> ResultatExecution:
             "tout envoi officiel : contrôlez la fenêtre puis validez dans le Centre de validation."
         )
     else:
-        message = (
-            f"{len(resultats) - reussis} vœu(x) sur {len(resultats)} n'ont pas pu être ajoutés "
-            "(introuvable, ambigu ou refusé) : contrôlez la fenêtre ouverte sur votre PC avant de valider."
-        )
+        message = message_voeux_non_ajoutes([r["statut"] for r in resultats])
     if reussis == len(resultats):
         jr.dire(f"J'ai ajouté {reussis} vœu(x) au panier. Je m'arrête ici : je n'envoie rien.")
     else:

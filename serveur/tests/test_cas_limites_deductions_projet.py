@@ -143,13 +143,18 @@ def test_virgule_et_point_decimal_sont_equivalents():
 def test_chiffre_invente_est_signale():
     elements = controler_texte("J'ai 17 ans d'expérience.", "Licence en droit")
 
-    assert elements == ["Chiffre « 17 » absent des faits fournis."]
+    assert elements == [
+        "Le projet cite le chiffre « 17 » mais il ne figure dans aucun fait confirmé : vérifiez-le ou retirez-le."
+    ]
 
 
 def test_certificat_cite_et_absent_des_faits_est_signale():
     elements = controler_texte("Je possède le TCF.", "Licence en droit")
 
-    assert elements == ["Certificat « TCF » absent des faits fournis."]
+    assert elements == [
+        "Le projet cite le certificat « TCF » mais aucune attestation TCF n'est confirmée : "
+        "confirmez l'attestation ou retirez la mention."
+    ]
 
 
 def test_baccalaureat_equivaut_a_bac():
@@ -161,7 +166,9 @@ def test_baccalaureat_equivaut_a_bac():
 def test_master_cite_alors_que_les_faits_donnent_une_licence_est_signale():
     elements = controler_texte("Je vise un master en droit.", "Licence en droit")
 
-    assert elements == ["Diplôme « master » absent des faits fournis."]
+    assert elements == [
+        "Le projet cite le master mais aucune pièce de master n'est confirmée : confirmez le relevé ou retirez la mention."
+    ]
 
 
 def test_marqueur_signale_sans_compter_son_chiffre_comme_invente():

@@ -287,7 +287,7 @@ JS_DEMARCHES = """
         img.classList.add("cache");
         message.textContent = "Aucune capture disponible : ouvrez d'abord le site avec « Ouvrir le site ».";
       };
-      img.src = "/api/v1/navigateur/capture?jeton=" + Date.now();
+      img.src = "/api/v1/navigateur/capture?t=" + Date.now();
     }
 
     async function dirNavigateurOuvert() {

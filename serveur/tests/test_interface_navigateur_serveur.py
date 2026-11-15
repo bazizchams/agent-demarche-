@@ -228,8 +228,8 @@ def test_vue_etat_sans_parametres_et_capture_avec_jeton_anti_cache(application: 
         page.wait_for_timeout(2600)
         captures = [r["chemin"] for r in requetes if "/navigateur/capture" in r["chemin"]]
         assert len(captures) >= 2
-        assert len(set(captures)) == len(captures), "chaque image doit avoir un jeton unique"
-        assert all("jeton=" in c for c in captures)
+        assert len(set(captures)) == len(captures), "chaque image doit avoir un horodatage unique (anti-cache)"
+        assert all("?t=" in c and "jeton" not in c for c in captures)
         # Cadence d'environ une image par seconde, pas davantage.
         assert len(captures) <= 6
         # Aucune commande n'est envoyée tant que l'opérateur n'a pas pris la main.

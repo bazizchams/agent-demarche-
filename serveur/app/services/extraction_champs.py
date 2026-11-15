@@ -380,12 +380,21 @@ _RE_MOYENNE = re.compile(
     re.IGNORECASE,
 )
 
+# « Moyenne 13,10/20 » seule en début de ligne : admise uniquement sur une pièce déjà reconnue comme diplôme/relevé.
+_RE_MOYENNE_NUE = re.compile(
+    r"^\s*(?:moyenne|moy\.?)[\s:=\-]*(\d{1,3}(?:[.,]\d{1,3})?)(?![.,]?[0-9A-Za-z])"
+    r"(?:\s*/\s*(\d{1,3})(?![0-9A-Za-z])|(?!\s*/))",
+    re.IGNORECASE,
+)
 
-def analyser_moyenne(texte: str, page: int = 1) -> list[ChampLu]:
-    """Moyenne générale libellée comme telle, au barème /20 et dans [0, 20]."""
+
+def analyser_moyenne(texte: str, page: int = 1, *, moyenne_nue: bool = False) -> list[ChampLu]:
+    """Moyenne générale libellée comme telle, au barème /20 et dans [0, 20].
+    `moyenne_nue` : accepte aussi « Moyenne 13,10/20 » seule en début de ligne (contexte de relevé établi)."""
     trouvees: list[tuple[str, str, str | None, str]] = []
     for ligne in texte.splitlines():
-        m = _RE_MOYENNE.search(_sans_accents(ligne))
+        sans = _sans_accents(ligne)
+        m = _RE_MOYENNE.search(sans) or (_RE_MOYENNE_NUE.search(sans) if moyenne_nue else None)
         if m:
             trouvees.append((m.group(1).replace(",", "."), ligne.strip(), m.group(2), m.group(0)))
     if not trouvees:

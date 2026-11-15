@@ -80,6 +80,8 @@ copy .env.exemple .env
 
 Ouvrez ensuite **`http://127.0.0.1:8000`** dans votre navigateur.
 
+> `alembic upgrade head` est recommandé même en local lorsque la base existe déjà : en environnement `LOCAL`, le démarrage ne crée que les tables manquantes (`create_all`) et ne met pas à jour le schéma d'une base ancienne.
+
 ### Options de lancement
 
 ```powershell

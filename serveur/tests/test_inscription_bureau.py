@@ -149,3 +149,18 @@ def test_audit_sans_donnee_personnelle(application, fabrique_sessions):
     ).lower()
     for interdit in ("horizon", "directrice", "samira", "@"):
         assert interdit not in texte
+
+
+def test_page_inscription_nomme_le_champ_en_cause_sur_un_422(application):
+    """Recette : « format attendu » seul ne disait pas quel champ corriger."""
+    html = TestClient(application).get("/inscription").text
+    for libelle in (
+        "Nom du bureau : ",
+        "Votre nom : ",
+        "Adresse e-mail : ",
+        "Mot de passe : 12 caractères minimum",
+        "Forfait : ",
+        "Vous devez accepter les CGU.",
+    ):
+        assert libelle in html
+    assert "form.elements[fautif]" in html  # le champ fautif reçoit le focus

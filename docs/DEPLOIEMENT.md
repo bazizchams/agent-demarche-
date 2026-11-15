@@ -452,6 +452,10 @@ enregistré, ni journalisé, ni affiché dans l'historique.
 - Réservé aux humains administrateur et employé ; actions authentifiées avec jeton CSRF. L'opérateur voit exactement ce que l'agent voit :
   pas d'accès à d'autres onglets du serveur ni au système de fichiers.
 - Les captures contiennent des données personnelles de candidats : elles ne sont pas conservées par l'interface (une image remplace la précédente).
+- **Aucun jeton dans l'URL de capture** : `GET /api/v1/navigateur/capture?t=<horodatage>` n'utilise le paramètre `t` que pour contourner le cache du navigateur
+  (une balise `<img>` ne peut pas envoyer d'en-tête ; l'authentification se fait par le cookie de session). La valeur est publique et sans pouvoir d'accès :
+  elle peut figurer dans les journaux d'accès sans risque. L'application ne la journalise pas et la réponse est en `Cache-Control: no-store`.
+  Si une évolution future plaçait un vrai secret dans une URL, il faudrait passer à `fetch` + blob URL avec en-tête, ou masquer le paramètre dans le journal d'accès de Caddy.
 
 ---
 

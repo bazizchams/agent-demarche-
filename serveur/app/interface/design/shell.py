@@ -239,7 +239,7 @@ def html_debut() -> str:
         <span class="banniere-pastille">[[i:dossier]]</span>
         <span class="banniere-dossier"><span class="surtitre">Dossier actif</span><strong id="bandeau-candidat-actif">Aucun</strong></span>
       </span>
-      <button class="btn btn-fantome btn-sm" type="button" data-aller-vers="vue-etudiants">Changer de dossier</button>
+      <button class="btn btn-contour btn-sm" type="button" data-aller-vers="vue-etudiants">Changer de dossier</button>
       <span class="banniere-regle-courte">[[i:validation]]<span>L'agent s'arrête toujours avant l'envoi officiel</span></span>
     </div>
     <div id="bandeau-email-non-verifie" class="banniere-regle banniere-alerte cache" role="status">

@@ -29,6 +29,7 @@ def page_maquette_eef_reel(chemin: str = "") -> HTMLResponse:
     return HTMLResponse(content=html_maquette_eef_reel(), headers={"X-Frame-Options": "SAMEORIGIN"})
 
 # Catalogue FICTIF de formations pour la page de démonstration (recherche + panier de vœux).
+# La page de démonstration ne connaît que ce catalogue : un vœu du dossier absent d'ici est « introuvable ».
 # Deux entrées « Licence 3 Informatique — Université de Lorraine » sont volontairement identiques
 # (campus différents) pour tester la détection de correspondance ambiguë du Co-Pilote.
 CATALOGUE_FORMATIONS_DEMO: list[dict[str, str]] = [
@@ -543,7 +544,7 @@ def page_demo_campus_france(
       if (!liste.children.length) {{
         var vide = document.createElement("li");
         vide.className = "catalogue-vide";
-        vide.textContent = "Aucune formation ne correspond à votre recherche.";
+        vide.textContent = "Aucune formation ne correspond à votre recherche (la page de démonstration ne connaît que son propre catalogue fictif).";
         liste.appendChild(vide);
       }}
     }}

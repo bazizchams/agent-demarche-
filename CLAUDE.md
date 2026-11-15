@@ -40,6 +40,8 @@ Identifiants opérateur de démonstration par défaut :
 - **E-mail** : `admin@bureau-alger.dz`
 - **Mot de passe** : `BureauAlger!2026`
 
+Second bureau de démonstration créé par `serveur/app/main.py` en local : « Bureau d'Études Démo Algérie » (slug `bureau-demo-dz`, e-mail `admin@bureau-demo.dz`, mot de passe défini dans `main.py`).
+
 ## 3. Règles de sécurité immuables (à toujours respecter)
 
 1. **Règle 1 (Validation humaine obligatoire avant soumission officielle)** *(modifiée le 2026-11-12 par décision du propriétaire du projet)* : L'agent ne soumet JAMAIS une demande officielle (Études en France, IRCC, école) sans validation humaine préalable. Il prépare le dossier en brouillon, produit un récapitulatif précis, et s'arrête. Seul un employé ou administrateur de l'agence, authentifié, peut valider ce récapitulatif. L'agent n'est autorisé à envoyer que ce contenu exact (empreinte du récapitulatif vérifiée juste avant l'envoi : toute modification invalide la validation). La validation est tracée dans l'audit (qui, quand, empreinte, sans donnée personnelle). Un agent ne peut pas valider lui-même. **Mise en œuvre dans le code : service, API, écran de validation, garde d'envoi (`soumission_validee.py`) branchée sur l'exécuteur en option, tests livrés (2026-11-12)** ; par défaut (aucune validation fournie) le comportement reste l'arrêt avant le bouton final. Aucun appelant de production ne fournit encore de validation.

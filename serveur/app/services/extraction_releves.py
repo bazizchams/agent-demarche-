@@ -409,12 +409,12 @@ def _reduire(candidats: list[ChampLu]) -> list[ChampLu]:
     return sorties
 
 
-def _moyennes_generales(lignes: list[str], page: int) -> list[ChampLu]:
+def _moyennes_generales(lignes: list[str], page: int, contexte_diplome: bool = False) -> list[ChampLu]:
     """Moyenne générale/finale/du bac (jamais « annuelle », qui a son propre champ)."""
     retenues = [ligne for ligne in lignes if "annuelle" not in _sa(ligne)]
-    sorties = analyser_moyenne("\n".join(retenues), page)
+    sorties = analyser_moyenne("\n".join(retenues), page, moyenne_nue=contexte_diplome)
     for ligne in retenues:
-        if analyser_moyenne(ligne, page):
+        if analyser_moyenne(ligne, page, moyenne_nue=contexte_diplome):
             continue
         repare, zones = _reparer(ligne)
         if not zones:
@@ -430,7 +430,7 @@ def analyser_releve(texte: str, page: int = 1) -> list[ChampLu]:
     intitule = _intitule(lignes, page)
     contexte_bac = intitule is not None and intitule.valide and intitule.valeur == "Baccalauréat"
     candidats: list[ChampLu] = [intitule] if intitule else []
-    candidats += _moyennes_generales(lignes, page)
+    candidats += _moyennes_generales(lignes, page, intitule is not None and intitule.valide)
     for ligne in lignes:
         lus = _lire_ligne(ligne, page, contexte_bac)
         candidats += lus

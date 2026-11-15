@@ -13,7 +13,8 @@ from app.api.dependances import (
     obtenir_cle_maitresse,
     obtenir_contexte_auth,
 )
-from app.core.config import Parametres, obtenir_parametres
+from app.core.config import Environnement, Parametres, obtenir_parametres
+from app.core.erreurs import NonTrouve
 from app.modeles.candidat import StatutCandidat
 from app.modeles.utilisateur import Role
 from app.schemas.candidat import (
@@ -235,8 +236,14 @@ def generer_specimens_demonstration(
     cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
 ) -> list[DocumentSortie]:
     """Dépose des documents PDF spécimens chiffrés pour les pièces manquantes du candidat
-    afin de faciliter le test immédiat des démarches Campus France et IRCC."""
+    afin de faciliter le test immédiat des démarches Campus France et IRCC.
+
+    Hors production uniquement : en production la route est introuvable (404), pour ne jamais
+    fabriquer de fausses pièces dans un vrai dossier (règle 4)."""
     from datetime import timedelta
+
+    if parametres.environnement is Environnement.PRODUCTION:
+        raise NonTrouve("Ressource introuvable.")
 
     service_candidats.obtenir_candidat(
         ctx.db, candidat_id=candidat_id, cle_maitresse=cle_maitresse

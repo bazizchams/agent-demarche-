@@ -22,7 +22,7 @@ Référence visuelle : écran de connexion et tableau de bord (`tableau_bord.py`
 | Rôle | Tokens |
 |---|---|
 | Fonds | `--fond` (page), `--fond-creux`, `--surface` (cartes), `--surface-2` (zones calmes, en-têtes de tableau), `--surface-3` (pistes, survol fort) |
-| Bordures | `--bord`, `--bord-fort` (champs) |
+| Bordures | `--bord`, `--bord-fort` (cartes, zone de dépôt en pointillés), `--bord-champ` (contour des champs de saisie, voir plus bas) |
 | Texte | `--texte`, `--texte-doux` (secondaire), `--texte-faible` (aide, libellés ; AA garanti) |
 | Accent indigo | `--accent` (liens, texte), `--accent-fort`, `--accent-doux` (fond teinté), `--accent-moyen`, `--accent-plein` + `--accent-plein-survol` (fond des boutons pleins), `--sur-accent` |
 | Marque | `--marque-fond`, `--marque-fond-2`, `--sur-marque`, `--sur-marque-doux` (panneau indigo) |
@@ -97,7 +97,7 @@ tâches :
 ```
 Variantes : `.squelette-titre`, `.squelette-valeur`, `.squelette-carre`.
 
-**Toasts** : appeler `notifier(message, ok)` (zone `#zone-notification`). Classe statique : `.toast.toast-ok` / `.toast-err`.
+**Toasts** : appeler `notifier(message, ok)` (zone `#zone-notification`), voir « Toasts à deux régions » plus bas. Classe statique : `.toast.toast-ok` / `.toast-err`.
 Encart de règle : `.banniere-regle` (+ `.banniere-alerte`).
 
 **Onglets**
@@ -119,6 +119,37 @@ Encart de règle : `.banniere-regle` (+ `.banniere-alerte`).
   <button class="btn btn-fantome btn-icone" type="button" aria-label="Fermer">[[i:fermer]]</button></div>
   <div class="modale-corps">Texte.</div><div class="modale-pied"><button class="btn btn-contour" type="button">Annuler</button><button class="btn btn-primaire" type="button">Confirmer</button></div></dialog>
 ```
+
+## Contour des champs : `--bord-champ`
+
+- Token de contour des champs de saisie (`input`, `select`, `textarea`). Valeurs : `#7b82a3` en thème clair, `#7a80ad` en thème sombre (`TOKENS_CLAIR` et `TOKENS_SOMBRE` dans `styles.py`).
+- Il est présent dans `:root`, dans `:root:not([data-theme="light"])` sous `prefers-color-scheme: dark`, et dans `:root[data-theme="dark"]`.
+- Il n'est utilisé qu'à un endroit : la règle `input, select, textarea` de `styles.py` (`border: 1px solid var(--bord-champ)`).
+- Pour un nouveau champ, ne rien écrire : le style vient de la règle globale. Pour une carte ou un séparateur, utiliser `--bord` ou `--bord-fort`, pas `--bord-champ`.
+
+## Lien d'évitement : `.sr-focus`
+
+- Lien « Aller au contenu », premier élément du `<body>` (`shell.py`) : `<a class="sr-focus" href="#contenu">Aller au contenu</a>`. Cible : `<main id="contenu" tabindex="-1">`.
+- Règle CSS dans `styles.py` : hors écran (`left: -9999px`) tant qu'il n'a pas le focus. Au focus (`:focus` ou `:focus-visible`), il passe en `position: fixed` à `var(--e4)` du bord haut-gauche.
+- Ne pas le déplacer après la barre haute, et ne pas renommer l'id `contenu`.
+- Ne pas confondre avec `.sr-only` (même fichier) : `.sr-only` cache un texte à l'écran tout en le laissant aux lecteurs d'écran ; `.sr-focus` est un lien invisible qui apparaît au clavier.
+
+## Annonces : `annoncer(msg)`
+
+- Fonction JS définie dans `js_dossiers.py` : `function annoncer(msg)` écrit `msg` dans `#annonce-statut`.
+- `#annonce-statut` (`shell.py`) : `<div id="annonce-statut" class="sr-only" role="status" aria-live="polite" aria-atomic="true">`. Rien ne s'affiche à l'écran.
+- Usage : un résumé court pour lecteur d'écran, par exemple « Score d'acceptation calculé. » ou « 2 vœux dans le panier. ».
+- Ne pas l'utiliser pour un message visible ni pour une erreur : utiliser `notifier`.
+
+## Toasts à deux régions
+
+- `shell.py`, dans `#zone-notification` : `#notif-statut` (`role="status"`, `aria-live="polite"`) pour les succès, et `#notif-alerte` (`role="alert"`) pour les erreurs. Ces deux régions existent dès le chargement et ne sont jamais retirées du DOM.
+- `notifier(msg, ok = true)` (`js_dossiers.py`) : `ok` vrai écrit dans `#notif-statut`, sinon dans `#notif-alerte`. Chaque appel remplace le contenu de la région (`replaceChildren`) : un seul toast par région à la fois.
+- Succès (`.toast-ok`) : retiré automatiquement après 6 000 ms.
+- Erreur (`.toast-err`) : reste affichée jusqu'au bouton « Fermer », créé par `notifier`.
+- Le message est inséré avec `textContent`, jamais en `innerHTML`.
+- Sur mobile (≤ 900 px), la zone passe en bas de l'écran (`styles.py`).
+- Ne pas créer ces régions à la volée : un rôle ajouté après coup n'est pas toujours annoncé.
 
 ## Coquille (ne pas casser)
 

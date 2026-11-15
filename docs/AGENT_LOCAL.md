@@ -103,6 +103,7 @@ dossier `agent_local\profil_chromium`). Ce profil est distinct de votre navigate
 | « Serveur injoignable » | Vérifiez l'adresse du serveur et que le serveur est démarré. L'agent réessaie tout seul. |
 | « Aucun navigateur n'a pu être ouvert » | Installez Google Chrome, ou relancez `installer_agent.bat` en répondant **O** pour le Chromium de secours. |
 | La tâche reste « En attente de l'agent » | L'agent n'est pas lancé, ou il a été arrêté. Lancez-le : il prend la tâche aussitôt. Une tâche prise par un agent qui s'éteint est automatiquement remise en attente. |
+| Un vœu est signalé « introuvable » | La page de démonstration ne connaît que son propre catalogue FICTIF (quinze formations d'exemple), pas le catalogue réel d'Études en France : un vœu qui n'y figure pas ne peut pas être ajouté. Ce n'est pas une erreur du dossier ; l'ajout sur le vrai portail reste une étape manuelle validée par un humain. |
 | La page de démonstration est indisponible | Elle n'existe pas sur un serveur en production : l'agent signale une erreur et n'essaie aucune autre adresse. |
 
 Pour effacer la clé mémorisée sur un PC : double-cliquez sur `lancer_agent.bat` avec l'option `-Oublier`
