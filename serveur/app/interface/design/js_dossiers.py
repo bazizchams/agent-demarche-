@@ -91,6 +91,11 @@ JS_DOSSIERS = """
     // Deux régions persistantes (jamais retirées du DOM, rôle fixe) : #notif-statut (polite) et
     // #notif-alerte (alert). On y insère un toast ; une erreur reste jusqu'à « Fermer ».
     let minuteurNotification = null;
+    // Sortie animée (fantôme inerte) quand Mouvement est disponible ; le nœud réel part immédiatement.
+    function retirerToast(toast) {
+      if (window.Mouvement) window.Mouvement.sortie(toast);
+      else toast.remove();
+    }
     function notifier(msg, ok = true) {
       const region = document.getElementById(ok ? "notif-statut" : "notif-alerte");
       const toast = document.createElement("div");
@@ -104,13 +109,16 @@ JS_DOSSIERS = """
         fermer.type = "button";
         fermer.className = "btn btn-fantome btn-sm";
         fermer.textContent = "Fermer";
-        fermer.addEventListener("click", () => toast.remove());
+        fermer.addEventListener("click", () => retirerToast(toast));
         toast.appendChild(fermer);
       }
+      // Un seul message visible à la fois : le dernier état gagne (jamais un succès et un échec ensemble).
+      const autre = document.getElementById(ok ? "notif-alerte" : "notif-statut");
+      if (autre) autre.replaceChildren();
+      clearTimeout(minuteurNotification);
       region.replaceChildren(toast);
       if (ok) {
-        clearTimeout(minuteurNotification);
-        minuteurNotification = setTimeout(() => toast.remove(), 6000);
+        minuteurNotification = setTimeout(() => retirerToast(toast), 6000);
       }
     }
 
@@ -122,6 +130,7 @@ JS_DOSSIERS = """
     const TITRE_APPLICATION = "Agent Bureau d'Études";
 
     function allerVersVue(cible) {
+      const vueAvant = document.querySelector(".vue-ecran:not(.cache)");
       document.querySelectorAll("aside button.nav-btn").forEach((b) => {
         const courant = b.getAttribute("data-vue") === cible;
         b.classList.toggle("actif", courant);
@@ -134,6 +143,7 @@ JS_DOSSIERS = """
       window.scrollTo(0, 0);
       fermerMenuMobile(false);
       const vue = document.getElementById(cible);
+      if (window.Mouvement && vue && vue !== vueAvant) window.Mouvement.transitionVue(vueAvant, vue);
       const titreVue = vue ? vue.querySelector("h2") : null;
       if (titreVue) {
         titreVue.setAttribute("tabindex", "-1");
@@ -401,14 +411,28 @@ JS_DOSSIERS = """
     // Écran Étudiants : liste, fiche du dossier actif, création
     // -----------------------------------------------------------------------
 
-    function majCompteurEtudiants(total) {
+    function majCompteurEtudiants(total, completes) {
       const badge = document.getElementById("etudiants-total");
       badge.className = "badge badge-nu";
-      badge.textContent = total + " " + (total > 1 ? "dossiers" : "dossier");
+      let texte = total + " " + (total > 1 ? "dossiers" : "dossier");
+      if (typeof completes === "number" && total > 0) {
+        texte += " · " + completes + " " + (completes > 1 ? "fiches complètes" : "fiche complète") + " sur " + total;
+      }
+      badge.textContent = texte;
+    }
+
+    // Cellule du tableau des étudiants : `data-label` sert d'étiquette de colonne en disposition
+    // en cartes (< 640 px) ; role="cell" garde la sémantique de tableau quand le CSS change l'affichage.
+    function dosCellule(libelle, classe) {
+      const td = document.createElement("td");
+      td.setAttribute("role", "cell");
+      if (classe) td.className = classe;
+      if (libelle) td.setAttribute("data-label", libelle);
+      return td;
     }
 
     function celluleEtudiant(c) {
-      const td = document.createElement("td");
+      const td = dosCellule("", "etu-cellule-identite");
       const identite = dosNoeud("div", "etu-identite");
       const avatar = dosNoeud("span", "avatar avatar-initiales", dosInitiales(c));
       avatar.setAttribute("aria-hidden", "true");
@@ -422,10 +446,13 @@ JS_DOSSIERS = """
     }
 
     function celluleProgressionFiche(c) {
-      const td = dosNoeud("td", "etu-progression");
+      const td = dosCellule("Fiche", "etu-progression");
       const faits = dosChampsRenseignes(c);
       const total = DOS_CHAMPS_FICHE.length;
-      td.appendChild(dosProgression("Renseignée", faits, total, faits === total ? "ok" : faits < total / 2 ? "alerte" : ""));
+      const bloc = dosNoeud("div", "etu-fiche-ligne");
+      bloc.appendChild(dosNoeud("strong", "", faits + "/" + total));
+      bloc.appendChild(dosBarreProgression(total > 0 ? (faits * 100) / total : 0, "", "Fiche renseignée : " + faits + " sur " + total));
+      td.appendChild(bloc);
       return td;
     }
 
@@ -443,10 +470,11 @@ JS_DOSSIERS = """
     function ligneCandidat(c) {
       const estActif = c.id === candidatActifId;
       const tr = document.createElement("tr");
+      tr.setAttribute("role", "row");
       tr.classList.toggle("ligne-active", estActif);
       tr.appendChild(celluleEtudiant(c));
 
-      const tdPass = document.createElement("td");
+      const tdPass = dosCellule("Passeport");
       if (c.numero_passeport) {
         tdPass.appendChild(dosNoeud("span", "chiffres", c.numero_passeport));
         if (c.date_expiration_passeport) tdPass.appendChild(dosNoeud("small", "", "Expire le " + c.date_expiration_passeport));
@@ -455,19 +483,19 @@ JS_DOSSIERS = """
       }
       tr.appendChild(tdPass);
 
-      const tdProg = document.createElement("td");
+      const tdProg = dosCellule("Formation visée");
       tdProg.appendChild(dosNoeud("span", "", c.programme_vise || "-"));
       tdProg.appendChild(dosNoeud("small", "", c.etablissement_vise || "-"));
       tr.appendChild(tdProg);
 
       tr.appendChild(celluleProgressionFiche(c));
 
-      const tdCons = document.createElement("td");
+      const tdCons = dosCellule("Consentement");
       tdCons.appendChild(dosNoeud("span", "badge " + (c.consentement_signe ? "badge-ok" : "badge-warn"),
         c.consentement_signe ? "Signé (Loi 18-07)" : "À recueillir"));
       tr.appendChild(tdCons);
 
-      const tdActions = document.createElement("td");
+      const tdActions = dosCellule("", "etu-cellule-actions");
       const actions = dosNoeud("div", "cellule-actions");
       const btnSel = dosBouton((estActif ? "btn-primaire" : "btn-secondaire") + " btn-sm", estActif ? "Dossier actif" : "Choisir ce dossier");
       btnSel.setAttribute("data-sel", c.id);
@@ -505,7 +533,10 @@ JS_DOSSIERS = """
       }
       const data = await rep.json();
       dosFinChargementTable(tbody);
-      majCompteurEtudiants(typeof data.total === "number" ? data.total : data.elements.length);
+      majCompteurEtudiants(
+        typeof data.total === "number" ? data.total : data.elements.length,
+        data.elements.filter((e) => dosChampsRenseignes(e) === DOS_CHAMPS_FICHE.length).length
+      );
       if (data.elements.length === 0) {
         tbody.appendChild(q
           ? dosLigneVide(6, "Aucun étudiant ne correspond à « " + q + " ».", "Vérifiez l'orthographe ou cherchez par numéro de passeport.", "recherche")
@@ -767,7 +798,7 @@ JS_DOSSIERS = """
       carte.appendChild(entete);
 
       const complet = piecesValidesOblig.length === obligatoires.length;
-      carte.appendChild(dosProgression("Pièces obligatoires reçues", piecesValidesOblig.length, obligatoires.length, complet ? "ok" : "alerte"));
+      carte.appendChild(dosProgression("Pièces obligatoires reçues", piecesValidesOblig.length, obligatoires.length, ""));
 
       if (piecesManquantes.length === 0 && champsManquants.length === 0) {
         carte.appendChild(dosNoeud("div", "notif notif-ok", "Toutes les pièces justificatives obligatoires et les informations du candidat sont complètes et valides."));
@@ -901,7 +932,9 @@ JS_DOSSIERS = """
         const crees = await rep.json();
         notifier(
           crees.length > 0
-            ? `${crees.length} pièce(s) justificative(s) spécimen(s) générée(s) et chiffrée(s) pour ce candidat.`
+            ? (crees.length > 1
+              ? `${crees.length} pièces justificatives spécimens générées et chiffrées pour ce candidat.`
+              : "1 pièce justificative spécimen générée et chiffrée pour ce candidat.")
             : "Toutes les pièces justificatives sont déjà présentes dans ce dossier.",
           true
         );

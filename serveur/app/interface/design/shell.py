@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 
+from app.interface.design.motion import SCRIPT_MOUVEMENT_AMORCE
 from app.interface.design.styles import CSS_DESIGN, LIEN_POLICES
 
 # Icônes au trait (viewBox 24), génériques et sans texte : jamais de caractère emoji.
@@ -145,7 +146,7 @@ _SCRIPT_THEME_INITIAL = """  <script>
 # par connecterOperateur() : ne pas les renommer.
 _ECRAN_CONNEXION = """
     <section id="ecran-connexion" class="connexion" aria-labelledby="titre-connexion">
-      <div class="connexion-form">
+      <div class="connexion-form mo-stagger">
         <div class="connexion-entete">
           <span class="surtitre">Espace du bureau</span>
           <h2 id="titre-connexion">Connexion à votre bureau</h2>
@@ -165,22 +166,16 @@ _ECRAN_CONNEXION = """
         <p class="connexion-pied">[[i:cadenas]]<span>Les dossiers de chaque bureau sont isolés et chiffrés. Rien n'est transmis à un portail officiel sans la validation d'un membre de votre équipe.</span></p>
       </div>
       <div class="connexion-marque">
-        <div class="marque">
+        <div class="marque mo-reveal">
           <span class="marque-logo">[[i:dossier]]</span>
           <span class="marque-nom">Agent Bureau d'Études<span class="marque-sous">Campus France · IRCC Canada · Algérie</span></span>
         </div>
-        <p class="connexion-accroche">Les dossiers de vos étudiants, préparés par l'agent et validés par votre équipe.</p>
-        <ul class="connexion-arguments">
-          <li><span class="argument-icone">[[i:validation]]</span><div><strong>Validation humaine avant tout envoi</strong><span>L'agent pré-remplit Études en France et IRCC, produit un récapitulatif et s'arrête avant le bouton final.</span></div></li>
-          <li><span class="argument-icone">[[i:cadenas]]</span><div><strong>Identifiants portail dans un coffre chiffré</strong><span>Mots de passe des candidats jamais affichés ni journalisés, avec consentement écrit tracé.</span></div></li>
-          <li><span class="argument-icone">[[i:pause]]</span><div><strong>Pause sur CAPTCHA ou double authentification</strong><span>L'agent ne contourne jamais une vérification : il vous alerte et vous prenez la main.</span></div></li>
+        <p class="connexion-accroche mo-reveal" style="--i:1">Des dossiers préparés par l'agent, validés par vous.</p>
+        <ul class="connexion-arguments mo-stagger" style="--mo-base:180ms">
+          <li><span class="argument-icone">[[i:validation]]</span><div><strong>Validation humaine avant tout envoi</strong><span>L'agent prépare le dossier et s'arrête avant le bouton final.</span></div></li>
+          <li><span class="argument-icone">[[i:cadenas]]</span><div><strong>Identifiants dans un coffre chiffré</strong><span>Jamais affichés ni journalisés.</span></div></li>
+          <li><span class="argument-icone">[[i:pause]]</span><div><strong>Pause sur CAPTCHA ou double authentification</strong><span>L'agent vous alerte, vous reprenez la main.</span></div></li>
         </ul>
-        <div class="connexion-exemple" aria-hidden="true">
-          <span class="surtitre">Exemple de dossier</span>
-          <div class="connexion-exemple-ligne"><strong>Études en France · Licence 3 Informatique</strong><span class="puce-marque">Prêt à valider</span></div>
-          <div class="barre-progression"><div class="barre-progression-remplie" style="width:100%"></div></div>
-          <div class="connexion-exemple-ligne"><span>Pièces reçues 11 sur 11</span><span>Empreinte vérifiée avant l'envoi</span></div>
-        </div>
       </div>
     </section>
 """
@@ -197,6 +192,7 @@ def html_debut() -> str:
   <title>Agent Bureau d'Études — Dossiers Campus France et IRCC</title>
   {LIEN_POLICES}
 {_SCRIPT_THEME_INITIAL}
+{SCRIPT_MOUVEMENT_AMORCE}
   <style>{CSS_DESIGN}  </style>
 </head>
 <body class="hors-session">
@@ -240,12 +236,12 @@ def html_debut() -> str:
         <span class="banniere-dossier"><span class="surtitre">Dossier actif</span><strong id="bandeau-candidat-actif">Aucun</strong></span>
       </span>
       <button class="btn btn-contour btn-sm" type="button" data-aller-vers="vue-etudiants">Changer de dossier</button>
-      <span class="banniere-regle-courte">[[i:validation]]<span>L'agent s'arrête toujours avant l'envoi officiel</span></span>
+      <span class="banniere-regle-courte" title="L'agent s'arrête toujours avant l'envoi officiel">[[i:validation]]<span>L'agent s'arrête toujours avant l'envoi officiel</span></span>
     </div>
-    <div id="bandeau-email-non-verifie" class="banniere-regle banniere-alerte cache" role="status">
-      <strong>Adresse e-mail non vérifiée.</strong>
-      <span>Confirmez votre adresse pour sécuriser votre compte et recevoir les messages de la plateforme.</span>
-      <button id="btn-renvoyer-verification" class="btn btn-contour btn-sm" type="button">Renvoyer l'e-mail de vérification</button>
+    <div id="bandeau-email-non-verifie" class="bandeau-fin cache" role="status">
+      [[i:alerte]]<span><strong>E-mail non vérifié.</strong><span class="bandeau-suite"> Confirmez votre adresse pour sécuriser votre compte.</span></span>
+      <button id="btn-renvoyer-verification" class="btn btn-lien" type="button">Renvoyer</button>
+      <button id="btn-masquer-bandeau-email" class="btn btn-fantome btn-sm btn-icone" type="button" aria-label="Masquer ce rappel">[[i:fermer]]</button>
     </div>
     <div id="zone-notification">
       <div id="notif-statut" role="status" aria-live="polite"></div>
@@ -274,18 +270,33 @@ JS_COQUILLE = """
     document.querySelectorAll("[data-bascule-theme]").forEach((b) => {
       b.addEventListener("click", () => {
         const suivant = themeEffectif() === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-theme", suivant);
-        try { localStorage.setItem("theme-interface", suivant); } catch (e) { /* mémorisation facultative */ }
-        majBoutonTheme();
+        const appliquer = () => {
+          document.documentElement.setAttribute("data-theme", suivant);
+          try { localStorage.setItem("theme-interface", suivant); } catch (e) { /* mémorisation facultative */ }
+          majBoutonTheme();
+        };
+        if (window.Mouvement) window.Mouvement.basculerTheme(appliquer);
+        else appliquer();
       });
     });
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", majBoutonTheme);
     majBoutonTheme();
 
+    // Rappel d'e-mail non vérifié : fermable, choix mémorisé (stockage facultatif).
+    function bandeauEmailMasque() {
+      try { return localStorage.getItem("bandeau-email-masque") === "1"; } catch (e) { return false; }
+    }
+
     function majBandeauVerification(utilisateur) {
       const non_verifie = !!utilisateur && utilisateur.email_verifie === false;
-      document.getElementById("bandeau-email-non-verifie").classList.toggle("cache", !non_verifie);
+      document.getElementById("bandeau-email-non-verifie").classList.toggle("cache", !non_verifie || bandeauEmailMasque());
     }
+
+    document.getElementById("btn-masquer-bandeau-email").addEventListener("click", () => {
+      try { localStorage.setItem("bandeau-email-masque", "1"); } catch (e) { /* mémorisation facultative */ }
+      document.getElementById("bandeau-email-non-verifie").classList.add("cache");
+      document.getElementById("contenu").focus({ preventScroll: true });
+    });
 
     document.getElementById("btn-renvoyer-verification").addEventListener("click", async () => {
       const bouton = document.getElementById("btn-renvoyer-verification");

@@ -40,7 +40,28 @@ STYLE_REVUE = """
       #vue-revue-extractions .rx-colonne { display: flex; flex-direction: column; gap: var(--e2); min-width: 0; }
       #vue-revue-extractions .rx-etiquette { margin: 0; font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--texte-faible); }
       #vue-revue-extractions .rx-extrait { margin: 0; padding: var(--e3); background: var(--surface-2); border: 1px solid var(--bord); border-radius: var(--r-m); font-family: var(--police-code); font-size: var(--t-sm); overflow-wrap: anywhere; white-space: pre-wrap; }
-      #vue-revue-extractions .rx-image { max-width: 100%; max-height: 260px; object-fit: contain; border: 1px solid var(--bord); border-radius: var(--r-m); background: var(--surface-2); }
+      #vue-revue-extractions .rx-zoom { position: relative; display: block; width: 100%; height: 260px; padding: 0; margin: 0; overflow: hidden; border: 1px solid var(--bord); border-radius: var(--r-m); background: var(--surface-2); cursor: zoom-in; }
+      #vue-revue-extractions .rx-zoom:focus-visible { outline: none; box-shadow: var(--anneau); }
+      #vue-revue-extractions .rx-zoom.rx-zoom-actif { cursor: zoom-out; }
+      #vue-revue-extractions .rx-image { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: 50% 50%; transition: transform var(--d2) var(--courbe); will-change: transform; }
+      #vue-revue-extractions .rx-zoom:hover .rx-image, #vue-revue-extractions .rx-zoom.rx-zoom-actif .rx-image { transform: scale(2); }
+      #vue-revue-extractions .rx-aide { margin: 0; font-size: var(--t-xs); color: var(--texte-faible); }
+      #vue-revue-extractions .rx-carte { position: relative; border-left: 4px solid var(--bord-fort); transition: border-color var(--d2) var(--courbe), background-color var(--d2) var(--courbe); }
+      #vue-revue-extractions .rx-carte.rx-st-auto { border-left-color: var(--accent); }
+      #vue-revue-extractions .rx-carte.rx-st-a_verifier { border-left-color: var(--alerte); }
+      #vue-revue-extractions .rx-carte.rx-st-valide_humain { border-left-color: var(--bon); }
+      #vue-revue-extractions .rx-carte.rx-st-rejete { border-left-color: var(--critique); }
+      #vue-revue-extractions .rx-carte.rx-st-rejete .rx-valeur { color: var(--texte-faible); text-decoration: line-through; }
+      #vue-revue-extractions .rx-carte.rx-change::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--accent-doux); pointer-events: none; animation: rx-flash var(--d3) var(--courbe) both; }
+      #vue-revue-extractions .rx-carte.rx-change .badge { animation: rx-pop var(--d3) var(--courbe) both; }
+      #vue-revue-extractions .rx-transition { margin: 0; font-size: var(--t-xs); color: var(--texte-faible); }
+      #vue-revue-extractions button[aria-busy="true"] { cursor: progress; }
+      @keyframes rx-flash { from { opacity: 0.8; } to { opacity: 0; } }
+      @keyframes rx-pop { from { opacity: 0.4; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+      @media (prefers-reduced-motion: reduce) {
+        #vue-revue-extractions .rx-carte.rx-change::after, #vue-revue-extractions .rx-carte.rx-change .badge { animation: none !important; }
+        #vue-revue-extractions .rx-image, #vue-revue-extractions .rx-carte { transition: none !important; }
+      }
       #vue-revue-extractions .rx-valeur { margin: 0; font-size: var(--t-lg); font-weight: 600; color: var(--texte); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
       #vue-revue-extractions .rx-note { margin: 0; font-size: var(--t-sm); color: var(--texte-doux); overflow-wrap: anywhere; }
       #vue-revue-extractions .rx-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); }
@@ -170,8 +191,33 @@ JS_REVUE = """
       }
       const img = rxEl("img", "rx-image");
       img.src = rxImagesDocuments[doc.id];
-      img.alt = "Aperçu du document : " + (doc.nom_fichier_origine || "pièce du dossier");
-      conteneur.appendChild(img);
+      img.alt = "";
+      const zone = rxEl("button", "rx-zoom");
+      zone.type = "button";
+      zone.setAttribute("aria-pressed", "false");
+      zone.setAttribute("aria-label", "Agrandir l'aperçu du document : " + (doc.nom_fichier_origine || "pièce du dossier"));
+      zone.appendChild(img);
+      function rxOrigine(x, y) {
+        img.style.transformOrigin = Math.max(0, Math.min(100, x)) + "% " + Math.max(0, Math.min(100, y)) + "%";
+      }
+      zone.addEventListener("pointermove", (ev) => {
+        const r = zone.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) rxOrigine(((ev.clientX - r.left) / r.width) * 100, ((ev.clientY - r.top) / r.height) * 100);
+      });
+      zone.addEventListener("click", () => {
+        const actif = zone.classList.toggle("rx-zoom-actif");
+        zone.setAttribute("aria-pressed", actif ? "true" : "false");
+        if (!actif) rxOrigine(50, 50);
+      });
+      let ox = 50, oy = 50;
+      zone.addEventListener("keydown", (ev) => {
+        if (!zone.classList.contains("rx-zoom-actif")) return;
+        const pas = { ArrowLeft: [-12, 0], ArrowRight: [12, 0], ArrowUp: [0, -12], ArrowDown: [0, 12] }[ev.key];
+        if (pas) { ev.preventDefault(); ox += pas[0]; oy += pas[1]; rxOrigine(ox, oy); }
+        else if (ev.key === "Escape") { zone.classList.remove("rx-zoom-actif"); zone.setAttribute("aria-pressed", "false"); rxOrigine(50, 50); }
+      });
+      conteneur.appendChild(zone);
+      conteneur.appendChild(rxEl("p", "rx-aide", "Survolez ou appuyez sur Entrée pour agrandir ; flèches pour se déplacer, Échap pour revenir."));
     }
 
     function rxLibelleMotif(motif) {
@@ -204,17 +250,31 @@ JS_REVUE = """
       if (trouve) trouve.focus();
     }
 
+    let rxChangement = null;
+    function rxOccuper(extraction, action, occupe) {
+      document.querySelectorAll("#rx-liste button[data-rx-extraction]").forEach((b) => {
+        if (b.getAttribute("data-rx-extraction") !== extraction.id) return;
+        b.disabled = occupe;
+        if (b.getAttribute("data-rx-action") === action && occupe) b.setAttribute("aria-busy", "true");
+        else b.removeAttribute("aria-busy");
+      });
+    }
+
     async function rxDecider(extraction, action, valeur) {
       rxMemoriserFocus(extraction, action);
+      rxOccuper(extraction, action, true);
       const options = { method: "POST" };
       if (action === "corriger") options.body = JSON.stringify({ valeur: valeur });
       const rep = await appelApi(rxUrlCandidat("/extractions/" + encodeURIComponent(extraction.id) + "/" + action), options);
       if (rep.ok) {
+        rxChangement = { id: extraction.id, avant: extraction.statut };
         notifier(action === "rejeter" ? "Valeur rejetée." : "Valeur confirmée : elle pourra être appliquée à la fiche.", true);
       } else {
         notifier((await rxLireDetail(rep)) || "Action impossible sur cette valeur.", false);
       }
       await rxActualiser();
+      rxOccuper(extraction, action, false);
+      rxChangement = null;
       rxRefocaliser();
     }
 
@@ -247,11 +307,16 @@ JS_REVUE = """
 
     function rxCarte(extraction, doc) {
       const [libelleStatut, classeStatut] = RX_STATUTS[extraction.statut] || [extraction.statut, ""];
-      const carte = rxEl("section", "carte");
+      const carte = rxEl("section", "carte rx-carte rx-st-" + extraction.statut);
       const entete = rxEl("div", "rx-carte-entete");
       entete.appendChild(rxEl("h4", "", RX_CHAMPS[extraction.champ] || extraction.champ));
       entete.appendChild(rxEl("span", "badge " + classeStatut, libelleStatut));
       carte.appendChild(entete);
+      if (rxChangement && rxChangement.id === extraction.id && rxChangement.avant !== extraction.statut) {
+        const ancien = (RX_STATUTS[rxChangement.avant] || [rxChangement.avant])[0];
+        carte.appendChild(rxEl("p", "rx-transition", "Avant : " + ancien + ". Maintenant : " + libelleStatut + "."));
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) carte.classList.add("rx-change");
+      }
 
       const grille = rxEl("div", "rx-grille");
       const source = rxEl("div", "rx-colonne");

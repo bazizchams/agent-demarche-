@@ -339,3 +339,67 @@ def test_le_panneau_deplie_ne_masque_ni_ne_bloque_la_page(banc: Callable[..., An
     page.click("#droite", timeout=2000)  # Playwright échoue si un autre élément intercepte le clic
     page.locator("#agent-panneau-hote button", has_text="Replier").click()
     assert page.evaluate("() => document.documentElement.style.marginRight") == ""  # marge d'origine rétablie
+
+
+def test_mouvement_reduit_aucune_animation_ni_trajectoire(banc: Callable[..., Any]) -> None:
+    """prefers-reduced-motion : ni apparition, ni pulsation, ni curseur animé ; le message reste visible."""
+    page, journal, _ = banc(reduced_motion="reduce")
+    journal.dire("Je commence")
+    journal.agir("Je vise", "#btn")
+    journal.agir("Je vise ailleurs", "#droite")
+    noms = page.evaluate(
+        f"""() => Array.from({RACINE}.querySelectorAll('*')).map(n => getComputedStyle(n).animationName)
+                .filter(a => a !== 'none')"""
+    )
+    assert noms == []
+    assert page.evaluate(f"() => {RACINE}.querySelector('.curseur').getAnimations().length") == 0
+    assert page.evaluate(f"() => getComputedStyle({RACINE}.querySelector('.msg')).opacity") == "1"
+
+
+def test_le_curseur_suit_une_trajectoire_courte_et_ne_capte_aucun_clic(banc: Callable[..., Any]) -> None:
+    page, journal, _ = banc()
+    journal.agir("Premier", "#btn")
+    journal.agir("Second", "#droite")
+    duree = page.evaluate(f"() => {RACINE}.querySelector('.curseur').getAnimations().map(a => a.effect.getTiming().duration)")
+    assert all(d <= 500 for d in duree) and duree
+    for selecteur in (".curseur", ".halo"):
+        assert page.evaluate(f"() => getComputedStyle({RACINE}.querySelector('{selecteur}')).pointerEvents") == "none"
+    page.click("#btn", timeout=2000)  # halo et curseur au-dessus du bouton : le clic du portail passe
+
+
+def test_panneau_replie_n_intercepte_aucun_clic_du_portail(banc: Callable[..., Any]) -> None:
+    page, journal, _ = banc()
+    journal.dire("Un")
+    page.locator("#agent-panneau-hote button", has_text="Replier").click()
+    page.wait_for_timeout(350)  # fin de l'animation de repli
+    assert page.evaluate(f"() => getComputedStyle({RACINE}.querySelector('.panneau')).visibility") == "hidden"
+    point = page.locator("#droite").bounding_box()
+    assert point is not None
+    page.mouse.click(1275, 40)  # sous l'ancien emplacement du panneau
+    assert page.evaluate("() => document.elementFromPoint(1275, 40).tagName") in {"HTML", "BODY", "FORM", "H1"}
+
+
+def test_defilement_intelligent_ne_vole_pas_la_lecture(banc: Callable[..., Any]) -> None:
+    page, journal, _ = banc(viewport={"width": 1280, "height": 500})
+    for i in range(30):
+        journal.dire(f"Message numéro {i}")
+    page.wait_for_timeout(1500)
+    fil = f"{RACINE}.querySelector('.fil')"
+    assert page.evaluate(f"() => {fil}.scrollHeight - {fil}.scrollTop - {fil}.clientHeight < 60")  # suit le bas
+    page.evaluate(f"() => {{ {fil}.scrollTop = 0; }}")
+    page.wait_for_timeout(500)
+    journal.dire("Nouveau message pendant la lecture")
+    page.wait_for_timeout(500)
+    assert page.evaluate(f"() => {fil}.scrollTop") < 50  # la lecture n'a pas été déplacée
+    assert page.evaluate(f"() => {RACINE}.querySelector('.nouveaux').className.includes('visible')")
+    page.evaluate(f"() => {RACINE}.querySelector('.nouveaux').click()")
+    page.wait_for_timeout(800)
+    assert page.evaluate(f"() => {fil}.scrollHeight - {fil}.scrollTop - {fil}.clientHeight < 60")
+
+
+def test_l_animation_ne_suggere_jamais_une_validation(banc: Callable[..., Any]) -> None:
+    """R1 : aucune coche ni mention de validation/envoi dans le décor du panneau ; la demande humaine reste du texte."""
+    assert "✓" not in JS_PANNEAU_DISCUSSION and "✔" not in JS_PANNEAU_DISCUSSION
+    page, journal, _ = banc()
+    journal.demander_humain("Cliquez vous-même sur Envoyer")
+    assert page.evaluate(f"() => {RACINE}.querySelectorAll('.msg.t-demande_humaine').length") == 1

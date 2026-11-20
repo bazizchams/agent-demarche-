@@ -20,13 +20,32 @@ CSS_DOSSIERS = """
       .ecran-dossiers .etu-identite { display: flex; align-items: center; gap: var(--e3); min-width: 0; }
       .ecran-dossiers .avatar-initiales { font-family: var(--police-titre); font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.02em; }
       .ecran-dossiers tr.ligne-active .avatar-initiales { background: var(--accent-plein); color: var(--sur-accent); }
-      .ecran-dossiers .etu-progression { min-width: 120px; }
+      .ecran-dossiers .etu-progression { min-width: 110px; }
+      .ecran-dossiers .etu-fiche-ligne { display: flex; align-items: center; gap: var(--e2); white-space: nowrap; }
+      .ecran-dossiers .etu-fiche-ligne strong { font-variant-numeric: tabular-nums; }
+      .ecran-dossiers .etu-fiche-ligne .barre-progression { flex: 1 1 auto; min-width: 36px; margin: 0; }
+      .ecran-dossiers #table-candidats td .chiffres, .ecran-dossiers #table-candidats td .badge, .ecran-dossiers #table-candidats td .note { white-space: nowrap; }
+      .ecran-dossiers #table-candidats .cellule-actions { flex-direction: column; align-items: stretch; }
+      .ecran-dossiers #table-candidats .cellule-actions .btn { white-space: normal; text-align: center; line-height: 1.25; }
+      .ecran-dossiers #table-candidats td .chiffres, .ecran-dossiers #table-candidats td small { font-variant-numeric: tabular-nums; }
+      .ecran-dossiers .table-wrap:has(#table-candidats) { overflow-x: auto; scrollbar-width: thin; background:
+        linear-gradient(to right, var(--surface) 30%, transparent) left center / 24px 100% no-repeat local,
+        linear-gradient(to left, var(--surface) 30%, transparent) right center / 24px 100% no-repeat local,
+        linear-gradient(to right, var(--bord-fort), transparent) left center / 10px 100% no-repeat scroll,
+        linear-gradient(to left, var(--bord-fort), transparent) right center / 10px 100% no-repeat scroll,
+        var(--surface); }
+      .ecran-dossiers .page-entete { gap: var(--e3) var(--e5); }
+      .ecran-dossiers .page-entete .lead { margin-top: var(--e2); }
       .ecran-dossiers tbody td:first-child { min-width: 250px; }
       .ecran-dossiers tbody td:last-child { min-width: 190px; }
       .ecran-dossiers .etu-identite > :first-child { flex-shrink: 0; }
       .ecran-dossiers .etu-identite > :last-child { flex: 1; overflow-wrap: anywhere; }
       .ecran-dossiers .cellule-actions .btn { white-space: nowrap; }
-      .ecran-dossiers .table-wrap table { min-width: 900px; }
+      .ecran-dossiers .table-wrap table { min-width: 780px; }
+      .ecran-dossiers #table-candidats th, .ecran-dossiers #table-candidats td { padding-left: var(--e3); padding-right: var(--e3); }
+      .ecran-dossiers #table-candidats th { white-space: normal; }
+      .ecran-dossiers #table-candidats tbody td:first-child { min-width: 190px; }
+      .ecran-dossiers #table-candidats tbody td:last-child { min-width: 150px; }
       .ecran-dossiers .barre-recherche { margin-bottom: var(--e4); }
       .ecran-dossiers .barre-recherche .btn, .ecran-dossiers .barre-saisie .btn { margin: 0; }
       .ecran-dossiers .ligne-formulaire { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e3); }
@@ -115,6 +134,65 @@ CSS_DOSSIERS = """
       .ecran-dossiers .fil-discussion .etat-vide { padding: var(--e4); }
       .ecran-dossiers .fil-discussion .ligne-squelette { padding: var(--e3); }
 
+      /* Liste des étudiants : avatars, survol, apparition en cascade */
+      .ecran-dossiers #table-candidats .avatar-initiales { width: 40px; height: 40px; background: var(--accent-doux); color: var(--accent-fort); box-shadow: inset 0 0 0 1px var(--accent-moyen); }
+      .ecran-dossiers #table-candidats tbody tr { transition: background-color var(--d1) var(--courbe), box-shadow var(--d1) var(--courbe); animation: dos-entree var(--mo-dur-3, var(--d3)) var(--mo-ease-out, var(--courbe)) both; }
+      .ecran-dossiers #table-candidats tbody tr:hover { background: var(--surface-2); }
+      .ecran-dossiers #table-candidats tbody tr.ligne-active { box-shadow: inset 3px 0 0 var(--accent-plein); }
+      .ecran-dossiers #table-candidats tbody tr:nth-child(2) { animation-delay: 40ms; }
+      .ecran-dossiers #table-candidats tbody tr:nth-child(3) { animation-delay: 80ms; }
+      .ecran-dossiers #table-candidats tbody tr:nth-child(4) { animation-delay: 120ms; }
+      .ecran-dossiers #table-candidats tbody tr:nth-child(5) { animation-delay: 160ms; }
+      .ecran-dossiers #table-candidats tbody tr:nth-child(n+6) { animation-delay: 200ms; }
+      .ecran-dossiers #table-candidats .btn:active { transform: scale(0.97); }
+      @keyframes dos-entree { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+      /* En-tête de la fiche du dossier actif */
+      .ecran-dossiers .fiche-hero { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e4); padding: var(--e4); margin-bottom: var(--e5); background: var(--surface-2); border: 1px solid var(--bord); border-radius: var(--r-l); animation: dos-entree var(--mo-dur-3, var(--d3)) var(--mo-ease-out, var(--courbe)) both; }
+      .ecran-dossiers .fiche-hero-avatar { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; flex: none; font-family: var(--police-titre); font-size: var(--t-lg); font-weight: 700; background: var(--accent-plein); color: var(--sur-accent); }
+      .ecran-dossiers .fiche-hero-texte { display: flex; flex-direction: column; gap: var(--e1); flex: 1 1 240px; min-width: 0; }
+      .ecran-dossiers .fiche-hero-texte strong { font-family: var(--police-titre); font-size: var(--t-lg); line-height: 1.2; overflow-wrap: anywhere; }
+      .ecran-dossiers .fiche-hero-texte > span { color: var(--texte-doux); font-size: var(--t-sm); overflow-wrap: anywhere; }
+      .ecran-dossiers .fiche-hero-puces { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e2); }
+      .ecran-dossiers .fiche-hero-jauge { position: relative; width: 84px; height: 84px; flex: none; }
+      .ecran-dossiers .fiche-jauge-svg { width: 100%; height: 100%; display: block; }
+      .ecran-dossiers .fiche-jauge-piste { fill: none; stroke: var(--surface-3); stroke-width: 10; }
+      .ecran-dossiers .fiche-jauge-valeur { fill: none; stroke: var(--accent-plein); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset 900ms var(--mo-ease-out, var(--courbe)); }
+      .ecran-dossiers .fiche-hero-pct { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: grid; place-items: center; font-family: var(--police-titre); font-weight: 700; font-size: var(--t-md); font-variant-numeric: tabular-nums; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .ecran-dossiers #table-candidats tbody tr, .ecran-dossiers .fiche-hero { animation: none; }
+        .ecran-dossiers .fiche-jauge-valeur { transition: none; }
+        .ecran-dossiers #table-candidats .btn:active { transform: none; }
+      }
+
+      /* Étudiants sous 640 px : chaque ligne devient une carte (étiquettes via data-label posées par le JS).
+         thead reste dans l'arbre d'accessibilité (technique .sr-only) et les rôles ARIA gardent la sémantique de tableau. */
+      @media (max-width: 640px) {
+        .ecran-dossiers .table-wrap:has(#table-candidats) { overflow: visible; border: 0; background: none; box-shadow: none; border-radius: 0; }
+        .ecran-dossiers #table-candidats, .ecran-dossiers #table-candidats tbody { display: block; min-width: 0; width: 100%; }
+        .ecran-dossiers .table-wrap table#table-candidats { min-width: 0; }
+        .ecran-dossiers #table-candidats thead { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+        .ecran-dossiers #table-candidats tbody { display: flex; flex-direction: column; gap: var(--e3); }
+        .ecran-dossiers #table-candidats tbody tr { display: flex; flex-direction: column; gap: var(--e3); padding: var(--e4); background: var(--surface); border: 1px solid var(--bord); border-radius: var(--r-l); box-shadow: var(--ombre-1); }
+        .ecran-dossiers #table-candidats tbody tr:hover { background: var(--surface); }
+        .ecran-dossiers #table-candidats tbody tr.ligne-active { border-color: var(--accent-plein); box-shadow: inset 4px 0 0 var(--accent-plein), var(--ombre-1); }
+        .ecran-dossiers #table-candidats tbody tr.sr-only { position: absolute; padding: 0; border: 0; }
+        .ecran-dossiers #table-candidats td { display: block; padding: 0; border: 0; min-width: 0; }
+        .ecran-dossiers #table-candidats tbody td:first-child, .ecran-dossiers #table-candidats tbody td:last-child { min-width: 0; }
+        .ecran-dossiers #table-candidats td[data-label] { display: grid; grid-template-columns: 124px minmax(0, 1fr); align-items: center; gap: var(--e3); }
+        .ecran-dossiers #table-candidats td[data-label]::before { content: attr(data-label); font-size: var(--t-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--texte-faible); }
+        .ecran-dossiers #table-candidats td[data-label] > small, .ecran-dossiers #table-candidats td[data-label] > span { overflow-wrap: anywhere; }
+        .ecran-dossiers #table-candidats .etu-progression { min-width: 0; }
+        .ecran-dossiers #table-candidats .etu-cellule-actions { padding-top: var(--e3); border-top: 1px solid var(--bord); }
+        .ecran-dossiers #table-candidats .cellule-actions { flex-direction: column; }
+        .ecran-dossiers #table-candidats .cellule-actions .btn { width: 100%; min-height: 44px; justify-content: center; white-space: normal; }
+        .ecran-dossiers #table-candidats td.etat-vide-cellule { display: block; }
+        .ecran-dossiers #table-candidats tbody tr:has(td.etat-vide-cellule) { padding: 0; background: var(--surface); }
+        .ecran-dossiers #table-candidats tbody tr[aria-hidden="true"] td { display: block; }
+        .ecran-dossiers #table-candidats tbody tr[aria-hidden="true"] td::before { content: none; }
+      }
+
       @media (max-width: 760px) {
         .ecran-dossiers .depot-grille { grid-template-columns: minmax(0, 1fr); }
         .ecran-dossiers .score-entete { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
@@ -173,13 +251,13 @@ HTML_ETUDIANTS = (
         </div>
         <div class="barre-saisie barre-recherche" role="search">
           <input id="rech-candidat" type="search" placeholder="Rechercher par nom, prénom, e-mail ou passeport" aria-label="Rechercher un étudiant" />
-          <button id="btn-rechercher-candidat" class="btn btn-secondaire" type="button">Rechercher</button>
+          <button id="btn-rechercher-candidat" class="btn btn-primaire" type="button">Rechercher</button>
         </div>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Tableau des dossiers du bureau">
-          <table id="table-candidats" aria-busy="true">
+          <table id="table-candidats" role="table" aria-busy="true">
             <caption class="sr-only">Dossiers du bureau : étudiant, passeport, formation visée, fiche, consentement et actions</caption>
-            <thead><tr><th scope="col">Étudiant</th><th scope="col">Passeport</th><th scope="col">Formation visée</th><th scope="col">Fiche</th><th scope="col">Consentement (loi 18-07)</th><th scope="col">Actions</th></tr></thead>
-            <tbody>
+            <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Étudiant</th><th scope="col" role="columnheader">Passeport</th><th scope="col" role="columnheader">Formation visée</th><th scope="col" role="columnheader">Fiche</th><th scope="col" role="columnheader">Consentement (loi 18-07)</th><th scope="col" role="columnheader">Actions</th></tr></thead>
+            <tbody role="rowgroup">
               <tr class="sr-only"><td colspan="6">Chargement des dossiers</td></tr>
               """
     + _LIGNE_SQUELETTE_TABLE * 3

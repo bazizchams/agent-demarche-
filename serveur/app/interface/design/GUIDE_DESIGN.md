@@ -28,7 +28,7 @@ Référence visuelle : écran de connexion et tableau de bord (`tableau_bord.py`
 | Marque | `--marque-fond`, `--marque-fond-2`, `--sur-marque`, `--sur-marque-doux` (panneau indigo) |
 | Sémantique | `--bon`, `--bon-doux`, `--bon-texte` ; `--alerte`, `--alerte-doux`, `--alerte-texte` ; `--critique`, `--critique-doux`, `--critique-texte` |
 | Ombres | `--ombre-1` (cartes), `--ombre-2` (survol, panneaux), `--ombre-flottante` (toast, tiroir, modale), `--anneau` (focus champ), `--voile` (fond de modale) |
-| Typo | `--police-titre` (Bricolage Grotesque), `--police-texte` (Inter), `--police-code` ; tailles `--t-xs` 12, `--t-sm` 13, `--t-base` 15, `--t-md` 17, `--t-lg` 21, `--t-xl` 28, `--t-2xl` 36, `--t-3xl` 44 px |
+| Typo | `--police-titre` (Bricolage Grotesque), `--police-texte` (Inter), `--police-code` ; tailles `--t-xs` 13, `--t-sm` 14, `--t-base` 15, `--t-md` 17, `--t-lg` 21, `--t-xl` 28, `--t-2xl` 36, `--t-3xl` 44 px |
 | Espaces | `--e1` 4, `--e2` 8, `--e3` 12, `--e4` 16, `--e5` 24, `--e6` 32, `--e7` 48, `--e8` 64 px |
 | Rayons | `--r-s` 6, `--r-m` 10, `--r-l` 14, `--r-xl` 20, `--r-pilule` |
 | Contrôles | `--h-ctrl-sm` 32, `--h-ctrl` 40, `--h-ctrl-lg` 48 px |
@@ -148,7 +148,7 @@ Encart de règle : `.banniere-regle` (+ `.banniere-alerte`).
 - Succès (`.toast-ok`) : retiré automatiquement après 6 000 ms.
 - Erreur (`.toast-err`) : reste affichée jusqu'au bouton « Fermer », créé par `notifier`.
 - Le message est inséré avec `textContent`, jamais en `innerHTML`.
-- Sur mobile (≤ 900 px), la zone passe en bas de l'écran (`styles.py`).
+- Position : fixe en bas à droite (`z-index` 35, sous l'en-tête collant) ; sur mobile (≤ 900 px), pleine largeur en bas, au-dessus de la zone sûre (`styles.py`).
 - Ne pas créer ces régions à la volée : un rôle ajouté après coup n'est pas toujours annoncé.
 
 ## Coquille (ne pas casser)
@@ -162,3 +162,36 @@ Encart de règle : `.banniere-regle` (+ `.banniere-alerte`).
 Fil en direct (SSE, repli par interrogation) de la fenêtre de l'agent, avec saisie, Pause / Reprendre / Arrêter et lien
 « Voir la fenêtre sur mon PC ». Intégration : `monterDiscussionAgent(conteneur, tacheId)` (voir l'en-tête du fichier) ;
 `assembler_discussion_agent(html)` insère le style et le script. Classes préfixées `.da-`, tokens uniquement.
+
+## Mouvement (`motion.py`) : contrat
+
+Sobre, premium, jamais gadget. `CSS_MOUVEMENT` est inclus dans `CSS_DESIGN` (la coque et les pages publiques en héritent) ;
+`SCRIPT_MOUVEMENT_AMORCE` (en `<head>`, pose `html.mo-actif` hors mouvement réduit) et `JS_MOUVEMENT` (définit
+`window.Mouvement`, à placer avant tout autre script) sont à injecter par chaque page. Pas de GSAP : CSS + WAAPI suffisent.
+
+- **Tokens** : `--mo-dur-1` 120 ms, `--mo-dur-2` 220, `--mo-dur-3` 420, `--mo-dur-4` 700 ; `--mo-ease-out` `cubic-bezier(.16,1,.3,1)`,
+  `--mo-ease-inout` `cubic-bezier(.65,0,.35,1)`, `--mo-ease-spring` (`linear()` avec repli `cubic-bezier`) ; `--mo-pas` 45 ms (pas de cascade).
+- **Classes** : `.mo-reveal` (fondu + translation à l'entrée dans le viewport ; `.mo-in` ajoutée par l'IntersectionObserver),
+  `.mo-stagger` (enfants décalés par `--i`, posé automatiquement si absent ; `--mo-base` décale le départ), `.mo-press` (retour au clic ; déjà
+  appliqué aux `.btn`, `.nav-btn`, `.raccourci`), `.mo-lift` (survol relevé ; déjà sur `.carte-cliquable` et `.raccourci`), `.mo-skel` (squelette,
+  appliqué aussi à `.squelette`), `.mo-pulse`. Les éléments ajoutés plus tard au DOM sont pris en charge (MutationObserver).
+- **JS** : `Mouvement.reduit()`, `reveler(racine)`, `cascade(liste)` (animation d'entrée décalée d'éléments déjà créés), `compteur(el, valeur, ms)`
+  (plafonné à 700 ms, repart de la valeur affichée), `transitionVue(avant, apres)` (fondu + glissement de 10 px, 220 ms, sans bloquer focus ni titre),
+  `pret` (Promise), et en plus `sortie(el)` (retire le nœud tout de suite, un fantôme inerte joue la sortie) et `basculerTheme(fn)`.
+- **Amélioration progressive** : `.mo-reveal` et les enfants de `.mo-stagger` ne sont masqués que sous `html.mo-actif`. Sans JS ou sous
+  `prefers-reduced-motion: reduce`, tout est affiché tout de suite, `Mouvement.*` ne fait rien (compteur écrit la valeur finale).
+- **Règles** : animer seulement `transform` / `opacity` (deux exceptions : couleurs de la classe temporaire `html.mo-theme` de 500 ms
+  à la bascule de thème, texte du compteur) ; durées <= 700 ms ; jamais d'attente sur la saisie ; thème clair et sombre (tokens uniquement).
+  Ne pas poser `.mo-reveal` sur des blocs re-rendus en boucle (rafraîchissement périodique) : préférer `cascade` au premier chargement.
+- **Dans la coque** : `allerVersVue` joue `transitionVue` (focus sur le h2 conservé, synchrone) ; pastille active de la barre latérale qui glisse
+  (`.nav-pastille`, translation) ; tiroir mobile (focus piégé inchangé) ; toasts entrant en ressort léger et sortant via `sortie` ; connexion orchestrée.
+
+## Coque : règles de la passe « direction artistique »
+
+- Contrastes : tout texte secondaire >= 4,5:1 sur les fonds de page, cartes et pistes, en clair et en sombre (calculé dans `tests/test_interface_coque_contrastes.py`).
+  Texte >= 13 px. Bouton plein sombre : `--accent-plein` `#4f46e5` (blanc 6,3:1). Fonds de badge sombres : teinte à 12 % d'opacité (`rgba`), verts désaturés.
+- Majuscules espacées : réservées aux titres de groupe de la barre latérale (`.nav-titre`). `.surtitre` et `th` sont en casse normale.
+- Bandeau « Dossier actif » : une seule ligne sur mobile (icône, nom tronqué, « Changer de dossier », pastille de règle réduite à l'icône + `title`).
+- Rappel e-mail non vérifié : `.bandeau-fin` d'une ligne, bouton-lien « Renvoyer », fermable ; choix mémorisé dans `localStorage["bandeau-email-masque"]` (try/catch).
+- Connexion : barre latérale atténuée (`opacity` 0,28, toujours cliquable) ; panneau indigo à 3 arguments et un titre court.
+- Tiroir mobile : bouton fermer 44 x 44, hauteur `100dvh` (le contenu défile), pied (utilisateur, déconnexion, thème) collant en bas.

@@ -68,6 +68,14 @@ JS_OUVERTURE_PC = """
       return li;
     }
 
+    // La marche à suivre est un bloc repliable (details) : seul son résumé reste visible par défaut.
+    function ouvMarcheContenu(zone, titre, etapes) {
+      const corps = dosNoeud("div", "ouverture-marche-corps");
+      corps.appendChild(dosNoeud("strong", "", titre));
+      corps.appendChild(etapes);
+      zone.replaceChildren(dosNoeud("summary", "", "Marche à suivre pour installer et lancer l'agent sur le PC"), corps);
+    }
+
     function ouvAfficherMarche(agents) {
       const zone = document.getElementById("ouverture-pc-marche");
       const actifs = agents.filter((a) => a.actif);
@@ -79,13 +87,13 @@ JS_OUVERTURE_PC = """
       }
       const etapes = dosNoeud("ol", "");
       if (actifs.length === 0) {
-        zone.replaceChildren(dosNoeud("strong", "", "Aucun poste agent n'est enrôlé pour votre bureau."), etapes);
+        ouvMarcheContenu(zone, "Aucun poste agent n'est enrôlé pour votre bureau.", etapes);
         etapes.appendChild(ouvEtapeMarche("Un administrateur ouvre « Abonnement et sauvegardes », puis « Enrôler un poste agent local », et copie la clé affichée (elle ne s'affiche qu'une fois)."));
         etapes.appendChild(ouvEtapeMarche("Sur le PC Windows du bureau : installer Python 3.11 ou plus récent, puis double-cliquer sur", "agent_local" + String.fromCharCode(92) + "installer_agent.bat"));
       } else {
         const dernier = actifs.map((a) => a.derniere_activite_le).filter((d) => d).sort().pop();
         const quand = dernier ? "Dernier signe de vie : " + new Date(dernier).toLocaleString("fr-FR") + "." : "Aucun poste ne s'est encore connecté.";
-        zone.replaceChildren(dosNoeud("strong", "", "Aucun agent n'est en ligne pour l'instant. " + quand), etapes);
+        ouvMarcheContenu(zone, "Aucun agent n'est en ligne pour l'instant. " + quand, etapes);
       }
       etapes.appendChild(ouvEtapeMarche("Lancer l'agent en double-cliquant sur", "agent_local" + String.fromCharCode(92) + "lancer_agent.bat"));
       etapes.appendChild(ouvEtapeMarche("Quand le script le demande, saisir l'adresse du serveur", ouvAdresseServeur()));

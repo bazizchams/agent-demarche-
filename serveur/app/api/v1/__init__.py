@@ -17,6 +17,7 @@ from app.api.v1 import (
     courriel,
     deductions,
     demarches,
+    depots_passeport,
     evenements_agent,
     dossier_automatique,
     extractions,
@@ -41,6 +42,7 @@ routeur_v1.include_router(courriel.routeur)
 routeur_v1.include_router(utilisateurs.routeur)
 routeur_v1.include_router(bureau.routeur)
 routeur_v1.include_router(candidats.routeur)
+routeur_v1.include_router(depots_passeport.routeur)
 routeur_v1.include_router(extractions.routeur)
 routeur_v1.include_router(deductions.routeur)
 routeur_v1.include_router(dossier_automatique.routeur)

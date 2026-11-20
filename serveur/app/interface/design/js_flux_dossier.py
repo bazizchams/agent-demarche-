@@ -10,12 +10,17 @@ pas recopiée ici.
 Contrat d'API :
 - `POST /api/v1/candidats/{id}/dossier-automatique/lancer` ;
 - `GET  /api/v1/candidats/{id}/dossier-automatique/etat` -> progression 0-100, étapes, pièces manquantes ;
-- dépôt : `POST /api/v1/candidats/{id}/documents` (formulaire `type_piece` + `fichier`, jeton CSRF via appelApi).
+- dépôt : `POST /api/v1/candidats/{id}/documents` (formulaire `type_piece` + `fichier`, jeton CSRF via appelApi) ;
+- fiche depuis le passeport : `POST /api/v1/depots-passeport` (fichier), `POST .../{id}/creer-fiche`
+  (`confirme: true` + valeurs affichées), `DELETE .../{id}` (annulation).
 """
 
 from __future__ import annotations
 
-JS_FLUX_DOSSIER = """
+from app.interface.design.js_flux_dossier_mouvement import JS_FLUX_DOSSIER_MOUVEMENT
+from app.interface.design.js_flux_dossier_passeport import JS_FLUX_DOSSIER_PASSEPORT
+
+_JS_PRINCIPAL = """
     // =======================================================================
     // Dossier automatique : dépôt des pièces, lancement, suivi des 9 étapes.
     // =======================================================================
@@ -25,15 +30,28 @@ JS_FLUX_DOSSIER = """
     const FD_VUE = "vue-flux-dossier";
     const FD_ETAPES_PREVUES = [
       ["pieces", "Pièces reçues"],
-      ["lecture", "Lecture des documents"],
-      ["revue_valeurs", "Valeurs lues à confirmer"],
+      ["lecture", "Lecture des pièces"],
+      ["revue_valeurs", "Revue des valeurs"],
       ["fiche", "Fiche de l'étudiant"],
       ["points_forts", "Points forts"],
       ["projet_professionnel", "Projet professionnel"],
       ["voeux", "Vœux"],
       ["lettres", "Lettres de motivation"],
-      ["navigateur", "Navigateur sur votre PC"]
+      ["navigateur", "Navigateur et validation"]
     ];
+    // Libellé lisible d'une étape : celui du serveur, sans préfixe « Étape », sauf s'il est absent ou égal au code.
+    function fdLibelleEtape(etape) {
+      let brut = String(etape.libelle || "").trim();
+      if (brut.toLowerCase().indexOf("étape ") === 0) brut = brut.slice(6).trim();
+      if (brut && brut !== etape.code) return brut;
+      const prevue = FD_ETAPES_PREVUES.find((e) => e[0] === etape.code);
+      return prevue ? prevue[1] : (brut || String(etape.code || ""));
+    }
+    // Détail utile seulement : vide ou « Détail <code> » = rien à afficher.
+    function fdDetailEtape(etape) {
+      const d = String(etape.detail || "").trim();
+      return d && d !== "Détail " + etape.code ? d : "";
+    }
     const FD_STATUTS = {
       a_faire: ["À faire", "badge-attente"],
       en_cours: ["En cours", "badge-info"],
@@ -96,6 +114,9 @@ JS_FLUX_DOSSIER = """
     function fdMessageHttp(statut, corps, defaut) {
       if (statut === 401 || statut === 403) return "Votre session a expiré ou ce compte ne peut pas modifier les dossiers. Reconnectez-vous puis réessayez.";
       if (statut === 404) return "Le suivi automatique n'est pas disponible pour ce dossier : le dossier est introuvable ou la fonction n'est pas encore activée sur ce serveur.";
+      if (statut === 413) return "Ce fichier est trop volumineux (10 Mo maximum). Réduisez-le ou scannez-le en plus basse résolution.";
+      if (statut === 415 || statut === 422) return messageErreurApi(corps, "Ce fichier n'a pas pu être accepté : utilisez un PDF, PNG ou JPEG lisible.");
+      if (statut === 429) return "Trop de demandes en peu de temps. Patientez quelques secondes puis réessayez.";
       if (statut === 409) return "Une analyse est déjà en cours pour ce dossier. Patientez : la page se met à jour toute seule.";
       if (statut >= 500) return "Le serveur a rencontré un problème. Réessayez dans un instant ; si cela continue, prévenez l'administrateur.";
       return messageErreurApi(corps, defaut);
@@ -150,6 +171,7 @@ JS_FLUX_DOSSIER = """
       fdEtat = null;
       fdEchecs = 0;
       fdSuivis = 0;
+      fdCompletVu = null;
       fdCandidat = id || null;
       fdSynchroniserDiscussion();
       fdCacherErreur();
@@ -164,10 +186,13 @@ JS_FLUX_DOSSIER = """
       fdEl("fd-contenu").classList.toggle("cache", aucun);
       if (aucun) {
         const vide = fdEl("fd-vide");
-        vide.replaceChildren(dosEtatVide(
-          "Choisissez l'étudiant à traiter.",
-          "Sélectionnez un dossier dans la liste, ou créez la fiche d'un nouvel étudiant, puis déposez ses documents.",
-          "piece"));
+        const action = dosNoeud("button", "mo-press btn btn-secondaire btn-sm", "Créer la fiche d'un nouvel étudiant");
+        action.type = "button";
+        action.addEventListener("click", () => { fdEl("fd-nouveau").open = true; fdEl("fd-nom").focus(); });
+        const bloc = dosNoeud("div", "fd-vide-bloc");
+        bloc.append(fdIllustrationVide(), dosNoeud("strong", "", "Choisissez l'étudiant à traiter."),
+          dosNoeud("span", "", "Sélectionnez un dossier dans la liste, ou créez la fiche d'un nouvel étudiant, puis déposez ses documents."), action);
+        vide.replaceChildren(bloc);
       }
       fdRendreFichiers();
       fdRendreAnalyse();
@@ -256,46 +281,6 @@ JS_FLUX_DOSSIER = """
 
     const FD_LIBELLES_ENVOI = { attente: ["À envoyer", "badge-attente"], envoi: ["Envoi…", "badge-info"], ok: ["Envoyé", "badge-ok"], erreur: ["Refusé", "badge-err"] };
 
-    function fdLigneFichier(entree) {
-      const li = dosNoeud("li", "fd-fichier");
-      li.appendChild(dosNoeud("span", "fd-fichier-nom", entree.fichier.name + " (" + fdTaille(entree.fichier.size) + ")"));
-      const [libelle, classe] = FD_LIBELLES_ENVOI[entree.statut];
-      li.appendChild(dosNoeud("span", "badge " + classe, libelle));
-      const meta = dosNoeud("div", "fd-fichier-meta");
-      if (entree.statut === "ok") {
-        meta.appendChild(dosNoeud("span", "fd-suggestion", "Type : " + fdLibelleType(entree.type)));
-      } else {
-        const select = document.createElement("select");
-        select.setAttribute("aria-label", "Type de la pièce " + entree.fichier.name);
-        select.disabled = fdEnvoi;
-        fdOptionsTypes(select, entree.type);
-        select.addEventListener("change", () => {
-          entree.type = select.value;
-          entree.suggere = false;
-          entree.message = "";
-          fdRendreFichiers();
-        });
-        meta.appendChild(select);
-        if (entree.suggere) meta.appendChild(dosNoeud("span", "fd-suggestion", "Suggéré d'après le nom : vérifiez"));
-        const retirer = dosNoeud("button", "btn btn-fantome btn-sm", "Retirer");
-        retirer.type = "button";
-        retirer.disabled = fdEnvoi;
-        retirer.setAttribute("aria-label", "Retirer " + entree.fichier.name);
-        retirer.addEventListener("click", () => {
-          fdFichiers = fdFichiers.filter((x) => x.cle !== entree.cle);
-          fdRendreFichiers();
-        });
-        meta.appendChild(retirer);
-      }
-      li.appendChild(meta);
-      if (entree.message) {
-        const p = dosNoeud("p", "fd-fichier-erreur", entree.message);
-        p.setAttribute("role", "alert");
-        li.appendChild(p);
-      }
-      return li;
-    }
-
     function fdLibelleType(code) {
       const source = document.getElementById("doc-type-piece");
       if (source) {
@@ -308,7 +293,7 @@ JS_FLUX_DOSSIER = """
 
     function fdRendreFichiers() {
       const liste = fdEl("fd-liste-fichiers");
-      liste.replaceChildren(...fdFichiers.map(fdLigneFichier));
+      fdRendreListeFichiers(liste);
       const aEnvoyer = fdFichiers.filter((x) => x.statut === "attente" || x.statut === "erreur");
       fdEl("fd-depot-pied").classList.toggle("cache", fdFichiers.length === 0);
       const bouton = fdEl("fd-btn-envoyer");
@@ -370,28 +355,6 @@ JS_FLUX_DOSSIER = """
     }
 
     // ----- État du dossier automatique -----
-    function fdMarqueur(etape, rang) {
-      const m = dosNoeud("span", "fd-marqueur");
-      m.setAttribute("aria-hidden", "true");
-      const attributs = { viewBox: "0 0 24 24", class: "ico", focusable: "false", "aria-hidden": "true" };
-      if (etape.statut === "termine") {
-        const svg = dosSvg("svg", attributs);
-        svg.appendChild(dosSvg("path", { d: "M5 12.5l4.5 4.5L19 7.5", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round" }));
-        m.appendChild(svg);
-      } else if (etape.statut === "a_verifier") {
-        const svg = dosSvg("svg", attributs);
-        svg.appendChild(dosSvg("path", { d: "M12 4l9 16H3zM12 10v4M12 17v.5", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" }));
-        m.appendChild(svg);
-      } else if (etape.statut === "bloque") {
-        const svg = dosSvg("svg", attributs);
-        svg.appendChild(dosSvg("path", { d: "M8 8l8 8M16 8l-8 8", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round" }));
-        m.appendChild(svg);
-      } else {
-        m.textContent = String(rang);
-      }
-      return m;
-    }
-
     function fdVueDepuisLien(lien) {
       if (!lien || typeof lien !== "string") return null;
       let cle = lien;
@@ -430,20 +393,20 @@ JS_FLUX_DOSSIER = """
       const zone = dosNoeud("div", "fd-actions");
       const vue = fdVueDepuisLien(etape.lien_ecran);
       if (etape.action_humaine && vue) {
-        const b = dosNoeud("button", etape.statut === "a_verifier" ? "btn btn-primaire btn-sm" : "btn btn-secondaire btn-sm", etape.action_humaine);
+        const b = dosNoeud("button", etape.statut === "a_verifier" ? "mo-press btn btn-primaire btn-sm" : "mo-press btn btn-secondaire btn-sm", etape.action_humaine);
         b.type = "button";
         b.setAttribute("data-aller-vers", vue);
         zone.appendChild(b);
       } else if (etape.action_humaine) {
         zone.appendChild(dosNoeud("span", "badge badge-completer", etape.action_humaine));
       } else if (vue && etape.statut !== "a_faire") {
-        const b = dosNoeud("button", "btn btn-fantome btn-sm", "Voir le détail");
+        const b = dosNoeud("button", "mo-press btn btn-fantome btn-sm", "Voir le détail");
         b.type = "button";
         b.setAttribute("data-aller-vers", vue);
         zone.appendChild(b);
       }
       if (etape.code === "navigateur" && etape.statut !== "bloque") {
-        const pc = dosNoeud("button", "btn btn-contour btn-sm", "Ouvrir sur mon PC");
+        const pc = dosNoeud("button", "mo-press btn btn-contour btn-sm", "Ouvrir sur mon PC");
         pc.type = "button";
         pc.id = "fd-btn-ouvrir-pc";
         pc.addEventListener("click", fdOuvrirSurPc);
@@ -499,26 +462,6 @@ JS_FLUX_DOSSIER = """
       if (cible.textContent !== texte) cible.textContent = texte;
     }
 
-    function fdCarteEtape(etape, rang) {
-      const statut = FD_STATUTS[etape.statut] ? etape.statut : "a_faire";
-      const [libelleStatut, classeBadge] = FD_STATUTS[statut];
-      const li = dosNoeud("li", "fd-etape fd-etape-" + statut);
-      li.setAttribute("data-code", etape.code);
-      li.appendChild(fdMarqueur({ statut: statut }, rang));
-      const corps = dosNoeud("div", "fd-corps");
-      const ligne = dosNoeud("div", "fd-ligne");
-      ligne.appendChild(dosNoeud("h4", "fd-titre", etape.libelle || etape.code));
-      ligne.appendChild(dosNoeud("span", "badge " + classeBadge, libelleStatut));
-      corps.appendChild(ligne);
-      if (etape.detail) corps.appendChild(dosNoeud("p", "fd-detail", etape.detail));
-      const compteurs = fdCompteurs(etape.compteurs);
-      if (compteurs) corps.appendChild(compteurs);
-      const actions = fdActionsEtape(Object.assign({}, etape, { statut: statut }));
-      if (actions) corps.appendChild(actions);
-      li.appendChild(corps);
-      return li;
-    }
-
     function fdSqueletteEtapes() {
       const ul = dosNoeud("ul", "fd-squelette");
       ul.setAttribute("aria-busy", "true");
@@ -526,10 +469,10 @@ JS_FLUX_DOSSIER = """
       for (let i = 0; i < FD_ETAPES_PREVUES.length; i++) {
         const li = dosNoeud("li");
         li.setAttribute("aria-hidden", "true");
-        li.appendChild(dosNoeud("span", "squelette squelette-rond"));
+        li.appendChild(dosNoeud("span", "mo-skel squelette squelette-rond"));
         const pile = dosNoeud("span", "squelette-pile");
-        pile.appendChild(dosNoeud("span", "squelette squelette-texte"));
-        pile.appendChild(dosNoeud("span", "squelette squelette-texte court"));
+        pile.appendChild(dosNoeud("span", "mo-skel squelette squelette-texte"));
+        pile.appendChild(dosNoeud("span", "mo-skel squelette squelette-texte court"));
         li.appendChild(pile);
         ul.appendChild(li);
       }
@@ -546,10 +489,10 @@ JS_FLUX_DOSSIER = """
       const enCours = etapes.filter((e) => e.statut === "en_cours");
       const attente = etapes.filter((e) => e.statut === "a_verifier");
       const bloquees = etapes.filter((e) => e.statut === "bloque");
-      if (enCours.length) return (fdLancement ? "Analyse en cours : " : "Étape en cours : ") + (enCours[0].libelle || enCours[0].code) + ". " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
-      if (bloquees.length) return "L'analyse est bloquée à l'étape « " + (bloquees[0].libelle || bloquees[0].code) + " ». " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
-      if (attente.length) return "À vous de jouer : « " + (attente[0].libelle || attente[0].code) + " » attend votre vérification. " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
-      if (faites === etapes.length && etapes.length) return "Toutes les étapes sont terminées. Le dossier est prêt pour votre validation.";
+      if (enCours.length) return (fdLancement ? "Analyse en cours : " : "Étape en cours : ") + fdLibelleEtape(enCours[0]) + ". " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
+      if (bloquees.length) return "L'analyse est bloquée à l'étape « " + fdLibelleEtape(bloquees[0]) + " ». " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
+      if (attente.length) return "À vous de jouer : « " + fdLibelleEtape(attente[0]) + " » attend votre vérification. " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
+      if (faites === etapes.length && etapes.length) return "Toutes les étapes sont terminées. Le dossier est prêt pour votre validation : rien n'a été envoyé.";
       if (progression > 0) return faites + " étape(s) sur " + etapes.length + " terminée(s).";
       return "Aucune analyse lancée.";
     }
@@ -593,11 +536,15 @@ JS_FLUX_DOSSIER = """
     function fdRendreAnalyse() {
       const etapes = fdEtapesAffichees();
       const progression = fdEtat && typeof fdEtat.progression === "number" ? Math.max(0, Math.min(100, Math.round(fdEtat.progression))) : 0;
-      fdEl("fd-progres-chiffre").textContent = progression + " %";
+      fdAnimerChiffre(fdEl("fd-progres-chiffre"), progression);
       fdEl("fd-barre").setAttribute("aria-valuenow", String(progression));
+      fdEl("fd-barre").setAttribute("aria-valuetext", progression + " pour cent");
       fdEl("fd-barre-remplie").style.width = progression + "%";
       const barre = fdEl("fd-barre");
       barre.classList.toggle("ok", progression === 100);
+      const reelles = fdEtat && Array.isArray(fdEtat.etapes) ? fdEtat.etapes : [];
+      barre.classList.toggle("fd-actif", reelles.some((e) => e.statut === "en_cours"));
+      const complet = fdMajPret(reelles);
       const texte = fdTextesProgression(etapes, progression);
       const zoneTexte = fdEl("fd-progres-texte");
       if (zoneTexte.textContent !== texte) zoneTexte.textContent = texte;
@@ -605,18 +552,18 @@ JS_FLUX_DOSSIER = """
       if (fdEtat === null && fdCandidat) {
         zone.replaceChildren(fdSqueletteEtapes());
       } else {
-        const ol = dosNoeud("ol", "fd-etapes");
-        ol.setAttribute("aria-label", "Étapes du dossier automatique");
-        etapes.forEach((e, i) => ol.appendChild(fdCarteEtape(e, i + 1)));
-        zone.replaceChildren(ol);
+        fdMajEtapes(zone, etapes);
       }
       fdRendrePiecesManquantes();
       fdSynchroniserDiscussion();
-      const enCours = etapes.some((e) => e.statut === "en_cours");
       const bouton = fdEl("fd-btn-lancer");
       // L'analyse est synchrone côté serveur : « en cours » (étape partielle) ne doit jamais bloquer la relance.
       bouton.disabled = !fdCandidat || !fdEcriture() || fdLancement;
-      bouton.lastChild.textContent = fdLancement ? "Analyse en cours…" : (progression > 0 ? "Relancer l'analyse" : "Lancer l'analyse");
+      const etat = fdLancement ? "cours" : (complet ? "termine" : "pret");
+      bouton.setAttribute("data-etat", etat);
+      bouton.classList.toggle("btn-primaire", etat !== "termine");
+      bouton.classList.toggle("btn-contour", etat === "termine");
+      bouton.lastChild.textContent = etat === "cours" ? "Analyse en cours…" : (etat === "termine" ? "Analyse terminée : relancer" : (progression > 0 ? "Relancer l'analyse" : "Lancer l'analyse"));
     }
 
     function fdArreterSuivi() {
@@ -696,6 +643,9 @@ JS_FLUX_DOSSIER = """
       await fdActualiser(false);
     }
 
+"""
+
+_JS_BRANCHEMENT = """
     // ----- Branchement -----
     function fdInitialiserDepot() {
       const champ = fdEl("fd-fichiers");
@@ -704,13 +654,22 @@ JS_FLUX_DOSSIER = """
         fdAjouterFichiers(champ.files);
         champ.value = "";
       });
-      ["dragenter", "dragover"].forEach((t) => champ.addEventListener(t, () => zone.classList.add("survol")));
-      ["dragleave", "drop"].forEach((t) => champ.addEventListener(t, () => zone.classList.remove("survol")));
+      const titre = zone.querySelector(".fd-depot-titre");
+      const titreRepos = titre.textContent;
+      ["dragenter", "dragover"].forEach((t) => champ.addEventListener(t, () => {
+        zone.classList.add("survol");
+        titre.textContent = "Relâchez pour déposer";
+      }));
+      ["dragleave", "drop"].forEach((t) => champ.addEventListener(t, () => {
+        zone.classList.remove("survol");
+        titre.textContent = titreRepos;
+      }));
     }
 
     fdInitialiserDepot();
     fdEl("fd-etudiant").addEventListener("change", (e) => fdChoisirEtudiant(e.target.value));
     fdEl("fd-btn-creer").addEventListener("click", fdCreerEtudiant);
+    fdEl("fd-pp-fichier").addEventListener("change", (e) => { if (e.target.files.length) fdPpDeposer(e.target.files[0]); });
     fdEl("fd-btn-envoyer").addEventListener("click", fdEnvoyerTout);
     fdEl("fd-btn-lancer").addEventListener("click", fdLancer);
     fdEl("fd-btn-actualiser").addEventListener("click", () => { fdEchecs = 0; fdSuivis = 0; fdActualiser(false); });
@@ -722,6 +681,7 @@ JS_FLUX_DOSSIER = """
     });
 
     async function fdEntrer() {
+      fdPpActiver();
       await fdChargerEtudiants();
       if (candidatActifId && dictionnaireCandidats[candidatActifId] && candidatActifId !== fdCandidat) {
         fdChoisirEtudiant(candidatActifId);
@@ -740,3 +700,5 @@ JS_FLUX_DOSSIER = """
     fdAfficherSelection();
 
 """
+
+JS_FLUX_DOSSIER = JS_FLUX_DOSSIER_MOUVEMENT + _JS_PRINCIPAL + JS_FLUX_DOSSIER_PASSEPORT + _JS_BRANCHEMENT

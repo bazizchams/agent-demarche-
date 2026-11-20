@@ -12,6 +12,7 @@ from app.interface.design.js_dossiers import JS_DOSSIERS
 from app.interface.design.js_ouverture_pc import JS_OUVERTURE_PC
 from app.interface.design.js_procedures import JS_PROCEDURES
 from app.interface.design.js_voeux import JS_VOEUX
+from app.interface.design.motion import JS_MOUVEMENT
 from app.interface.design.shell import JS_COQUILLE, html_debut, rendre_icones
 from app.interface.design.tableau_bord import HTML_ACCUEIL, JS_ACCUEIL
 from app.interface.design.vues_demarches import (
@@ -66,7 +67,8 @@ _ECRANS = (
 def construire_page_base() -> str:
     corps = rendre_icones(html_debut() + "".join(_ECRANS))
     js = (
-        JS_DOSSIERS
+        JS_MOUVEMENT
+        + JS_DOSSIERS
         + JS_OUVERTURE_PC
         + JS_DEMARCHES
         + JS_PROCEDURES

@@ -15,6 +15,7 @@ from app.modeles.discussion_dossier import (
     AuteurMessageDossier,
     MessageDiscussionDossier,
 )
+from app.modeles.depot_passeport import DepotPasseport
 from app.modeles.document import DocumentCandidat
 from app.modeles.evenement_agent import EvenementAgent
 from app.modeles.extraction_document import ExtractionDocument, StatutExtraction
@@ -45,6 +46,7 @@ __all__ = [
     "Candidat",
     "DecisionValidationHumaine",
     "DemarcheBureau",
+    "DepotPasseport",
     "DocumentCandidat",
     "EntreeAudit",
     "EtapeTache",

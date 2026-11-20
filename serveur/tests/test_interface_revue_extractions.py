@@ -69,3 +69,20 @@ def test_focus_conserve_apres_confirmer_ou_rejeter() -> None:
     for action in ("valider", "corriger", "rejeter"):
         assert f'extraction, "{action}"));' in js
     assert "\\" not in js
+
+
+def test_transition_de_statut_zoom_clavier_et_mouvement_reduit() -> None:
+    js, style = ecran.JS_REVUE, ecran.STYLE_REVUE
+    # carte colorée par statut + transition lisible « Avant : … Maintenant : … », jamais d'animation sous mouvement réduit
+    assert "rx-st-" in js and "rx-transition" in js and "Avant : " in js
+    assert "prefers-reduced-motion: reduce" in style and "rx-change" in style
+    assert 'matchMedia("(prefers-reduced-motion: reduce)")' in js
+    # feedback au clic : boutons de la carte occupés pendant la requête
+    assert 'setAttribute("aria-busy", "true")' in js and "rxOccuper(extraction, action, true)" in js
+    # zoom de l'image : survol (CSS), clavier (Entrée / flèches / Échap), état exposé
+    assert "rx-zoom" in style and ":hover .rx-image" in style and "will-change: transform" in style
+    for touche in ("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"):
+        assert touche in js
+    assert 'setAttribute("aria-pressed"' in js
+    # rien ne laisse croire que la valeur est déjà appliquée à la fiche du seul fait de la confirmation
+    assert "Appliquée à la fiche." in js and js.count("Appliquée à la fiche.") == 1

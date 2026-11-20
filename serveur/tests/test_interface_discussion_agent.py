@@ -178,3 +178,29 @@ def test_mise_en_page_mobile_sans_debordement(page_ui: Page) -> None:
     page_ui.set_viewport_size({"width": 360, "height": 740})
     _monter(page_ui, elements=[_evt(1, "agent", "x" * 400)])
     assert page_ui.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+
+def test_mouvement_reduit_et_pas_de_validation_suggeree() -> None:
+    assert "prefers-reduced-motion: reduce" in CSS_DISCUSSION_AGENT
+    assert "animation: none !important" in CSS_DISCUSSION_AGENT
+    assert "✓" not in JS_DISCUSSION_AGENT and "✔" not in JS_DISCUSSION_AGENT
+    assert "transition: width" not in CSS_DISCUSSION_AGENT and "transition: height" not in CSS_DISCUSSION_AGENT
+
+
+def test_defilement_intelligent_et_indicateur_discret(page_ui: Page) -> None:
+    page_ui.set_viewport_size({"width": 900, "height": 700})
+    _monter(page_ui, elements=[_evt(i, "agent", f"Message {i}") for i in range(1, 40)])
+    page_ui.wait_for_timeout(300)
+    # l'agent travaille : indicateur visible, aria-hidden, hors décompte des messages
+    assert page_ui.locator(".da-ecrit").get_attribute("aria-hidden") == "true"
+    assert page_ui.locator(".da-ecrit").is_visible()
+    assert page_ui.locator(".da-msg").count() == 39
+    page_ui.evaluate("() => { const f = document.querySelector('.da-fil'); f.dispatchEvent(new WheelEvent('wheel', { deltaY: -50 })); f.scrollTop = 0; }")
+    page_ui.wait_for_timeout(200)
+    page_ui.evaluate("() => flux[0].emettre('evenement', " + json.dumps(_evt(100, "agent", "Nouveau")) + ")")
+    page_ui.wait_for_timeout(400)
+    assert page_ui.evaluate("() => document.querySelector('.da-fil').scrollTop") < 50
+    assert page_ui.locator(".da-nouveaux").is_visible()
+    page_ui.locator(".da-nouveaux").click()
+    page_ui.wait_for_function("() => { const f = document.querySelector('.da-fil'); return f.scrollHeight - f.scrollTop - f.clientHeight < 60; }")
+    assert not page_ui.locator(".da-nouveaux").is_visible()
