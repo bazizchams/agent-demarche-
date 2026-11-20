@@ -99,6 +99,48 @@ def _verifier_dimensions_image(octets: bytes) -> None:
         )
 
 
+def _trouver_paire_mrz(textes: list[str]) -> tuple[str, str] | None:
+    """Paire de lignes MRZ consécutives (ligne 1 « P< »), réparée et vérifiée par les chiffres de contrôle."""
+    from app.services.extraction_champs import reparer_lignes_mrz  # noqa: PLC0415 - évite un cycle d'import
+
+    for i, premiere in enumerate(textes[:-1]):
+        if premiere.upper().replace(" ", "").startswith("P<"):
+            reparee = reparer_lignes_mrz(premiere, textes[i + 1])
+            if reparee is not None:
+                return reparee
+    return None
+
+
+def _bandes_mrz(image: bytes) -> list[bytes]:
+    """Bandes candidates (PNG) autour de la dernière zone d'encre de la page, agrandies ×2 puis ×1."""
+    try:
+        image_pil = _importer_pillow()
+        from PIL import ImageOps  # noqa: PLC0415
+
+        with image_pil.open(io.BytesIO(image)) as brute:
+            gris = brute.convert("L")
+        largeur, hauteur = gris.size
+        donnees = gris.tobytes()
+        derniere = -1
+        for y in range(hauteur - 1, -1, -1):
+            ligne = donnees[y * largeur : (y + 1) * largeur]
+            if sum(1 for p in ligne if p < 140) > 3:
+                derniere = y
+                break
+        if derniere < 0:
+            return []
+        bande = gris.crop((0, max(0, derniere - 180), largeur, min(hauteur, derniere + 25)))
+        resultat = []
+        for facteur in (2, 1):
+            agrandie = ImageOps.autocontrast(bande.resize((bande.width * facteur, bande.height * facteur)))
+            tampon = io.BytesIO()
+            agrandie.save(tampon, format="PNG")
+            resultat.append(tampon.getvalue())
+        return resultat
+    except Exception:  # image exotique : la lecture normale reste valable
+        return []
+
+
 class _MoteurRapidOcr:
     """Adaptateur RapidOCR (v2 `rapidocr`, ou v1 `rapidocr_onnxruntime`)."""
 
@@ -123,12 +165,9 @@ def _moteur_rapidocr_partage() -> _MoteurRapidOcr:
     try:
         from rapidocr import RapidOCR  # noqa: PLC0415 - v2
 
-        try:
-            from rapidocr import LangRec  # noqa: PLC0415
-
-            moteur = RapidOCR(params={"Rec.lang_type": LangRec.LATIN})  # alphabet latin (accents)
-        except Exception:  # version sans sélection de langue : modèle par défaut
-            moteur = RapidOCR()
+        # Modèle « fr » (alphabet latin accentué) : « latin » n'existe pas dans toutes les versions et son échec
+        # n'apparaît qu'à la première lecture (ce qui rendait toute lecture indisponible).
+        moteur = RapidOCR(params={"Rec.lang_type": "fr"})
     except ImportError:
         from rapidocr_onnxruntime import RapidOCR as RapidOCRv1  # noqa: PLC0415
 
@@ -167,10 +206,36 @@ class LecteurDocumentLocal:
     def _page_ocr(self, numero: int, image: bytes) -> PageTexte:
         _verifier_dimensions_image(image)
         lignes = [(t.strip(), s) for t, s in self._ocr().reconnaitre(image) if t and t.strip()]
+        lignes = self._completer_mrz(image, lignes)
         if not lignes:
             return PageTexte(numero, "", ORIGINE_OCR, 0.0)
         confiance = sum(s for _, s in lignes) / len(lignes)
         return PageTexte(numero, "\n".join(t for t, _ in lignes), ORIGINE_OCR, confiance)
+
+    def _completer_mrz(self, image: bytes, lignes: list[tuple[str, float]]) -> list[tuple[str, float]]:
+        """Passeport : la zone MRZ (petits caractères « < ») est mal lue sur la page entière. Si une ligne 1
+        de MRZ est vue mais pas la paire complète valide, on relit la dernière bande d'encre de la page,
+        agrandie, puis on remplace les lignes MRZ par la paire corrigée dont les chiffres de contrôle sont
+        TOUS bons. Sinon le texte reste tel que lu (aucune correction non vérifiée)."""
+        if not any(t.upper().replace(" ", "").startswith("P<") for t, _ in lignes):
+            return lignes
+        paire = _trouver_paire_mrz([t for t, _ in lignes])  # paire lisible : au moins corrige O/0 des noms
+        if paire is not None:
+            return self._remplacer_mrz(lignes, paire)
+
+        for bande in _bandes_mrz(image):
+            textes = [t for t, _ in self._ocr().reconnaitre(bande) if t and t.strip()]
+            paire = _trouver_paire_mrz(textes)
+            if paire is not None:
+                break
+        if paire is None:
+            return lignes
+        return self._remplacer_mrz(lignes, paire)
+
+    @staticmethod
+    def _remplacer_mrz(lignes: list[tuple[str, float]], paire: tuple[str, str]) -> list[tuple[str, float]]:
+        garde = [(t, s) for t, s in lignes if "<" not in t and not t.upper().replace(" ", "").startswith("P<")]
+        return [*garde, (paire[0], 1.0), (paire[1], 1.0)]
 
     # -- PDF
     @staticmethod

@@ -41,6 +41,7 @@ from app.services import voeux as service_voeux
 from app.services.application_extractions import (
     CHAMPS_FICHE,
     _convertir,
+    attribut_fiche,
     _identiques,
     _vide,
     appliquer_extractions_a_fiche,
@@ -160,7 +161,7 @@ def _diagnostic_fiche(db: Session, candidat_id: uuid.UUID, fiche, cle: bytes) ->
             if any(not _identiques(champ, valeurs[0], v) for v in valeurs[1:]):
                 conflits += 1
                 continue
-            actuelle = getattr(fiche, champ)
+            actuelle = getattr(fiche, attribut_fiche(champ))
             if _vide(actuelle):
                 a_reporter += 1
             elif not _identiques(champ, actuelle, valeurs[0]):

@@ -18,6 +18,9 @@ from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
 routeur_demo = APIRouter(prefix="/demo", tags=["pages de démonstration"])
+from app.demo.maquette_compte import routeur_compte  # noqa: E402
+
+routeur_demo.include_router(routeur_compte)
 
 
 @routeur_demo.get("/eef-reel", response_class=HTMLResponse)

@@ -494,7 +494,7 @@ _JS_PRINCIPAL = """
       if (attente.length) return "À vous de jouer : « " + fdLibelleEtape(attente[0]) + " » attend votre vérification. " + faites + " étape(s) sur " + etapes.length + " terminée(s).";
       if (faites === etapes.length && etapes.length) return "Toutes les étapes sont terminées. Le dossier est prêt pour votre validation : rien n'a été envoyé.";
       if (progression > 0) return faites + " étape(s) sur " + etapes.length + " terminée(s).";
-      return "Aucune analyse lancée.";
+      return "Pas encore d'analyse : déposez les documents de l'étudiant, puis cliquez sur « Lancer l'analyse ».";
     }
 
     function fdRendrePiecesManquantes() {
@@ -614,10 +614,18 @@ _JS_PRINCIPAL = """
     async function fdLancer() {
       if (!fdCandidat) { notifier("Choisissez d'abord un étudiant.", false); return; }
       const enAttente = fdFichiers.filter((x) => x.statut === "attente" || x.statut === "erreur").length;
-      if (enAttente) { notifier("Des documents choisis n'ont pas encore été envoyés : envoyez-les d'abord.", false); return; }
       const candidat = fdCandidat;
       fdLancement = true;
       fdRendreAnalyse();
+      if (enAttente) {
+        // Un seul clic : les documents choisis sont d'abord déposés (le type de chaque pièce reste à confirmer).
+        await fdEnvoyerTout();
+        if (fdFichiers.some((x) => x.statut === "attente" || x.statut === "erreur") || candidat !== fdCandidat) {
+          fdLancement = false;
+          fdRendreAnalyse();
+          return;
+        }
+      }
       try {
         const rep = await appelApi(fdUrl("/dossier-automatique/lancer"), { method: "POST" });
         const corps = await rep.json().catch(() => null);

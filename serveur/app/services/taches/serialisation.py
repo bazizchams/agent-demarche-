@@ -104,6 +104,7 @@ def _serialiser_tache(
         candidat_id=tache.candidat_id,
         code_demarche=tache.code_demarche,
         action=tache.action,
+        portail=tache.portail,
         statut=tache.statut,
         motif_suspension=tache.motif_suspension,
         message_alerte=tache.message_alerte,

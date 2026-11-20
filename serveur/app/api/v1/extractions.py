@@ -28,9 +28,13 @@ from app.schemas.extraction import (
     RapportApplicationSortie,
     ResultatExtractionDocumentSortie,
     ResultatLotSortie,
+    ResultatValidationLotSortie,
+    SyntheseRevueSortie,
+    ValidationLotEntree,
 )
 from app.services import application_extractions as service_application
 from app.services import extractions as service_extractions
+from app.services import validation_lot as service_lot
 from app.services.jetons_courriel import LimiteurDemandes
 from app.services.lecture_documents import LecteurDocument, LecteurDocumentLocal
 from app.services.lecture_vision import LecteurVision, construire_lecteur_vision
@@ -191,4 +195,31 @@ def appliquer(
 ) -> RapportApplicationSortie:
     return service_application.appliquer_extractions_a_fiche(
         ctx.db, candidat_id=candidat_id, acteur_id=ctx.utilisateur.id, cle_maitresse=cle_maitresse
+    )
+
+
+@routeur.get("/extractions/synthese", response_model=SyntheseRevueSortie)
+def synthese(
+    candidat_id: uuid.UUID,
+    ctx: ContexteAuth = Depends(obtenir_contexte_auth),
+    cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
+) -> SyntheseRevueSortie:
+    """Fiabilité de chaque valeur en attente, valeurs douteuses et champs « à compléter » (lecture seule)."""
+    return service_lot.synthese_revue(ctx.db, candidat_id=candidat_id, cle_maitresse=cle_maitresse)
+
+
+@routeur.post("/extractions/valider-lot", response_model=ResultatValidationLotSortie)
+def valider_lot(
+    candidat_id: uuid.UUID,
+    donnees: ValidationLotEntree | None = None,
+    ctx: ContexteAuth = ExigerEcriture,
+    cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
+) -> ResultatValidationLotSortie:
+    """Un clic humain : confirme les valeurs FIABLES (jamais les douteuses) puis remplit la fiche sans écraser."""
+    return service_lot.valider_lot_et_remplir_fiche(
+        ctx.db,
+        candidat_id=candidat_id,
+        acteur_id=ctx.utilisateur.id,
+        cle_maitresse=cle_maitresse,
+        extraction_ids=donnees.extraction_ids if donnees else None,
     )

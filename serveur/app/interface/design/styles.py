@@ -17,9 +17,13 @@ from app.interface.design.motion import CSS_MOUVEMENT
 LIEN_POLICES = (
     '<link rel="preconnect" href="https://fonts.googleapis.com" />\n'
     '  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n'
-    '  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+    # Feuille de polices non bloquante pour le rendu (media=print puis bascule au chargement).
+    '  <link rel="stylesheet" media="print" onload="this.media=' "'all'" '" href="https://fonts.googleapis.com/css2?'
     "family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700"
-    '&amp;family=Inter:wght@400;500;600;700&amp;display=swap" />'
+    '&amp;family=Inter:wght@400;500;600;700&amp;display=swap" />\n'
+    '  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?'
+    "family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700"
+    '&amp;family=Inter:wght@400;500;600;700&amp;display=swap" /></noscript>'
 )
 
 # Couleurs du thème clair : neutres teintés indigo (teinte ~240), accent indigo profond.

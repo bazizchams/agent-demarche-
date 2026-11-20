@@ -36,6 +36,9 @@ from app.services.extractions import _AAD_VALEUR
 from app.services.extraction_champs import (
     DATE_EXPIRATION_PASSEPORT,
     DATE_NAISSANCE,
+    DIPLOME_INTITULE,
+    LIEU_NAISSANCE,
+    NATIONALITE_CODE,
     NIVEAU_ANGLAIS,
     NIVEAU_FRANCAIS,
     NOM,
@@ -45,8 +48,20 @@ from app.services.extraction_champs import (
 )
 
 # Champ lu -> champ de la fiche candidat (même nom).
-CHAMPS_FICHE = (NOM, PRENOM, DATE_NAISSANCE, SEXE, NUMERO_PASSEPORT, DATE_EXPIRATION_PASSEPORT, NIVEAU_FRANCAIS, NIVEAU_ANGLAIS)
-_CHAMPS_IDENTITE_TEXTE = (NOM, PRENOM)
+CHAMPS_FICHE = (
+    NOM, PRENOM, DATE_NAISSANCE, LIEU_NAISSANCE, SEXE, NATIONALITE_CODE, NUMERO_PASSEPORT,
+    DATE_EXPIRATION_PASSEPORT, NIVEAU_FRANCAIS, NIVEAU_ANGLAIS, DIPLOME_INTITULE,
+)
+# Champ lu dont l'attribut de la fiche porte un autre nom (le diplôme le plus récent décrit le niveau actuel).
+_ATTRIBUT_FICHE = {NATIONALITE_CODE: "nationalite", DIPLOME_INTITULE: "niveau_actuel"}
+_CHAMPS_IDENTITE_TEXTE = (NOM, PRENOM, LIEU_NAISSANCE, DIPLOME_INTITULE)
+LONGUEUR_MAX_NIVEAU_ACTUEL = 160
+# Code pays OACI -> libellé usuel de la fiche ; un code absent de la table est reporté tel quel (jamais deviné).
+_NATIONALITES = {"DZA": "Algérienne", "MAR": "Marocaine", "TUN": "Tunisienne", "FRA": "Française"}
+
+
+def attribut_fiche(champ: str) -> str:
+    return _ATTRIBUT_FICHE.get(champ, champ)
 
 
 def _convertir(champ: str, valeur: str) -> Any:
@@ -56,6 +71,10 @@ def _convertir(champ: str, valeur: str) -> Any:
         return SexeCandidat(valeur)
     if champ in (NIVEAU_FRANCAIS, NIVEAU_ANGLAIS):
         return valeur.upper()
+    if champ == NATIONALITE_CODE:
+        return _NATIONALITES.get(valeur.strip().upper(), valeur.strip().upper())
+    if champ == DIPLOME_INTITULE and len(valeur) > LONGUEUR_MAX_NIVEAU_ACTUEL:
+        raise ValueError("intitulé trop long pour la fiche")
     return valeur
 
 
@@ -68,6 +87,9 @@ def _identiques(champ: str, actuelle: Any, proposee: Any) -> bool:
         return normaliser_pour_index(str(actuelle)) == normaliser_pour_index(str(proposee))
     if champ == NUMERO_PASSEPORT:
         return str(actuelle).replace(" ", "").upper() == str(proposee).replace(" ", "").upper()
+    if champ == NATIONALITE_CODE:
+        return normaliser_pour_index(str(actuelle)) in {normaliser_pour_index(str(proposee)), normaliser_pour_index(
+            next((c for c, n in _NATIONALITES.items() if n == proposee), str(proposee)))}
     return actuelle == proposee
 
 
@@ -121,14 +143,18 @@ def appliquer_extractions_a_fiche(
     conflits: list[ConflitApplicationSortie] = []
     deja_identiques: list[str] = []
     for champ, extractions in par_champ.items():
-        valeurs = [
-            _convertir(champ, dechiffrer_champ(cle_maitresse, e.tenant_id, _AAD_VALEUR, e.valeur_chiffree) or "")
-            for e in extractions
-        ]
+        try:
+            valeurs = [
+                _convertir(champ, dechiffrer_champ(cle_maitresse, e.tenant_id, _AAD_VALEUR, e.valeur_chiffree) or "")
+                for e in extractions
+            ]
+        except ValueError:
+            conflits.append(ConflitApplicationSortie(champ=champ, extraction_id=extractions[0].id, raison="valeur_non_reportable"))
+            continue
         if any(not _identiques(champ, valeurs[0], v) for v in valeurs[1:]):
             conflits.append(ConflitApplicationSortie(champ=champ, extraction_id=extractions[0].id, raison="valeurs_multiples"))
             continue
-        actuelle = getattr(fiche, champ)
+        actuelle = getattr(fiche, attribut_fiche(champ))
         if _vide(actuelle):
             appliques.append((champ, extractions[0], valeurs[0]))
         elif _identiques(champ, actuelle, valeurs[0]):
@@ -136,7 +162,7 @@ def appliquer_extractions_a_fiche(
         else:
             conflits.append(ConflitApplicationSortie(champ=champ, extraction_id=extractions[0].id, raison="fiche_deja_renseignee"))
 
-    champs_a_ecrire = {champ: valeur for champ, _, valeur in appliques}
+    champs_a_ecrire = {attribut_fiche(champ): valeur for champ, _, valeur in appliques}
     if not _appliquer_modification(
         db, candidat_id=candidat_id, champs=champs_a_ecrire, acteur_id=acteur_id, cle=cle_maitresse
     ):
@@ -144,7 +170,7 @@ def appliquer_extractions_a_fiche(
         ecarte = next(e for c, e, _ in appliques if c == NUMERO_PASSEPORT)
         conflits.append(ConflitApplicationSortie(champ=NUMERO_PASSEPORT, extraction_id=ecarte.id, raison="passeport_deja_utilise"))
         appliques = [a for a in appliques if a[0] != NUMERO_PASSEPORT]
-        champs_a_ecrire.pop(NUMERO_PASSEPORT, None)
+        champs_a_ecrire.pop(attribut_fiche(NUMERO_PASSEPORT), None)
         if not _appliquer_modification(
             db, candidat_id=candidat_id, champs=champs_a_ecrire, acteur_id=acteur_id, cle=cle_maitresse
         ):

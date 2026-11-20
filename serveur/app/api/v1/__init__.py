@@ -14,6 +14,7 @@ from app.api.v1 import (
     candidats,
     catalogue_formations,
     coffre_identifiants,
+    connexion_portail,
     courriel,
     deductions,
     demarches,
@@ -57,6 +58,7 @@ routeur_v1.include_router(portails.routeur)
 routeur_v1.include_router(navigateur_serveur.routeur)
 routeur_v1.include_router(agents_locaux.routeur)
 routeur_v1.include_router(taches.routeur)
+routeur_v1.include_router(connexion_portail.routeur)
 routeur_v1.include_router(evenements_agent.routeur)
 routeur_v1.include_router(validations.routeur)
 routeur_v1.include_router(validation_recapitulatif.routeur)

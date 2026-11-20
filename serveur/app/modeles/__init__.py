@@ -17,6 +17,7 @@ from app.modeles.discussion_dossier import (
 )
 from app.modeles.depot_passeport import DepotPasseport
 from app.modeles.document import DocumentCandidat
+from app.modeles.echange_coffre import EchangeCoffre
 from app.modeles.evenement_agent import EvenementAgent
 from app.modeles.extraction_document import ExtractionDocument, StatutExtraction
 from app.modeles.fiche_formation import FicheFormation, StatutFiche
@@ -59,6 +60,7 @@ __all__ = [
     "ForfaitAbonnement",
     "MessageDiscussionDossier",
     "MotifSuspensionTache",
+    "EchangeCoffre",
     "EvenementAgent",
     "PointFort",
     "PreuveConsentementCandidat",

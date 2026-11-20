@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.middleware.gzip import GZipMiddleware
 
 import app.modeles  # noqa: F401  (enregistre les modèles ORM)
 from app.api.v1 import routeur_v1
@@ -139,6 +140,9 @@ def creer_application(parametres: Parametres | None = None) -> FastAPI:
 
     if parametres is not None:
         application.dependency_overrides[obtenir_parametres] = lambda: cfg
+
+    # Compression des réponses texte (la page d'interface pèse ~600 Ko) ; le flux SSE est exclu par défaut.
+    application.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
     @application.middleware("http")
     async def en_tetes_securite(requete: Request, call_next):

@@ -1,0 +1,30 @@
+# Connexion IRCC (CléGC / GCKey) : relevé lecture seule du 2026-11-20. Sélecteurs « à confirmer sur un vrai essai ».
+# Sources : https://www.canada.ca/fr/immigration-refugies-citoyennete/services/demande/compte.html (page d'aiguillage :
+# boutons « Se connecter avec GC Key », « Se connecter avec une banque », « S'inscrire à un compte ») ;
+# https://clegc-gckey.gc.ca/j/fra/l SANS ReqID redirige vers /j/fra/ES-01 (page informative, AUCUN formulaire).
+# Les champs de la vraie page de connexion CléGC n'ont donc PAS pu être relevés (ils n'existent que derrière une URL
+# portant un ReqID propre à chaque session) : les libellés ci-dessous sont des hypothèses à confirmer ; en cas de champ
+# introuvable l'agent s'arrête et demande à l'humain. Le ReqID n'est JAMAIS codé en dur : l'agent part de la page
+# d'accueil IRCC ou de https://clegc-gckey.gc.ca/j/fra/l et suit la redirection.
+# CAPTCHA : la page de connexion CléGC charge un hCaptcha (relevé du 2026-11-13, config/portails/ircc_reel.yaml) et
+# propose une authentification à deux facteurs : pause humaine obligatoire (règle 2).
+code_portail: ircc
+releve_le: "2026-11-20"
+statut: "non testé"
+detecteurs_captcha:
+  - ".h-captcha"
+  - ".g-recaptcha"
+  - "iframe[src*='hcaptcha']"
+  - "iframe[src*='recaptcha']"
+  - "#gckey-security-question"
+  - "#ircc-mfa-prompt"
+  - "#bloc-captcha-securite"
+temoin_connecte:
+  texte_regex: 'Se déconnecter|Déconnexion|Fermer la session'
+connexion:
+  url_reelle: "https://clegc-gckey.gc.ca/j/fra/l"
+  chemin_demo: "/demo/gckey/connexion"
+  champs:
+    identifiant: {libelle_regex: '^(Nom d''utilisateur|Identifiant)\s*\*?$', type: texte}
+    mot_de_passe: {libelle_regex: '^Mot de passe\s*\*?$', type: mot_de_passe}
+  bouton_regex: '^(Se connecter|Ouvrir une session|Connexion)$'

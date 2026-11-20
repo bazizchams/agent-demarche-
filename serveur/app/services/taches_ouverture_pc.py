@@ -21,6 +21,8 @@ from app.db.tenant import tenant_courant
 from app.modeles.journal_audit import ResultatAudit
 from app.modeles.tache import (
     ACTION_AJOUTER_VOEUX_PANIER,
+    ACTION_CONNEXION_PORTAIL,
+    ACTION_CREATION_COMPTE_EEF,
     ACTIONS_OUVERTURE_PC,
     StatutTache,
     TacheDossier,
@@ -37,6 +39,9 @@ from app.services.taches import (
 )
 
 CODE_DEMARCHE_CAMPUS_FRANCE = "campus_france"
+CODE_DEMARCHE_COMPTE_EEF = "compte_etudes_en_france"
+PORTAIL_EEF = "etudes_en_france"
+PORTAIL_IRCC = "ircc"
 MESSAGE_AUCUN_VOEU_VALIDE = (
     "Aucun vœu validé pour ce candidat : rédigez puis validez au moins un vœu "
     "(onglet Campus France, « Vœux et lettres de motivation »)."
@@ -51,6 +56,38 @@ def nombre_voeux_valides(db: Session, candidat_id: uuid.UUID, cle_maitresse: byt
     )
 
 
+def _portail_de_la_demande(donnees: TacheCreation) -> str | None:
+    """Valide la démarche et le portail selon l'action ; renvoie le portail visé (nul pour les vœux)."""
+    if donnees.action == ACTION_AJOUTER_VOEUX_PANIER:
+        if donnees.code_demarche != CODE_DEMARCHE_CAMPUS_FRANCE:
+            raise DonneesInvalides(
+                "L'action « ajouter_voeux_panier » concerne uniquement la démarche Campus France."
+            )
+        return None
+    if donnees.action == ACTION_CREATION_COMPTE_EEF:
+        if donnees.code_demarche not in (CODE_DEMARCHE_COMPTE_EEF, CODE_DEMARCHE_CAMPUS_FRANCE):
+            raise DonneesInvalides(
+                "La création de compte Études en France concerne les démarches Campus France et "
+                "« compte_etudes_en_france »."
+            )
+        return PORTAIL_EEF
+    if donnees.action == ACTION_CONNEXION_PORTAIL:
+        deduit = (
+            PORTAIL_IRCC
+            if donnees.code_demarche.startswith("ircc")
+            else PORTAIL_EEF
+            if donnees.code_demarche in (CODE_DEMARCHE_COMPTE_EEF, CODE_DEMARCHE_CAMPUS_FRANCE)
+            else None
+        )
+        portail = donnees.portail or deduit
+        if portail not in (PORTAIL_EEF, PORTAIL_IRCC):
+            raise DonneesInvalides("Portail à préciser : etudes_en_france ou ircc.")
+        if deduit is not None and portail != deduit:
+            raise DonneesInvalides("Ce portail ne correspond pas à la démarche choisie.")
+        return portail
+    raise DonneesInvalides("Action inconnue pour « Ouvrir sur mon PC ».")
+
+
 def creer_tache_ouverture_pc(
     db: Session,
     *,
@@ -63,11 +100,12 @@ def creer_tache_ouverture_pc(
         raise RuntimeError("Contexte bureau (tenant) manquant sur la session.")
     if donnees.action not in ACTIONS_OUVERTURE_PC:
         raise DonneesInvalides("Action inconnue pour « Ouvrir sur mon PC ».")
-    if donnees.code_demarche != CODE_DEMARCHE_CAMPUS_FRANCE:
-        raise DonneesInvalides("L'action « ajouter_voeux_panier » concerne uniquement la démarche Campus France.")
+    portail = _portail_de_la_demande(donnees)
 
     candidat = obtenir_candidat(db, candidat_id=donnees.candidat_id, cle_maitresse=cle_maitresse)
-    if nombre_voeux_valides(db, candidat.id, cle_maitresse) == 0:
+    if donnees.action == ACTION_AJOUTER_VOEUX_PANIER and (
+        nombre_voeux_valides(db, candidat.id, cle_maitresse) == 0
+    ):
         raise DonneesInvalides(MESSAGE_AUCUN_VOEU_VALIDE)
 
     deja_ouverte = db.scalar(
@@ -75,6 +113,7 @@ def creer_tache_ouverture_pc(
             TacheDossier.candidat_id == candidat.id,
             TacheDossier.action == donnees.action,
             TacheDossier.statut.in_(STATUTS_TACHE_OUVERTE),
+            *([TacheDossier.portail == portail] if portail else []),
         )
     )
     if deja_ouverte is not None:
@@ -88,6 +127,7 @@ def creer_tache_ouverture_pc(
         candidat_id=candidat.id,
         code_demarche=donnees.code_demarche,
         action=donnees.action,
+        portail=portail,
         statut=StatutTache.EN_ATTENTE,
         creee_par_id=acteur_id,
     )
@@ -100,7 +140,11 @@ def creer_tache_ouverture_pc(
         acteur_id=acteur_id,
         ressource_type="tache",
         ressource_id=tache.id,
-        details={"action": donnees.action, "code_demarche": donnees.code_demarche},
+        details={
+            "action": donnees.action,
+            "code_demarche": donnees.code_demarche,
+            **({"portail": portail} if portail else {}),
+        },
     )
     db.commit()
     db.refresh(tache)

@@ -10,7 +10,9 @@ La page est une chaîne unique assemblée à l'import :
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+import hashlib
+
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse
 
 from app.interface.design.page import construire_page_base
@@ -36,7 +38,14 @@ HTML_INTERFACE_FR = assembler_discussion_agent(
 )
 
 
+# Empreinte du contenu : le navigateur revalide (304, sans corps) au lieu de retélécharger 600 Ko.
+_ETAG_INTERFACE = '"' + hashlib.sha256(HTML_INTERFACE_FR.encode("utf-8")).hexdigest()[:20] + '"'
+_ENTETES_INTERFACE = {"ETag": _ETAG_INTERFACE, "Cache-Control": "no-cache"}
+
+
 @routeur_interface.get("/", response_class=HTMLResponse)
 @routeur_interface.get("/interface", response_class=HTMLResponse)
-def afficher_interface_francaise() -> HTMLResponse:
-    return HTMLResponse(content=HTML_INTERFACE_FR)
+def afficher_interface_francaise(requete: Request) -> Response:
+    if _ETAG_INTERFACE in requete.headers.get("if-none-match", ""):
+        return Response(status_code=304, headers=_ENTETES_INTERFACE)
+    return HTMLResponse(content=HTML_INTERFACE_FR, headers=_ENTETES_INTERFACE)

@@ -20,6 +20,8 @@ from urllib.parse import urlsplit
 import httpx
 from playwright.sync_api import sync_playwright
 
+from app.agent_local.action_connexion_portail import executer_connexion_portail
+from app.agent_local.action_creation_compte_eef import executer_creation_compte_eef
 from app.agent_local.action_voeux_demo import executer_ajout_voeux_demo
 from app.agent_local.demon_ecoute import DemonEcoute
 from app.agent_local.ouverture_visible import (
@@ -28,7 +30,11 @@ from app.agent_local.ouverture_visible import (
     restreindre_acces_utilisateur,
 )
 from app.api.dependances import EN_TETE_JETON_AGENT
-from app.modeles.tache import ACTION_AJOUTER_VOEUX_PANIER
+from app.modeles.tache import (
+    ACTION_AJOUTER_VOEUX_PANIER,
+    ACTION_CONNEXION_PORTAIL,
+    ACTION_CREATION_COMPTE_EEF,
+)
 
 VARIABLE_ENV_JETON = "BE_JETON_AGENT"
 CANAUX_CHOISIS: dict[str, tuple[str | None, ...]] = {
@@ -129,7 +135,11 @@ def lancer_ecoute(
             demon = DemonEcoute(
                 client_api=client_api,
                 fenetre=fenetre,
-                executeurs={ACTION_AJOUTER_VOEUX_PANIER: executer_ajout_voeux_demo},
+                executeurs={
+                    ACTION_AJOUTER_VOEUX_PANIER: executer_ajout_voeux_demo,
+                    ACTION_CONNEXION_PORTAIL: executer_connexion_portail,
+                    ACTION_CREATION_COMPTE_EEF: executer_creation_compte_eef,
+                },
                 url_serveur=url_serveur,
                 intervalle_sondage_s=intervalle_sondage_s,
                 sortie=sortie,

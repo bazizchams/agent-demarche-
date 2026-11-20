@@ -40,8 +40,7 @@ JS_DEMARRAGE = """    // Connexion automatique dès l'ouverture de l'interface p
       document.getElementById("etat-utilisateur").textContent = data.utilisateur.nom_affiche + " (" + roleFr + ")";
       document.getElementById("btn-se-deconnecter").classList.remove("cache");
       majBandeauVerification(data.utilisateur);
-      await chargerCandidats();
-      await rafraichirTableauDeBord();
+      await Promise.all([chargerCandidats(), rafraichirTableauDeBord()]);
       return true;
     }
 

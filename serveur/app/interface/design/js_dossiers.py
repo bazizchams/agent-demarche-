@@ -174,13 +174,25 @@ JS_DOSSIERS = """
       });
     });
 
+    const appelsEnVol = new Map();
     async function appelApi(url, options = {}) {
       const headers = Object.assign({}, options.headers || {});
       if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
         headers["Content-Type"] = "application/json";
       }
       if (jetonCsrf) headers["X-CSRF-Token"] = jetonCsrf;
-      return fetch(url, Object.assign({}, options, { headers }));
+      const methode = (options.method || "GET").toUpperCase();
+      if (methode !== "GET" || options.signal) return fetch(url, Object.assign({}, options, { headers }));
+      // Un même GET déjà en vol est partagé (évite les appels en double au chargement).
+      const cle = url + "|" + jetonCsrf;
+      let vol = appelsEnVol.get(cle);
+      if (!vol) {
+        vol = fetch(url, Object.assign({}, options, { headers }));
+        appelsEnVol.set(cle, vol);
+        const libere = () => appelsEnVol.delete(cle);
+        vol.then(libere, libere);
+      }
+      return vol.then((r) => r.clone());
     }
 
     async function connecterOperateur(silencieux = false) {
@@ -200,8 +212,7 @@ JS_DOSSIERS = """
         document.getElementById("btn-se-deconnecter").classList.remove("cache");
         majBandeauVerification(data.utilisateur);
         if (!silencieux) notifier("Session opérateur ouverte avec succès.", true);
-        await chargerCandidats();
-        await rafraichirTableauDeBord();
+        await Promise.all([chargerCandidats(), rafraichirTableauDeBord()]);
       } else {
         document.getElementById("etat-utilisateur").textContent = "Non connecté";
         document.querySelector(".session-form").open = true;

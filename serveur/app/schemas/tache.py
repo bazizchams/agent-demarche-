@@ -105,6 +105,8 @@ class TacheCreation(SchemaEntree):
     code_demarche: str = Field(min_length=1, max_length=60)
     # Défaut : pré-remplissage par étapes YAML. Sinon une action « Ouvrir sur mon PC ».
     action: str = Field(default="preremplissage", min_length=1, max_length=40)
+    # Portail visé (`etudes_en_france` ou `ircc`) pour l'action `connexion_portail` ; déduit de la démarche sinon.
+    portail: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class DemarrerTacheEntree(SchemaEntree):
@@ -152,6 +154,7 @@ class TacheSortie(SchemaSortie):
     candidat_id: uuid.UUID
     code_demarche: str
     action: str = "preremplissage"
+    portail: str | None = None
     statut: StatutTache
     motif_suspension: MotifSuspensionTache | None
     message_alerte: str | None

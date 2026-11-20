@@ -298,6 +298,57 @@ def _trouver_lignes_mrz(texte: str) -> tuple[str, str, str, str] | None:
     return None
 
 
+_VERS_CHIFFRE = str.maketrans({"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1", "Z": "2", "S": "5", "B": "8", "G": "6"})
+_VERS_LETTRE = str.maketrans({"0": "O", "1": "I", "2": "Z", "5": "S", "8": "B", "6": "G"})
+_POSITIONS_ALPHA_L2 = (10, 11, 12)  # nationalité (le sexe M/F/< est laissé tel quel)
+
+
+def _reparer_types_l2(c2: str) -> str | None:
+    """Corrige lettre/chiffre selon la position puis exige que TOUS les chiffres de contrôle soient bons."""
+    if len(c2) != 44:
+        return None
+    lettres = list(c2)
+    for i in (9, *range(13, 20), *range(21, 28), 42, 43):
+        lettres[i] = lettres[i].translate(_VERS_CHIFFRE) if lettres[i] != "<" else "<"
+    for i in _POSITIONS_ALPHA_L2:
+        lettres[i] = lettres[i].translate(_VERS_LETTRE)
+    c2 = "".join(lettres)
+    if not _RE_MRZ_L2.match(c2):
+        return None
+    ok = (
+        _controle_ok(c2[0:9], c2[9]) and _controle_ok(c2[13:19], c2[19]) and _controle_ok(c2[21:27], c2[27])
+        and _controle_ok(c2[28:42], c2[42])
+        and calculer_chiffre_controle(c2[0:10] + c2[13:20] + c2[21:43]) == c2[43]
+    )
+    return c2 if ok else None
+
+
+def reparer_lignes_mrz(ligne1: str, ligne2: str) -> tuple[str, str] | None:
+    """Corrige les confusions classiques de l'OCR (O/0, I/1, longueur du remplissage « < ») dans les deux
+    lignes MRZ. La ligne 2 n'est acceptée QUE si tous ses chiffres de contrôle (numéro, naissance, expiration,
+    champ facultatif, composite) sont corrects après correction : sinon rien n'est renvoyé (aucune valeur
+    inventée). La ligne 1 (noms, sans chiffre de contrôle) n'est corrigée que pour les chiffres, jamais
+    présents dans un nom."""
+    c1 = re.sub(r"\s+", "", ligne1).upper()
+    c2 = re.sub(r"\s+", "", ligne2).upper()
+    if not c1.startswith("P<") or "<<" not in c1:
+        return None
+    c1 = c1[:2] + c1[2:].translate(_VERS_LETTRE)
+    c1 = (c1.rstrip("<") + "<" * 44)[:44] if len(c1.rstrip("<")) <= 44 else None
+    if c1 is None:
+        return None
+    c2 = c2.replace("«", "<")
+    if len(c2) == 43:  # un « < » du remplissage perdu : on le réinsère là où TOUS les contrôles deviennent bons
+        for pos in range(41, 27, -1):  # du côté droit : le remplissage « < » suit le champ facultatif
+            essai = _reparer_types_l2(c2[:pos] + "<" + c2[pos:])
+            if essai is not None:
+                return c1, essai
+    if len(c2) != 44:
+        return None
+    c2 = _reparer_types_l2(c2)
+    return (c1, c2) if c2 is not None else None
+
+
 def _date_mrz(aammjj: str, *, naissance: bool, pivot: int) -> date | None:
     yy = int(aammjj[0:2])
     annee = (2000 + yy if yy <= pivot else 1900 + yy) if naissance else 2000 + yy

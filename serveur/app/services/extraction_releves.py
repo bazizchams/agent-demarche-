@@ -289,7 +289,11 @@ def _identite_et_libelles(ligne: str, sa: str, page: int, contexte_bac: bool) ->
     sorties: list[ChampLu] = []
     m = _RE_NOM.match(sa)
     if m and (lu := _valeur_apres(ligne, m.end())):
-        sorties.append(_champ(NOM if m.group(1) == "nom" else PRENOM, lu[0], ligne, page, lu[0]))
+        brut = lu[0]
+        # OCR : un « l » minuscule au milieu ou à la fin d'un mot en capitales est un « I » (KACl -> KACI) ;
+        # l'ancre garde le texte littéral du document.
+        valeur = re.sub(r"(?<=[A-ZÀ-Ý])l(?=[A-ZÀ-Ý]|$)", "I", brut) if m.group(1) == "nom" else brut
+        sorties.append(_champ(NOM if m.group(1) == "nom" else PRENOM, valeur, ligne, page, brut))
     m = _RE_LIBELLE.match(sa)
     if m and (lu := _valeur_apres(ligne, m.end())):
         libelle = m.group(1)

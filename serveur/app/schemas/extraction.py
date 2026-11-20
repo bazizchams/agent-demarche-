@@ -96,3 +96,32 @@ class RapportApplicationSortie(SchemaSortie):
     deja_identiques: list[str]
     hors_fiche: list[str]
     a_verifier_restants: int
+
+
+class FiabiliteSortie(SchemaSortie):
+    """Niveau de confiance d'une valeur lue : seules les valeurs `fiable` entrent dans le lot."""
+
+    extraction_id: uuid.UUID
+    niveau: str  # « fiable » ou « douteuse »
+    raison: str  # code : mrz_valide, double_lecture_concordante, concordance_deux_pieces, ou motif du doute
+    conflit_fiche: bool  # la fiche porte déjà une autre valeur : elle ne sera jamais écrasée
+
+
+class SyntheseRevueSortie(SchemaSortie):
+    nb_fiables: int
+    nb_douteuses: int
+    nb_deja_confirmees: int
+    items: list[FiabiliteSortie]
+    a_completer: list[str]  # champs de la fiche ou des pièces que les documents ne permettent pas de lire
+
+
+class ValidationLotEntree(SchemaEntree):
+    # Facultatif : sans liste, toutes les valeurs fiables du moment ; avec liste, seulement celles-ci (si fiables).
+    extraction_ids: list[uuid.UUID] | None = Field(default=None, max_length=500)
+
+
+class ResultatValidationLotSortie(SchemaSortie):
+    nb_valides: int
+    nb_ignores: int
+    nb_douteuses_restantes: int
+    rapport: RapportApplicationSortie

@@ -200,7 +200,9 @@ class DemonEcoute:
             self._rendre_resultat(tache_id, resultat)
         except SuspensionRequiseParGardeFou as susp:
             self._fenetre.amener_au_premier_plan()
-            self._suspendre(tache_id, susp.motif, susp.message_alerte, code_etape=None)
+            self._suspendre(
+                tache_id, susp.motif, susp.message_alerte, code_etape=None, champs_manquants=susp.champs_manquants
+            )
         except JetonRefuse:
             raise
         except Exception as exc:  # une erreur d'une tâche ne doit jamais tuer le démon
@@ -247,10 +249,13 @@ class DemonEcoute:
         message: str,
         *,
         code_etape: str | None = None,
+        champs_manquants: list[str] | None = None,
     ) -> None:
         corps: dict[str, Any] = {"motif": motif.value, "message_alerte": message[:500]}
         if code_etape:
             corps["code_etape"] = code_etape
+        if champs_manquants:
+            corps["champs_manquants"] = champs_manquants
         rep = self._client.post(f"{CHEMIN_TACHES}/{tache_id}/suspendre", json=corps)
         self._sortie(
             f"Tâche {tache_id} suspendue : {message} "

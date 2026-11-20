@@ -285,6 +285,7 @@ JS_DISCUSSION_AGENT = """
       }
 
       async function interroger() {
+        if (document.hidden) return;
         try {
           const rep = await appelApi(base + "/evenements?depuis=" + dernier);
           if (!rep.ok) return;

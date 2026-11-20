@@ -68,6 +68,11 @@ STYLE_REVUE = """
       #vue-revue-extractions .rx-actions .btn { margin: 0; }
       #vue-revue-extractions .rx-correction { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e2); }
       #vue-revue-extractions .rx-correction .btn { margin: 0; }
+      #vue-revue-extractions .rx-lot { display: flex; flex-direction: column; gap: var(--e3); margin: 0 0 var(--e4); padding: var(--e4); background: var(--accent-doux); border: 1px solid var(--bord); border-left: 4px solid var(--accent); border-radius: var(--r-m); }
+      #vue-revue-extractions .rx-lot p, #vue-revue-extractions .rx-lot ul { margin: 0; }
+      #vue-revue-extractions .rx-lot ul { padding-left: var(--e5); font-size: var(--t-sm); }
+      #vue-revue-extractions .rx-lot .btn { align-self: flex-start; margin: 0; }
+      #vue-revue-extractions .rx-carte.rx-douteuse { background: var(--alerte-doux); border-left-color: var(--alerte); box-shadow: inset 0 0 0 1px var(--alerte); }
     </style>"""
 
 HTML_VUE = rendre_icones(
@@ -86,8 +91,9 @@ HTML_VUE = rendre_icones(
         </div>
       </header>
       <div class="banniere-regle">
-        Rien n'est écrit sur la fiche sans votre confirmation, même une valeur lue automatiquement
-        avec certitude : cliquez sur « Confirmer ». Une valeur douteuse reste « à vérifier » et n'est
+        Rien n'est écrit sur la fiche sans votre confirmation : un seul clic sur « Tout confirmer et
+        remplir la fiche » valide les valeurs fiables (passeport contrôlé, deux lectures concordantes
+        ou même valeur sur deux pièces). Les valeurs douteuses se confirment une par une. Une valeur douteuse reste « à vérifier » et n'est
         jamais appliquée ; un champ illisible reste vide (Règle 4). Une valeur déjà saisie sur la
         fiche n'est jamais écrasée.
       </div>
@@ -103,6 +109,11 @@ HTML_VUE = rendre_icones(
         <button id="rx-btn-appliquer" class="btn btn-contour" type="button">[[i:coche]]Appliquer à la fiche</button>
       </div>
       <p id="rx-resume" class="note rx-resume cache"></p>
+      <div id="rx-lot" class="rx-lot cache">
+        <p id="rx-lot-texte"></p>
+        <button id="rx-btn-lot" class="btn btn-primaire" type="button">[[i:coche]]Tout confirmer et remplir la fiche</button>
+        <div id="rx-lot-details"></div>
+      </div>
       <div id="rx-alertes"></div>
       <div id="rx-liste" class="rx-liste"></div>
     </section>
@@ -119,8 +130,19 @@ JS_REVUE = """
       nationalite_code: "Nationalité (code)", numero_passeport: "Numéro de passeport",
       date_expiration_passeport: "Expiration du passeport", moyenne_generale: "Moyenne générale",
       certificat_langue_type: "Test de langue", certificat_langue_date: "Date du test de langue",
-      niveau_francais: "Niveau de français", niveau_anglais: "Niveau d'anglais", ielts_bande: "Note IELTS"
+      niveau_francais: "Niveau de français", niveau_anglais: "Niveau d'anglais", ielts_bande: "Note IELTS",
+      lieu_naissance: "Lieu de naissance", diplome_intitule: "Diplôme", diplome_etablissement: "Établissement",
+      diplome_annee: "Année du diplôme", annee_universitaire: "Année universitaire", moyenne_annuelle: "Moyenne annuelle",
+      mention: "Mention", rang: "Rang", session: "Session", decision_jury: "Décision du jury",
+      diplome_filiere: "Filière", diplome_specialite: "Spécialité", numero_bac: "Numéro du baccalauréat", bac_serie: "Série du bac"
     };
+    const RX_RAISONS = {
+      mrz_valide: "Fiable : chiffres de contrôle du passeport valides.",
+      double_lecture_concordante: "Fiable : les deux lectures concordent.",
+      concordance_deux_pieces: "Fiable : même valeur lue sur deux pièces.",
+      valeurs_differentes_entre_pieces: "Douteuse : les pièces ne donnent pas la même valeur."
+    };
+    let rxSynthese = null;
     const RX_STATUTS = {
       auto: ["Lu automatiquement : à confirmer", "badge-info"],
       a_verifier: ["À vérifier", "badge-completer"],
@@ -334,6 +356,12 @@ JS_REVUE = """
       const motif = rxLibelleMotif(extraction.motif);
       if (motif) proposition.appendChild(rxEl("p", "rx-note", motif));
       if (extraction.applique_le) proposition.appendChild(rxEl("p", "rx-note", "Appliquée à la fiche."));
+      const fiab = rxSynthese && rxSynthese[extraction.id];
+      if (fiab) {
+        proposition.appendChild(rxEl("p", "rx-note", RX_RAISONS[fiab.raison] || (fiab.niveau === "fiable" ? "Fiable." : "Douteuse : confirmez-la individuellement.")));
+        if (fiab.conflit_fiche) proposition.appendChild(rxEl("p", "rx-note", "La fiche contient déjà une autre valeur : elle ne sera pas écrasée."));
+        if (fiab.niveau === "douteuse") carte.classList.add("rx-douteuse");
+      }
       const zoneCorrection = rxEl("div", "rx-correction");
       if (rxEcriture()) {
         const actions = rxEl("div", "rx-actions");
@@ -391,9 +419,17 @@ JS_REVUE = """
         resume.classList.remove("cache");
         return;
       }
-      const [repDocs, repExtr] = await Promise.all([
-        appelApi(rxUrlCandidat("/documents")), appelApi(rxUrlCandidat("/extractions"))
+      const [repDocs, repExtr, repSyn] = await Promise.all([
+        appelApi(rxUrlCandidat("/documents")), appelApi(rxUrlCandidat("/extractions")),
+        appelApi(rxUrlCandidat("/extractions/synthese"))
       ]);
+      rxSynthese = null;
+      const synthese = repSyn.ok ? await repSyn.json() : null;
+      if (synthese) {
+        rxSynthese = {};
+        synthese.items.forEach((i) => { rxSynthese[i.extraction_id] = i; });
+      }
+      rxAfficherLot(synthese);
       if (!repExtr.ok) {
         resume.textContent = "Lecture des documents indisponible.";
         resume.classList.remove("cache");
@@ -409,6 +445,49 @@ JS_REVUE = """
         : "Aucune valeur lue pour l'instant. Lancez « Lire les documents ».";
       resume.classList.remove("cache");
       extractions.forEach((e) => liste.appendChild(rxCarte(e, parId[e.document_id])));
+    }
+
+    function rxIdsFiables() {
+      return rxSynthese ? Object.keys(rxSynthese).filter((id) => rxSynthese[id].niveau === "fiable") : [];
+    }
+
+    function rxAfficherLot(synthese) {
+      const zone = document.getElementById("rx-lot");
+      const texte = document.getElementById("rx-lot-texte");
+      const details = document.getElementById("rx-lot-details");
+      rxVider(details);
+      if (!synthese || (!synthese.items.length && !synthese.nb_deja_confirmees)) { zone.classList.add("cache"); return; }
+      zone.classList.remove("cache");
+      texte.textContent = synthese.nb_fiables + " valeur(s) fiable(s) prête(s) à être confirmées et reportées sur la fiche ; " +
+        synthese.nb_douteuses + " valeur(s) douteuse(s) à confirmer une par une (surlignées ci-dessous).";
+      const bouton = document.getElementById("rx-btn-lot");
+      bouton.disabled = !rxEcriture() || synthese.nb_fiables === 0;
+      if (synthese.a_completer.length) {
+        details.appendChild(rxEl("p", "rx-note", "À compléter (non lisible dans les documents) :"));
+        const liste = rxEl("ul");
+        synthese.a_completer.forEach((c) => liste.appendChild(rxEl("li", "", RX_CHAMPS[c] || c)));
+        details.appendChild(liste);
+      }
+    }
+
+    async function rxToutConfirmer() {
+      if (!candidatActifId) { notifier("Choisissez d'abord un étudiant.", false); return; }
+      const bouton = document.getElementById("rx-btn-lot");
+      bouton.disabled = true;
+      bouton.setAttribute("aria-busy", "true");
+      const rep = await appelApi(rxUrlCandidat("/extractions/valider-lot"), {
+        method: "POST", body: JSON.stringify({ extraction_ids: rxIdsFiables() })
+      });
+      bouton.removeAttribute("aria-busy");
+      if (!rep.ok) {
+        notifier((await rxLireDetail(rep)) || "La confirmation en lot a échoué.", false);
+        await rxActualiser();
+        return;
+      }
+      const r = await rep.json();
+      notifier(r.nb_valides + " valeur(s) confirmée(s), " + r.rapport.appliques.length + " champ(s) de la fiche rempli(s), " +
+        r.rapport.conflits.length + " conflit(s) (valeurs déjà saisies conservées), " + r.nb_douteuses_restantes + " à confirmer une par une.", true);
+      await rxActualiser();
     }
 
     async function rxLire() {
@@ -442,6 +521,7 @@ JS_REVUE = """
     document.getElementById("rx-btn-actualiser").addEventListener("click", rxActualiser);
     document.getElementById("rx-btn-lire").addEventListener("click", rxLire);
     document.getElementById("rx-btn-appliquer").addEventListener("click", rxAppliquer);
+    document.getElementById("rx-btn-lot").addEventListener("click", rxToutConfirmer);
     const allerVersVuePrecedenteRx = allerVersVue;
     allerVersVue = function (cible) {
       allerVersVuePrecedenteRx(cible);

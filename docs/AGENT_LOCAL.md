@@ -15,7 +15,7 @@ sinon Edge) et y travaille sous vos yeux. Vous voyez tout ce qu'il fait, et vous
 |---|---|
 | **R1 : validation humaine** | L'agent s'arrête **toujours avant tout envoi officiel**. Il ne valide jamais lui-même : la tâche passe à « à valider » et c'est **vous** qui validez dans le Centre de validation. |
 | **R2 : pas de contournement** | Si un CAPTCHA ou une double authentification (2FA) apparaît, l'agent se **met en pause**. Vous le résolvez **vous-même dans la fenêtre**, puis vous cliquez sur « Reprendre la tâche ». |
-| **R3 : mots de passe** | La plateforme **n'envoie jamais** le mot de passe du coffre à un PC. Si le portail demande de se connecter, **vous tapez vous-même** votre identifiant et votre mot de passe dans la fenêtre. L'agent attend. |
+| **R3 : mots de passe** | Le mot de passe du coffre n'est remis au PC **qu'après votre clic « Autoriser l'agent à se connecter »** (une fois, 60 s). Sans identifiants au coffre, **vous tapez vous-même** votre identifiant et votre mot de passe dans la fenêtre du portail (jamais dans le panneau). L'agent attend. |
 | **R6 : domaines officiels** | L'agent n'ouvre que la page de démonstration de **votre** serveur. Aucune autre adresse. |
 | **R4 : rien d'inventé** | Sans vœu validé, l'agent s'arrête et le dit. Seuls les vœux **validés** lui sont transmis (jamais un brouillon). |
 
@@ -121,8 +121,13 @@ dans l'interface, **révoquez** son agent ; sa clé cesse immédiatement de fonc
 - Serveur : `POST /api/v1/taches/reserver-suivante` (réservation atomique par compare-and-swap, jeton
   `X-Agent-Token` obligatoire), `GET /api/v1/taches/{id}/voeux-a-ajouter` (vœux au statut `valide`
   uniquement, tâche détenue par l'agent appelant), `GET /api/v1/agents-locaux/moi`.
-- Aucune route ne transmet le mot de passe du coffre à un PC. Une future connexion automatique exigerait un
-  endpoint à usage unique, à durée courte et avec consentement explicite : il n'existe pas aujourd'hui.
+- Connexion et création de compte (actions `connexion_portail` et `creation_compte_eef`, 2026-11-20) : le coffre n'est remis
+  qu'à l'agent détenteur de la tâche, par `POST /api/v1/taches/{id}/identifiants-portail/remise`, UNE fois et dans les 60 s qui
+  suivent le clic « Autoriser l'agent à se connecter » de l'interface web (`POST .../autoriser-connexion`). Sans identifiants au coffre,
+  l'humain les tape dans le formulaire du portail ; l'interface web propose ensuite de les enregistrer (consentement explicite).
+  La création de compte s'arrête avant « S'inscrire » (R1) ; CAPTCHA et code reçu par e-mail restent humains (R2). Formulaires :
+  `config/portails/formulaires/*.yaml` (relevé du 2026-11-20, à confirmer sur un vrai essai ; le portail réel reste fermé tant
+  que le statut n'est pas « validé sur portail réel »). Pages de démonstration : `/demo/eef-compte/...`, `/demo/gckey/connexion`.
 
 ## La discussion avec l'agent (panneau dans la fenêtre)
 

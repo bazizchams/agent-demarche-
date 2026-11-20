@@ -1,0 +1,54 @@
+# Formulaires publics d'Études en France : RELEVÉ LECTURE SEULE du 2026-11-20 (sans compte, rien saisi ni soumis).
+# Sélecteurs « relevés le 2026-11-20, à confirmer sur un vrai essai » : le navigateur intégré expose libellé, rôle et
+# type, PAS les attributs name/id/autocomplete (non trouvés). Les champs sont donc retrouvés par LIBELLÉ accessible
+# (jamais par id : le site est une application React aux id générés). Le statut reste « non testé » : l'agent ne
+# travaille sur le portail réel que si l'administrateur atteste « validé sur portail réel » (règle 6) ; sinon il
+# n'ouvre que les pages de démonstration du serveur (/demo/eef-compte/...).
+# Sources : https://etudesenfrance.diplomatie.gouv.fr/connexion et /inscription (lues le 2026-11-20).
+code_portail: etudes_en_france
+releve_le: "2026-11-20"
+statut: "non testé"
+detecteurs_captcha:
+  # Aucun CAPTCHA détecté sur ces deux pages le 2026-11-20 (non confirmé au niveau du DOM) : détecteurs génériques.
+  - ".g-recaptcha"
+  - ".h-captcha"
+  - "iframe[src*='recaptcha']"
+  - "iframe[src*='hcaptcha']"
+  - "#bloc-captcha-securite"
+temoin_connecte:
+  # Non observé (compte requis) : à confirmer sur un vrai essai.
+  texte_regex: 'Se déconnecter|Déconnexion'
+connexion:
+  url_reelle: "https://etudesenfrance.diplomatie.gouv.fr/connexion"
+  chemin_demo: "/demo/eef-compte/connexion"
+  # Relevé : champs « Identifiant » (text) et « Mot de passe » (password) ; case « Afficher le mot de passe » ; bouton
+  # « Se connecter » ; lien « Mot de passe oublié ? » (/connexion/mot-de-passe-oublie). Tous obligatoires.
+  champs:
+    identifiant: {libelle_regex: '^Identifiant\s*\*?$', type: texte}
+    mot_de_passe: {libelle_regex: '^Mot de passe\s*\*?$', type: mot_de_passe}
+  bouton_regex: '^Se connecter$'
+inscription:
+  url_reelle: "https://etudesenfrance.diplomatie.gouv.fr/inscription"
+  chemin_demo: "/demo/eef-compte/inscription"
+  # Relevé : Prénom*, Nom*, Espace Campus France de résidence* (liste, 76 options « Espace Campus France <pays> »),
+  # Région de résidence* (liste dépendante de l'espace, options non visibles avant choix), Adresse mail* (text),
+  # Mot de passe*, Confirmer le mot de passe* (password), case consentement*, case France Alumni (facultative),
+  # bouton « S'inscrire ». Règles : 12 caractères minimum, 1 minuscule, 1 majuscule, 1 chiffre, 1 caractère spécial.
+  champs:
+    prenom: {libelle_regex: '^Prénom\s*\*?$', type: texte}
+    nom: {libelle_regex: '^Nom\s*\*?$', type: texte}
+    espace: {libelle_regex: '^Espace Campus France de résidence\s*\*?$', type: liste}
+    region: {libelle_regex: '^(Région de résidence|Veuillez sélectionner un Espace Campus France de résidence)\s*\*?$', type: liste}
+    email: {libelle_regex: '^Adresse mail\s*\*?$', type: texte}
+    mot_de_passe: {libelle_regex: '^Mot de passe\s*\*?$', type: mot_de_passe}
+    confirmation: {libelle_regex: '^Confirmer le mot de passe\s*\*?$', type: mot_de_passe}
+  valeurs_fixes:
+    # Démarche compte_etudes_en_france : espace de résidence du bureau (Algérie).
+    espace: "Espace Campus France Algérie"
+  # Cases JAMAIS cochées par l'agent (décision du candidat, validation humaine) : consentement et France Alumni.
+  cases_laissees_a_l_humain:
+    - "J'accepte que les informations saisies"
+    - "Je souhaite m'inscrire au réseau France Alumni"
+  # Bouton de soumission finale : l'agent ne le clique JAMAIS (règle 1).
+  bouton_interdit_regex: '^S''inscrire$'
+  regles_mot_de_passe: {longueur_min: 12, minuscule: true, majuscule: true, chiffre: true, special: true}

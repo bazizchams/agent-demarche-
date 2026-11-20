@@ -65,8 +65,12 @@ class TypeDecisionValidation(str, enum.Enum):
 
 ACTION_PREREMPLISSAGE = "preremplissage"
 ACTION_AJOUTER_VOEUX_PANIER = "ajouter_voeux_panier"
+ACTION_CONNEXION_PORTAIL = "connexion_portail"
+ACTION_CREATION_COMPTE_EEF = "creation_compte_eef"
 # Actions « Ouvrir sur mon PC » : exécutées dans la fenêtre visible de l'Agent Local (sans étapes YAML).
-ACTIONS_OUVERTURE_PC: frozenset[str] = frozenset({ACTION_AJOUTER_VOEUX_PANIER})
+ACTIONS_OUVERTURE_PC: frozenset[str] = frozenset(
+    {ACTION_AJOUTER_VOEUX_PANIER, ACTION_CONNEXION_PORTAIL, ACTION_CREATION_COMPTE_EEF}
+)
 
 
 def _valeurs(enum_cls: type[enum.Enum]) -> list[str]:
@@ -91,6 +95,9 @@ class TacheDossier(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
         default=ACTION_PREREMPLISSAGE,
         server_default=ACTION_PREREMPLISSAGE,
     )
+
+    # Portail visé par une action de connexion ou de création de compte (`etudes_en_france`, `ircc`) ; nul sinon.
+    portail: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     statut: Mapped[StatutTache] = mapped_column(
         Enum(

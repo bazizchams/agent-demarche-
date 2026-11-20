@@ -385,7 +385,10 @@ def test_m4_ecran_de_revue_confirmer_pour_les_valeurs_auto() -> None:
     assert "à confirmer" in bloc_statuts.split("auto:", 1)[1].split("]", 1)[0]
     assert 'extraction.statut !== "valide_humain"' in js  # Confirmer visible pour auto, à vérifier, rejeté
     assert '!== "auto"' not in js
-    assert "même une valeur lue automatiquement" in ecran.HTML_VUE
+    # Nouvelle formulation : rien n'est écrit sans clic humain (un clic en lot ou individuel), les douteuses une à une.
+    assert "Rien n'est écrit sur la fiche sans votre confirmation" in ecran.HTML_VUE
+    assert "Tout confirmer et remplir la fiche" in ecran.HTML_VUE
+    assert "Les valeurs douteuses se confirment une par une" in ecran.HTML_VUE
 
 
 # ===================================================================== M5 : lecture bornée et débit limité

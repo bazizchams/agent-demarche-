@@ -124,6 +124,7 @@ JS_OUVERTURE_PC = """
     }
 
     async function ouvActualiser() {
+      if (document.hidden) return; // onglet caché : on économise le réseau, la reprise se fait au retour
       if (!ouvTacheId || !ouvCandidat || ouvCandidat !== candidatActifId) {
         ouvArreterSuivi();
         return;
@@ -147,6 +148,7 @@ JS_OUVERTURE_PC = """
       ouvArreterSuivi();
       ouvTacheId = null;
       ouvCandidat = c ? c.id : null;
+      cnxSurChangementCandidat(c);
       if (typeof fdSynchroniserDiscussion === "function") fdSynchroniserDiscussion();
       const bouton = document.getElementById("btn-ouvrir-sur-pc");
       if (!ouvCandidat) {
@@ -208,6 +210,147 @@ JS_OUVERTURE_PC = """
       ouvSuivre();
       notifier("Tâche remise en attente : l'agent va la reprendre.", true);
     }
+
+    // ===== Connexion au portail et création de compte (R3 : aucun mot de passe ici, jamais) =====
+    const CNX_ACTIONS = ["connexion_portail", "creation_compte_eef"];
+    const CNX_FINAUX = ["terminee", "annulee", "en_erreur"];
+    const CNX_LIBELLES = {
+      en_attente: "Demande envoyée : en attente de l'agent sur votre PC.",
+      en_cours: "L'agent travaille dans la fenêtre ouverte sur votre PC.",
+      suspendue: "En pause : une intervention de votre part est nécessaire dans la fenêtre ouverte sur votre PC (CAPTCHA, code, fiche incomplète…), puis reprenez la tâche.",
+      a_valider: "Terminé côté agent, arrêté avant tout envoi : contrôlez la fenêtre sur votre PC, puis clôturez dans le Centre de validation.",
+      terminee: "Validé et terminé.", annulee: "Tâche annulée.", en_erreur: "L'agent a rencontré une erreur."
+    };
+    let cnxMinuteur = null;
+    let cnxTacheId = null;
+    let cnxAction = null;
+    let cnxCandidat = null;
+
+    function cnxArreter() {
+      if (cnxMinuteur !== null) { clearInterval(cnxMinuteur); cnxMinuteur = null; }
+    }
+
+    function cnxAfficher(tache) {
+      const zone = document.getElementById("connexion-pc-etat");
+      if (!tache) { zone.replaceChildren(); }
+      else {
+        const lignes = [dosNoeud("p", "", CNX_LIBELLES[tache.statut] || tache.statut)];
+        if (tache.message_alerte && (tache.statut === "suspendue" || tache.statut === "en_erreur")) lignes.push(dosNoeud("p", "ouverture-alerte", tache.message_alerte));
+        zone.replaceChildren(...lignes);
+      }
+      const attendConsentement = !!tache && tache.action === "connexion_portail" && tache.statut === "en_cours";
+      document.getElementById("btn-autoriser-agent").classList.toggle("cache", !attendConsentement);
+    }
+
+    async function cnxActualiserDepot() {
+      const bloc = document.getElementById("depot-identifiants-bloc");
+      if (!cnxTacheId || cnxAction !== "connexion_portail") { bloc.classList.add("cache"); return; }
+      const rep = await appelApi("/api/v1/taches/" + cnxTacheId + "/depot-identifiants");
+      const etat = rep.ok ? await rep.json() : { present: false };
+      bloc.classList.toggle("cache", !etat.present);
+    }
+
+    async function cnxActualiser() {
+      if (!cnxTacheId || !cnxCandidat || cnxCandidat !== candidatActifId) { cnxArreter(); return; }
+      const rep = await appelApi("/api/v1/taches/" + cnxTacheId);
+      if (!rep.ok) { cnxArreter(); return; }
+      const tache = await rep.json();
+      cnxAfficher(tache);
+      await cnxActualiserDepot();
+      if (CNX_FINAUX.indexOf(tache.statut) !== -1) cnxArreter();
+    }
+
+    function cnxSuivre() {
+      cnxArreter();
+      cnxMinuteur = setInterval(cnxActualiser, OUV_INTERVALLE_MS);
+    }
+
+    async function cnxSurChangementCandidat(c) {
+      cnxArreter();
+      cnxTacheId = null;
+      cnxAction = null;
+      cnxCandidat = c ? c.id : null;
+      cnxAfficher(null);
+      document.getElementById("depot-identifiants-bloc").classList.add("cache");
+      const actif = !!cnxCandidat;
+      ["btn-se-connecter-portail", "btn-creer-compte-eef"].forEach((id) => { document.getElementById(id).disabled = !actif; });
+      if (!actif) return;
+      const rep = await appelApi("/api/v1/taches?candidat_id=" + encodeURIComponent(cnxCandidat) + "&taille=50");
+      if (!rep.ok || cnxCandidat !== c.id) return;
+      const page = await rep.json();
+      const liste = (page.elements || []).filter((t) => CNX_ACTIONS.indexOf(t.action) !== -1);
+      if (liste.length === 0) return;
+      cnxTacheId = liste[0].id;
+      cnxAction = liste[0].action;
+      cnxAfficher(liste[0]);
+      await cnxActualiserDepot();
+      if (CNX_FINAUX.indexOf(liste[0].statut) === -1) cnxSuivre();
+    }
+
+    async function cnxCreer(action, demarche, portail) {
+      if (!candidatActifId) { notifier("Choisissez d'abord un dossier dans la liste.", false); return; }
+      cnxCandidat = candidatActifId;
+      const corps = { candidat_id: candidatActifId, code_demarche: demarche, action: action };
+      if (portail) corps.portail = portail;
+      const rep = await appelApi("/api/v1/taches", { method: "POST", body: JSON.stringify(corps) });
+      const data = await rep.json().catch(() => ({}));
+      if (!rep.ok) {
+        const detail = typeof data.detail === "string" ? data.detail : "La demande n'a pas pu être créée.";
+        cnxAfficher(null);
+        document.getElementById("connexion-pc-etat").replaceChildren(dosNoeud("p", "ouverture-alerte", detail));
+        notifier(detail, false);
+        return;
+      }
+      cnxTacheId = data.id;
+      cnxAction = data.action;
+      cnxAfficher(data);
+      cnxSuivre();
+      notifier("Demande envoyée : en attente de l'agent sur votre PC.", true);
+    }
+
+    async function cnxAutoriser() {
+      if (!cnxTacheId) return;
+      const rep = await appelApi("/api/v1/taches/" + cnxTacheId + "/autoriser-connexion", { method: "POST" });
+      const data = await rep.json().catch(() => ({}));
+      if (!rep.ok) {
+        notifier(typeof data.detail === "string" ? data.detail : "L'autorisation a échoué.", false);
+        return;
+      }
+      notifier("Autorisation donnée pour 60 secondes, une seule fois : l'agent se connecte.", true);
+    }
+
+    async function cnxEnregistrerDepot() {
+      if (!cnxTacheId) return;
+      const consentement = document.getElementById("depot-consentement").checked;
+      const rep = await appelApi("/api/v1/taches/" + cnxTacheId + "/depot-identifiants/enregistrer", {
+        method: "POST", body: JSON.stringify({ consentement: consentement })
+      });
+      const data = await rep.json().catch(() => ({}));
+      if (!rep.ok) {
+        notifier(typeof data.detail === "string" ? data.detail : "L'enregistrement a échoué.", false);
+        return;
+      }
+      document.getElementById("depot-consentement").checked = false;
+      document.getElementById("depot-identifiants-bloc").classList.add("cache");
+      notifier("Identifiants enregistrés dans le coffre chiffré.", true);
+    }
+
+    async function cnxRefuserDepot() {
+      if (!cnxTacheId) return;
+      await appelApi("/api/v1/taches/" + cnxTacheId + "/depot-identifiants", { method: "DELETE" });
+      document.getElementById("depot-consentement").checked = false;
+      document.getElementById("depot-identifiants-bloc").classList.add("cache");
+      notifier("Identifiants non enregistrés : ils ont été effacés.", true);
+    }
+
+    document.getElementById("btn-se-connecter-portail").addEventListener("click", () => {
+      const portail = document.getElementById("select-portail-connexion").value;
+      cnxCreer("connexion_portail", portail === "ircc" ? "ircc_permis_etudes" : "compte_etudes_en_france", portail);
+    });
+    document.getElementById("btn-creer-compte-eef").addEventListener("click", () => cnxCreer("creation_compte_eef", "compte_etudes_en_france", null));
+    document.getElementById("btn-autoriser-agent").addEventListener("click", cnxAutoriser);
+    document.getElementById("btn-depot-enregistrer").addEventListener("click", cnxEnregistrerDepot);
+    document.getElementById("btn-depot-refuser").addEventListener("click", cnxRefuserDepot);
 
     document.getElementById("btn-ouvrir-sur-pc").addEventListener("click", ouvDemanderOuverture);
     document.getElementById("btn-reprendre-ouverture-pc").addEventListener("click", ouvReprendre);

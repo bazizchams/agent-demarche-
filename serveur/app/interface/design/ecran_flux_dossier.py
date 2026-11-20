@@ -330,7 +330,7 @@ HTML_VUE = rendre_icones(
               <div><strong>Dossier prêt pour votre validation</strong><span>L'agent a préparé le dossier. Rien n'a été envoyé : l'envoi officiel attend la validation d'un employé.</span></div>
               <button class="mo-press btn btn-primaire btn-sm" type="button" data-aller-vers="vue-validation-humaine">Passer à la validation</button>
             </div>
-            <p id="fd-progres-texte" class="fd-progres-texte" role="status" aria-live="polite">Aucune analyse lancée.</p>
+            <p id="fd-progres-texte" class="fd-progres-texte" role="status" aria-live="polite">Pas encore d'analyse : déposez les documents de l'étudiant, puis cliquez sur « Lancer l'analyse ».</p>
             <div class="fd-lancement">
               <button id="fd-btn-lancer" class="mo-press btn btn-primaire btn-lg fd-lancer" type="button">[[i:envoi]]Lancer l'analyse</button>
               <button id="fd-btn-actualiser" class="mo-press btn btn-fantome" type="button">[[i:actualiser]]Actualiser</button>
