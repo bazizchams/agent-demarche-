@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.chiffrement import (
@@ -279,9 +280,13 @@ def deposer_passeport(
 
 
 def obtenir_depot(
-    db: Session, *, depot_id: uuid.UUID, parametres: Parametres, cle_maitresse: bytes
+    db: Session, *, depot_id: uuid.UUID, parametres: Parametres, cle_maitresse: bytes,
+    reserve_au_deposant: uuid.UUID | None = None,
 ) -> DepotPasseportSortie:
+    """`reserve_au_deposant` : si fourni, seul ce déposant peut lire le dépôt (sinon introuvable)."""
     depot = _obtenir(db, depot_id, parametres)
+    if reserve_au_deposant is not None and depot.depose_par_id != reserve_au_deposant:
+        raise NonTrouve("Dépôt introuvable ou expiré.")
     avertissements = [MESSAGE_SAISIE_MANUELLE] if depot.statut == STATUT_SAISIE_MANUELLE else []
     return _sortie(db, depot, cle_maitresse, avertissements)
 
@@ -409,7 +414,15 @@ def creer_fiche_depuis_depot(
     )
     nom_fichier = dechiffrer_champ(cle_maitresse, tid, _AAD_NOM, depot.nom_fichier_chiffre) or "passeport"
 
-    candidat = creer_candidat(db, donnees=creation, acteur_id=acteur_id, cle_maitresse=cle_maitresse)
+    try:
+        candidat = creer_candidat(db, donnees=creation, acteur_id=acteur_id, cle_maitresse=cle_maitresse)
+    except (IntegrityError, Conflit):
+        # Course perdue contre une création concurrente du même passeport (index unique en base).
+        db.rollback()
+        existant = _candidat_par_passeport(db, cle_maitresse, tid, creation.numero_passeport)
+        if existant is None:
+            raise
+        raise PasseportDejaUtilise(existant) from None
     document = deposer_document(
         db, candidat_id=candidat.id, type_piece=TYPE_PIECE_PASSEPORT, nom_fichier_origine=nom_fichier,
         contenu_clair=contenu, date_expiration=donnees.date_expiration_passeport, acteur_id=acteur_id,
@@ -430,8 +443,12 @@ def creer_fiche_depuis_depot(
         db.rollback()
         avertissements.append(f"Fiche créée, mais la lecture du document n'a pas pu être rattachée : {exc.message}")
 
-    depot = _obtenir(db, depot_id, parametres)
-    _supprimer_depot(db, depot, parametres)
+    try:
+        depot = _obtenir(db, depot_id, parametres)
+    except NonTrouve:
+        depot = None  # supprimé ou purgé en concurrence : la fiche est créée, rien d'autre à nettoyer
+    if depot is not None:
+        _supprimer_depot(db, depot, parametres)
     audit.journaliser(
         db, "depot_passeport.creer_fiche", ResultatAudit.SUCCES, acteur_id=acteur_id,
         ressource_type="candidat", ressource_id=candidat.id,

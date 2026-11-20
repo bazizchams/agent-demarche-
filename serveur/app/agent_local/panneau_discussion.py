@@ -15,13 +15,20 @@ Sécurité et accessibilité du script injecté (`JS_PANNEAU_DISCUSSION`) :
   passeport, identité) est signalé à Python (`sensible`) pour que son libellé ne soit pas transmis ;
 - jamais dans un iframe.
 
-Pont Python <-> page (`expose_function`) : `agent_envoyer_message(texte)` et `agent_commande(code)`.
+Pont Python <-> page (`expose_function`) : `agent_envoyer_message(jeton, texte)` et `agent_commande(jeton, code)`.
 Les callbacks s'exécutent dans le fil Playwright : ils ne font qu'enregistrer / relayer, sans toucher à la page.
+
+Une page tierce voit ces deux fonctions globales : chaque appel doit donc porter un JETON ALÉATOIRE (un par pont,
+généré en Python, injecté dans la fermeture du script, jamais lisible depuis la page) que Python vérifie ; sans jeton
+valide l'appel est ignoré (aucune erreur renvoyée) et seule une ligne de journal sans donnée est écrite.
+Python pilote le panneau (messages, état, surlignage) par un événement DOM dont le nom est un second secret aléatoire :
+aucune variable globale (`window.__agentPanneau`, drapeau de test) n'est lisible depuis la page.
 """
 
 from __future__ import annotations
 
 import logging
+import secrets
 import time
 from collections.abc import Callable
 from typing import Any
@@ -38,7 +45,12 @@ NB_MESSAGES_REJOUES = 200
 JS_PANNEAU_DISCUSSION = """
 (function () {
   "use strict";
-  if (window.top !== window || window.__agentPanneau) return;
+  if (window.top !== window) return;
+  // Secrets injectés par Python (voir `construire_script`) : ils ne vivent que dans cette fermeture.
+  var JETON = "__JETON_PANNEAU__";
+  var CANAL = "__CANAL_PANNEAU__";
+  var RACINE_OUVERTE = __RACINE_OUVERTE__;
+  var PONTS = { agent_envoyer_message: window.agent_envoyer_message, agent_commande: window.agent_commande };
   var MAX_MESSAGES = 200;
   var MAX_SAISIE = 1000;
   var LARGEUR_PANNEAU = 360;
@@ -222,9 +234,11 @@ JS_PANNEAU_DISCUSSION = """
   ].join("");
 
   function appeler(nom, argument) {
-    var f = window[nom];
+    // Fonction capturée dès l'injection si possible (une page ne peut plus la remplacer pour espionner le jeton).
+    var f = PONTS[nom];
+    if (typeof f !== "function") { f = window[nom]; PONTS[nom] = f; }
     if (typeof f !== "function") return Promise.reject(new Error("pont indisponible"));
-    return Promise.resolve(f(argument));
+    return Promise.resolve(f(JETON, argument));
   }
 
   function rendreMessage(m, anime) {
@@ -334,8 +348,9 @@ JS_PANNEAU_DISCUSSION = """
     hote.id = "agent-panneau-hote";
     // Racine FERMÉE : les sélecteurs Playwright de l'agent (textarea, button, texte…) ne traversent pas un
     // shadow root fermé, donc le panneau ne peut jamais être pris pour un champ du portail. Les tests
-    // posent `window.__AGENT_PANNEAU_OUVERT__ = true` pour l'inspecter.
-    racine = hote.attachShadow({ mode: window.__AGENT_PANNEAU_OUVERT__ === true ? "open" : "closed" });
+    // demandent une racine ouverte par un paramètre injecté par Python (`RACINE_OUVERTE`), jamais par la page.
+    if (document.getElementById("agent-panneau-hote")) return;
+    racine = hote.attachShadow({ mode: RACINE_OUVERTE ? "open" : "closed" });
     var style = document.createElement("style");
     style.textContent = STYLE;
     racine.appendChild(style);
@@ -678,17 +693,45 @@ JS_PANNEAU_DISCUSSION = """
     if (etatInitial) definirEtat(etatInitial);
   }
 
-  window.__agentPanneau = {
+  // Opérations que Python peut demander, par événement DOM au nom secret (CANAL) : rien n'est posé sur `window`.
+  var OPERATIONS = {
     ajouter: ajouter, definirEtat: definirEtat, surligner: surligner, restaurer: restaurer,
     replier: definirReplie, estSensible: estSensible,
     etat: function () { return etat; }, nombreMessages: function () { return messages.length; }
   };
+  document.addEventListener(CANAL, function (ev) {
+    ev.stopImmediatePropagation();  // une seule fermeture traite l'appel, même si le script est injecté deux fois
+    var d = ev.detail;
+    if (!d || typeof d.op !== "string" || !Object.prototype.hasOwnProperty.call(OPERATIONS, d.op)) return;
+    try { d.resultat = OPERATIONS[d.op].apply(null, d.args || []); d.ok = true; } catch (e) { d.ok = false; }
+  });
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", monter);
   else monter();
   if (!racine) document.addEventListener("DOMContentLoaded", monter);
 })();
 """
+
+
+_JS_APPEL = """([canal, op, args]) => {
+  const d = { op: op, args: args, ok: false, resultat: null };
+  document.dispatchEvent(new CustomEvent(canal, { detail: d }));
+  return d.ok ? d.resultat : null;
+}"""
+_JS_APPEL_ELEMENT = """(el, [canal, op]) => {
+  const d = { op: op, args: [el], ok: false, resultat: null };
+  document.dispatchEvent(new CustomEvent(canal, { detail: d }));
+  return d.ok ? d.resultat : null;
+}"""
+
+
+def construire_script(jeton: str, canal: str, *, racine_ouverte: bool = False) -> str:
+    """Script injecté, avec les secrets de ce pont (jeton du pont, nom du canal) et le mode de la racine."""
+    return (
+        JS_PANNEAU_DISCUSSION.replace("__JETON_PANNEAU__", jeton)
+        .replace("__CANAL_PANNEAU__", canal)
+        .replace("__RACINE_OUVERTE__", "true" if racine_ouverte else "false")
+    )
 
 
 class PontPanneau:
@@ -698,9 +741,12 @@ class PontPanneau:
     fois. Le journal courant (`lier`) change à chaque tâche.
     """
 
-    def __init__(self, cible: Any, page: Any) -> None:
+    def __init__(self, cible: Any, page: Any, *, racine_ouverte: bool = False) -> None:
         self._cible = cible
         self._page = page
+        self._nonce = secrets.token_urlsafe(32)  # exigé de la page à chaque appel du pont
+        self._canal = "agent-" + secrets.token_urlsafe(24)  # nom secret de l'événement Python -> panneau
+        self._script = construire_script(self._nonce, self._canal, racine_ouverte=racine_ouverte)
         self._recepteur: Any = None
         self._historique: list[dict[str, Any]] = []
         self._etat = "inactif"
@@ -713,14 +759,14 @@ class PontPanneau:
             return
         self._cible.expose_function(NOM_PONT_MESSAGE, self._recevoir_message)
         self._cible.expose_function(NOM_PONT_COMMANDE, self._recevoir_commande)
-        self._cible.add_init_script(JS_PANNEAU_DISCUSSION)
+        self._cible.add_init_script(self._script)
         self._page.on("domcontentloaded", self._marquer_a_restaurer)
         self._installe = True
         self._injecter_dans_page_courante()
 
     def _injecter_dans_page_courante(self) -> None:
         try:
-            self._page.evaluate(JS_PANNEAU_DISCUSSION)
+            self._page.evaluate(self._script)
             self._restaurer()
         except Exception as exc:
             journal.info("Panneau non injecté dans la page courante : %s", type(exc).__name__)
@@ -729,11 +775,21 @@ class PontPanneau:
         self._recepteur = recepteur
 
     # ------------------------------------------------------------------ callbacks de la page
-    def _recevoir_message(self, texte: Any) -> None:
+    def _jeton_valide(self, jeton: Any, pont: str) -> bool:
+        if isinstance(jeton, str) and secrets.compare_digest(jeton.encode(), self._nonce.encode()):
+            return True
+        journal.warning("Appel refusé du pont %s : jeton absent ou invalide.", pont)  # aucune donnée de l'appel
+        return False
+
+    def _recevoir_message(self, jeton: Any = None, texte: Any = None, *_: Any) -> None:
+        if not self._jeton_valide(jeton, NOM_PONT_MESSAGE):
+            return
         if self._recepteur is not None and isinstance(texte, str):
             self._recepteur.sur_message_panneau(texte[:1000])
 
-    def _recevoir_commande(self, code: Any) -> None:
+    def _recevoir_commande(self, jeton: Any = None, code: Any = None, *_: Any) -> None:
+        if not self._jeton_valide(jeton, NOM_PONT_COMMANDE):
+            return
         if self._recepteur is not None and isinstance(code, str):
             self._recepteur.sur_commande_panneau(code)
 
@@ -741,12 +797,12 @@ class PontPanneau:
         self._a_restaurer = True
 
     # ------------------------------------------------------------------ vers la page
+    def _appeler_page(self, operation: str, *arguments: Any) -> Any:
+        return self._page.evaluate(_JS_APPEL, [self._canal, operation, list(arguments)])
+
     def _restaurer(self) -> None:
         self._a_restaurer = False
-        self._page.evaluate(
-            "([liste, etat]) => window.__agentPanneau && window.__agentPanneau.restaurer(liste, etat)",
-            [self._historique[-NB_MESSAGES_REJOUES:], self._etat],
-        )
+        self._appeler_page("restaurer", self._historique[-NB_MESSAGES_REJOUES:], self._etat)
 
     def _synchroniser(self) -> None:
         if self._a_restaurer:
@@ -763,9 +819,7 @@ class PontPanneau:
         self._historique.append({"type": type_, "texte": texte, "t": int(time.time() * 1000)})
         del self._historique[:-NB_MESSAGES_REJOUES]
         try:
-            self._page.evaluate(
-                "([t, x]) => window.__agentPanneau && window.__agentPanneau.ajouter(t, x)", [type_, texte]
-            )
+            self._appeler_page("ajouter", type_, texte)
         except Exception as exc:
             journal.info("Message non affiché dans le panneau : %s", type(exc).__name__)
 
@@ -775,7 +829,7 @@ class PontPanneau:
         self._etat = etat
         self._synchroniser()
         try:
-            self._page.evaluate("(e) => window.__agentPanneau && window.__agentPanneau.definirEtat(e)", etat)
+            self._appeler_page("definirEtat", etat)
         except Exception as exc:
             journal.info("État non affiché dans le panneau : %s", type(exc).__name__)
 
@@ -785,14 +839,9 @@ class PontPanneau:
         self._synchroniser()
         try:
             if isinstance(cible, str):
-                resultat = self._page.evaluate(
-                    "(s) => window.__agentPanneau ? window.__agentPanneau.surligner(s) : null", cible
-                )
+                resultat = self._appeler_page("surligner", cible)
             else:
-                resultat = cible.first.evaluate(
-                    "(el) => window.__agentPanneau ? window.__agentPanneau.surligner(el) : null",
-                    timeout=delai_ms,
-                )
+                resultat = cible.first.evaluate(_JS_APPEL_ELEMENT, [self._canal, "surligner"], timeout=delai_ms)
         except Exception as exc:
             journal.info("Surlignage impossible : %s", type(exc).__name__)
             return {"trouve": False, "sensible": False}
@@ -811,8 +860,11 @@ class PontPanneau:
 _PONTS: WeakKeyDictionary[Any, PontPanneau] = WeakKeyDictionary()
 
 
-def pont_pour(page: Any, *, fabrique: Callable[[Any, Any], PontPanneau] = PontPanneau) -> PontPanneau:
-    """Pont du contexte de `page` (un par contexte ; `page` sert au repli si le contexte est inaccessible)."""
+def pont_pour(
+    page: Any, *, fabrique: Callable[..., PontPanneau] = PontPanneau, racine_ouverte: bool = False
+) -> PontPanneau:
+    """Pont du contexte de `page` (un par contexte ; `page` sert au repli si le contexte est inaccessible).
+    `racine_ouverte` (tests uniquement) ouvre le shadow root pour l'inspecter ; ignoré si le pont existe déjà."""
     try:
         cible = page.context
     except Exception:
@@ -821,6 +873,6 @@ def pont_pour(page: Any, *, fabrique: Callable[[Any, Any], PontPanneau] = PontPa
     if pont is not None:
         pont._page = page
     else:
-        pont = fabrique(cible, page)
+        pont = fabrique(cible, page, racine_ouverte=True) if racine_ouverte else fabrique(cible, page)
         _PONTS[cible] = pont
     return pont

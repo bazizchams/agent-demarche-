@@ -4,6 +4,7 @@ Usage (depuis le dossier `serveur/`) :
     python -m app.cli creer-bureau --nom "Bureau Alger Centre" --slug bureau-alger --email-admin admin@exemple.dz --nom-admin "Responsable"
     python -m app.cli lister-bureaux
     python -m app.cli envoyer-rappels-echeances   # idempotent, pour cron
+    python -m app.cli purger-depots-passeport     # idempotent, pour cron (toutes les heures)
 """
 
 from __future__ import annotations
@@ -126,8 +127,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_rappels.set_defaults(func=_cmd_envoyer_rappels_echeances)
 
+    p_purge = sous.add_parser(
+        "purger-depots-passeport",
+        help="Supprime les dépôts de passeport de plus de 24 h, tous bureaux (idempotent ; à planifier par cron).",
+    )
+    p_purge.set_defaults(func=_cmd_purger_depots_passeport)
+
     args = analyseur.parse_args(argv)
     return args.func(args)
+
+
+def _cmd_purger_depots_passeport(_args: argparse.Namespace) -> int:
+    from app.services.depots_passeport import purger_depots_expires
+
+    parametres = obtenir_parametres()
+    moteur = creer_moteur(parametres.url_base_donnees)
+    try:
+        with creer_fabrique_sessions(moteur)() as db:
+            nombre = purger_depots_expires(db, parametres=parametres)
+    finally:
+        moteur.dispose()
+    print(f"Dépôts de passeport : depots_purges={nombre}")
+    return 0
 
 
 def _cmd_envoyer_rappels_echeances(args: argparse.Namespace) -> int:

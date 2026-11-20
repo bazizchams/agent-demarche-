@@ -1,7 +1,7 @@
 """Routes du dépôt de passeport SANS fiche : lecture de la MRZ, propositions, création de la fiche confirmée.
 
-Sécurité : session et CSRF sur toute écriture, rôle administrateur ou employé ; lecture limitée par
-utilisateur (comme l'extraction). Aucune fiche n'est créée sans `confirme=true` et sans les valeurs
+Sécurité : session et CSRF sur toute écriture, rôle administrateur ou employé ; lecture d'un dépôt
+réservée à son déposant (l'administrateur du bureau peut lire tous les dépôts du bureau ; rôle lecture seule refusé). Aucune fiche n'est créée sans `confirme=true` et sans les valeurs
 confirmées par l'humain.
 """
 
@@ -12,7 +12,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 
-from app.api.dependances import ContexteAuth, exiger_roles, obtenir_cle_maitresse, obtenir_contexte_auth
+from app.api.dependances import ContexteAuth, exiger_roles, obtenir_cle_maitresse
 from app.api.v1.extractions import _limiter_extractions, obtenir_lecteur_document
 from app.core.config import Parametres, obtenir_parametres
 from app.modeles.utilisateur import Role
@@ -50,11 +50,14 @@ async def deposer(
 @routeur.get("/{depot_id}", response_model=DepotPasseportSortie)
 def obtenir(
     depot_id: uuid.UUID,
-    ctx: ContexteAuth = Depends(obtenir_contexte_auth),
+    ctx: ContexteAuth = ExigerEcriture,
     parametres: Parametres = Depends(obtenir_parametres),
     cle_maitresse: bytes = Depends(obtenir_cle_maitresse),
 ) -> DepotPasseportSortie:
-    return service.obtenir_depot(ctx.db, depot_id=depot_id, parametres=parametres, cle_maitresse=cle_maitresse)
+    reserve_a = None if ctx.utilisateur.role == Role.ADMINISTRATEUR else ctx.utilisateur.id
+    return service.obtenir_depot(
+        ctx.db, depot_id=depot_id, parametres=parametres, cle_maitresse=cle_maitresse, reserve_au_deposant=reserve_a
+    )
 
 
 @routeur.delete("/{depot_id}", status_code=status.HTTP_204_NO_CONTENT)

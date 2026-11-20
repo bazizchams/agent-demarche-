@@ -33,7 +33,7 @@ def test_revision_courte_et_parent() -> None:
 
 def test_tete_unique_des_revisions() -> None:
     script = ScriptDirectory.from_config(_cfg("sqlite://"))
-    assert script.get_heads() == [REVISION]
+    assert script.get_heads() == ["0018_passeport_unique"]
 
 
 def test_up_down_sqlite(tmp_path: Path) -> None:

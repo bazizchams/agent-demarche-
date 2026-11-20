@@ -251,3 +251,94 @@ def test_aucune_donnee_en_clair_ni_dans_l_audit(ctx: dict, fabrique_sessions, pa
         assert all(secret not in e for e in extractions)
     actions = {a for a, _ in audits}
     assert {"depot_passeport.depot", "depot_passeport.creer_fiche"} <= actions
+
+
+# ------------------------------------------------------------------ M1 : purge planifiée (CLI)
+def test_cli_purger_depots_passeport_purge_les_expires_tous_bureaux(
+    ctx: dict, fabrique_sessions, parametres_test, monkeypatch, capsys
+) -> None:
+    from app import cli
+
+    vieux = _deposer(ctx["client_b"]).json()["id"]
+    recent = _deposer(ctx["client_a"]).json()["id"]
+    _vieillir(fabrique_sessions, ctx["b"].bureau.id, vieux, 30)
+    monkeypatch.setattr(cli, "obtenir_parametres", lambda: parametres_test)
+
+    assert cli.main(["purger-depots-passeport"]) == 0
+    assert "depots_purges=1" in capsys.readouterr().out
+    with fabrique_sessions() as db, sans_filtre_tenant(db):
+        ids = {str(i) for i in db.scalars(select(DepotPasseport.id))}
+    assert ids == {recent}
+    assert len(_fichiers_depots(parametres_test)) == 1
+    assert cli.main(["purger-depots-passeport"]) == 0  # idempotent
+    assert "depots_purges=0" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ M2 : doublon atomique (course simulée)
+def test_course_doublon_passeport_rend_409_et_ne_cree_rien(ctx: dict, monkeypatch) -> None:
+    client = ctx["client_a"]
+    existant = client.post(
+        "/api/v1/candidats", json={"nom": "Autre", "prenom": "Etudiant", "numero_passeport": "L898902C3"}
+    ).json()["id"]
+    depot = _deposer(client).json()
+    from app.services import depots_passeport
+
+    vrai_recherche = depots_passeport._candidat_par_passeport
+    appels = {"n": 0}
+
+    def _recherche(db, cle, tid, numero):  # 1er appel (contrôle préalable) : course perdue, rien vu
+        appels["n"] += 1
+        return None if appels["n"] == 1 else vrai_recherche(db, cle, tid, numero)
+
+    monkeypatch.setattr(depots_passeport, "_candidat_par_passeport", _recherche)
+    vrai = depots_passeport.creer_candidat
+
+    def _creer_aveugle(db, **kw):  # idem pour le contrôle interne : seule l'unicité en base protège
+        db.scalar = lambda *_a, **_k: None  # type: ignore[method-assign]
+        try:
+            return vrai(db, **kw)
+        finally:
+            del db.scalar
+
+    monkeypatch.setattr(depots_passeport, "creer_candidat", _creer_aveugle)
+
+    rep = client.post(f"{URL}/{depot['id']}/creer-fiche", json=VALEURS_CONFIRMEES)
+    assert rep.status_code == 409, rep.text
+    corps = rep.json()
+    assert corps["code"] == "passeport_deja_utilise" and corps["candidat_id"] == existant
+    assert "L898902C3" not in rep.text
+    assert _nb_candidats(client) == 1
+    assert client.get(f"{URL}/{depot['id']}").status_code == 200  # dépôt conservé
+
+
+# ------------------------------------------------------------------ L2 : DELETE concurrent du dépôt
+def test_depot_supprime_en_concurrence_apres_creation_fiche_n_est_pas_une_erreur(ctx: dict, monkeypatch) -> None:
+    from app.services import depots_passeport
+
+    client = ctx["client_a"]
+    depot = _deposer(client).json()
+    vrai_obtenir = depots_passeport._obtenir
+    appels = {"n": 0}
+
+    def _obtenir_puis_disparu(db, depot_id, parametres):
+        appels["n"] += 1
+        if appels["n"] == 2:  # relecture finale : un DELETE concurrent est passé entre-temps
+            raise depots_passeport.NonTrouve("Dépôt introuvable ou expiré.")
+        return vrai_obtenir(db, depot_id, parametres)
+
+    monkeypatch.setattr(depots_passeport, "_obtenir", _obtenir_puis_disparu)
+    rep = client.post(f"{URL}/{depot['id']}/creer-fiche", json=VALEURS_CONFIRMEES)
+    assert rep.status_code == 201, rep.text
+    assert _nb_candidats(client) == 1  # fiche créée, pas d'état incohérent ni de 404
+
+
+# ------------------------------------------------------------------ L1 : lecture d'un dépôt = déposant ou administrateur
+def test_lecture_d_un_depot_reservee_au_deposant_ou_a_l_administrateur(application: FastAPI, ctx: dict) -> None:
+    depot_employe = _deposer(ctx["client_a"]).json()["id"]
+    admin, _ = connecter_client(application, ctx["a"].admin.email)
+    depot_admin = _deposer(admin).json()["id"]
+
+    assert ctx["client_a"].get(f"{URL}/{depot_employe}").status_code == 200  # déposant
+    assert admin.get(f"{URL}/{depot_employe}").status_code == 200  # administrateur : tout le bureau
+    assert ctx["client_a"].get(f"{URL}/{depot_admin}").status_code == 404  # autre employé : introuvable
+    assert ctx["lecteur"].get(f"{URL}/{depot_employe}").status_code == 403  # lecture seule : refusé

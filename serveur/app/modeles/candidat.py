@@ -16,7 +16,7 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, Enum, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, Date, Enum, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, MixinHorodatage, MixinIdentifiant, MixinTenant
@@ -46,7 +46,12 @@ class Candidat(MixinIdentifiant, MixinTenant, MixinHorodatage, Base):
         Index("ix_candidats_tenant_idx_nom", "tenant_id", "idx_nom"),
         Index("ix_candidats_tenant_idx_prenom", "tenant_id", "idx_prenom"),
         Index("ix_candidats_tenant_idx_email", "tenant_id", "idx_email"),
-        Index("ix_candidats_tenant_idx_passeport", "tenant_id", "idx_passeport"),
+        # Unicité atomique du numéro de passeport par bureau (course entre deux créations concurrentes).
+        Index(
+            "uq_candidats_tenant_idx_passeport", "tenant_id", "idx_passeport", unique=True,
+            sqlite_where=text("idx_passeport IS NOT NULL"),
+            postgresql_where=text("idx_passeport IS NOT NULL"),
+        ),
     )
 
     # Champs personnels chiffrés (AES-256-GCM)

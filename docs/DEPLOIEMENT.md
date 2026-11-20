@@ -323,6 +323,13 @@ La commande est idempotente (table `rappels_echeances_envoyes`) : on peut la rel
 Options : `--slug <bureau>`, `--date-rentree AAAA-MM-JJ`. Lancement manuel par un administrateur : `POST /api/v1/demarches/rappels-echeances` (jeton CSRF requis).
 Le courriel ne contient que le libellé, la date, les jours restants et le lien. Les échéances relatives à la rentrée ou au dépôt ne sont calculées que si la date est fournie.
 
+### 9.4 Purge des dépôts de passeport (cron horaire)
+
+Les dépôts de passeport sans fiche expirent après 24 h ; la purge n'étant sinon qu'opportuniste (à chaque dépôt), planifier chaque heure (idempotent) :
+```bash
+0 * * * * cd /opt/agent-bureau/plateforme/deploiement && docker compose --env-file .env.production -f docker-compose.production.yml exec -T serveur python -m app.cli purger-depots-passeport >> /var/log/agent-bureau-purge-depots.log 2>&1
+```
+
 ## 10. Liste de contrôle de sécurité avant ouverture au public
 
 Cochez chaque point. Un point non coché bloque la mise en service.
